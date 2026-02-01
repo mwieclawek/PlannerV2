@@ -1,9 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/models.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static String get baseUrl {
+    if (kReleaseMode) {
+      return '';
+    }
+    return 'http://127.0.0.1:8000';
+  }
   final Dio _dio;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
