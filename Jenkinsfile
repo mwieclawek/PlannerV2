@@ -26,24 +26,29 @@ pipeline {
                 unstash 'source'
                 sh '''
                     pip install -r backend/requirements.txt
-                    pip install pytest httpx pytest-asyncio
+                    pip install pytest httpx pytest-asyncio uvicorn
                 '''
+                
+                // Kompilacja pythona (sprawdzenie składni)
                 sh 'python -m py_compile backend/app/main.py'
                 sh 'python -m py_compile backend/app/routers/auth.py'
                 sh 'python -m py_compile backend/app/routers/manager.py'
                 sh 'python -m py_compile backend/app/routers/scheduler.py'
                 sh 'mkdir -p test-results'
                 
-                // Unit tests (no server needed)
+                // Unit tests
                 sh 'python -m pytest backend/tests/test_auth_unit.py -v --junitxml=test-results/auth-unit.xml || true'
                 sh 'python -m pytest backend/tests/test_solver_unit.py -v --junitxml=test-results/solver-unit.xml || true'
                 
-                // API and Integration tests (need server)
+                // API and Integration tests
+                // FIX: Uruchamiamy z głównego katalogu (bez cd backend), ustawiamy PYTHONPATH
+                // i wskazujemy moduł jako backend.app.main:app
                 sh '''
-                    cd backend
-                    nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 &
-                    sleep 5
+                    export PYTHONPATH=$PWD
+                    nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
+                    sleep 10
                 '''
+                
                 sh 'python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
                 sh 'python -m pytest backend/tests/test_integration.py -v --junitxml=test-results/backend-integration.xml || true'
                 sh 'python -m pytest backend/tests/test_employee.py -v --junitxml=test-results/employee.xml || true'
@@ -53,7 +58,6 @@ pipeline {
             post {
                 always {
                     junit allowEmptyResults: true, testResults: 'test-results/*.xml'
-                    // Container cleanup handles process termination
                 }
             }
         }
@@ -99,26 +103,21 @@ pipeline {
                 unstash 'source'
                 unstash 'flutter-web'
                 
-                // Force stop and remove nginx first
+                // Cleanup old containers
                 sh '''
                     docker stop plannerv2-nginx || true
                     docker rm -f plannerv2-nginx || true
-                    sleep 2
-                '''
-                
-                // Stop and remove other container
-                sh '''
+                    
                     docker stop plannerv2-backend || true
                     docker rm -f plannerv2-backend || true
+                    
                     docker stop plannerv2-db || true
                     docker rm -f plannerv2-db || true
-                    sleep 2
                 '''
                 
-                // Create network if not exists
                 sh 'docker network create plannerv2-network || true'
                 
-                // Start PostgreSQL
+                // Start DB
                 sh '''
                     docker run -d --name plannerv2-db \
                         --network plannerv2-network \
@@ -130,10 +129,9 @@ pipeline {
                         postgres:15
                 '''
                 
-                // Wait for postgres to be ready
-                sh 'sleep 5'
+                sh 'sleep 10' // Więcej czasu na start bazy
                 
-                // Build and start Backend
+                // Build & Start Backend
                 sh 'docker build -t plannerv2-backend:latest ./backend'
                 sh '''
                     docker run -d --name plannerv2-backend \
@@ -143,10 +141,9 @@ pipeline {
                         plannerv2-backend:latest
                 '''
                 
-                // Wait for backend to start
-                sh 'sleep 3'
+                sh 'sleep 10' // Backend musi wstać zanim Nginx spróbuje go rozwiązać
                 
-                // Start Nginx (port 8090 to avoid conflicts with System/Jenkins on 80/8080)
+                // Start Nginx
                 sh '''
                     docker run -d --name plannerv2-nginx \
                         --network plannerv2-network \
@@ -154,24 +151,21 @@ pipeline {
                         --restart unless-stopped \
                         nginx:alpine
                     
-                    # Wait for container to start
-                    sleep 3
+                    sleep 5
                     
-                    # Copy nginx config
+                    # Copy config and content
                     docker cp nginx/nginx.conf plannerv2-nginx:/etc/nginx/nginx.conf
-                    
-                    # Create web directory and copy Flutter build
                     docker exec plannerv2-nginx mkdir -p /var/www/plannerv2/web
                     docker cp frontend/build/web/. plannerv2-nginx:/var/www/plannerv2/web/
                     
-                    # Reload nginx to apply config
+                    # Reload nginx
                     docker exec plannerv2-nginx nginx -s reload
                 '''
                 
-                // Health check
+                // Health Check
                 sh '''
                     sleep 5
-                    curl -f http://localhost/docs || echo "Backend health check pending..."
+                    curl -f http://localhost:8090/docs || echo "Health check failed or pending"
                 '''
             }
         }
