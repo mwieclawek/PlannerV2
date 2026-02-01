@@ -21,6 +21,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
   Map<String, dynamic>? _lastResult;
   List<ScheduleEntry> _scheduleEntries = [];
   List<ScheduleEntry> _originalEntries = []; // For tracking changes
+  List<StaffingWarning> _warnings = []; // Staffing warnings
   List<ShiftDefinition> _shifts = [];
   List<JobRole> _roles = [];
   List<TeamMember> _users = [];
@@ -68,6 +69,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       _selectedWeekStart = _selectedWeekStart.add(Duration(days: days));
       _scheduleEntries = [];
       _originalEntries = [];
+      _warnings = [];
       _hasUnsavedChanges = false;
       _isFirstEdit = true;
       _lastResult = null;
@@ -428,9 +430,16 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           ));
         }
 
+        // Parse warnings from result
+        final List<dynamic> warningsJson = result['warnings'] ?? [];
+        final List<StaffingWarning> parsedWarnings = warningsJson
+            .map((w) => StaffingWarning.fromJson(w as Map<String, dynamic>))
+            .toList();
+
         setState(() {
           _scheduleEntries = generatedEntries;
           _originalEntries = List.from(generatedEntries);
+          _warnings = parsedWarnings;
           _lastResult = result;
           _isGenerating = false;
           _hasUnsavedChanges = true; // Mark as unsaved since it's a draft
@@ -581,11 +590,12 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           
           // Results / Schedule Display
           if (_scheduleEntries.isNotEmpty && _shifts.isNotEmpty) ...[
-            ScheduleViewer(
+          ScheduleViewer(
               schedules: _scheduleEntries,
               shifts: _shifts,
               roles: _roles,
               weekStart: _selectedWeekStart,
+              warnings: _warnings,
               onEmptyCellTap: _showAddAssignmentDialog,
               onAssignmentTap: _showEditAssignmentDialog,
             ),

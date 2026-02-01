@@ -136,6 +136,33 @@ class SolverService:
                     )
                     generated_schedules.append(sc)
 
+            # 4. Calculate staffing warnings
+            # Count assigned workers per (date, shift, role)
+            assigned_count = {}
+            for sc in generated_schedules:
+                key = (sc.date, sc.shift_def_id, sc.role_id)
+                assigned_count[key] = assigned_count.get(key, 0) + 1
+            
+            # Compare with requirements and generate warnings
+            warnings = []
+            shift_map = {s.id: s.name for s in shifts}
+            role_map = {r.id: r.name for r in roles}
+            
+            for (d, s_id, r_id), required in req_map.items():
+                if required > 0:
+                    assigned = assigned_count.get((d, s_id, r_id), 0)
+                    if assigned < required:
+                        warnings.append({
+                            "date": d.isoformat(),
+                            "shift_def_id": s_id,
+                            "role_id": r_id,
+                            "role_name": role_map.get(r_id, "Unknown"),
+                            "shift_name": shift_map.get(s_id, "Unknown"),
+                            "required": required,
+                            "assigned": assigned,
+                            "missing": required - assigned
+                        })
+
             if save:
                 # Clear old schedules for this period first to clean up
                 statements = select(Schedule).where(Schedule.date >= start_date, Schedule.date <= end_date)
@@ -148,6 +175,12 @@ class SolverService:
                     self.session.add(item)
                 self.session.commit()
             
-            return {"status": "success", "count": len(generated_schedules), "schedules": generated_schedules}
+            return {
+                "status": "success", 
+                "count": len(generated_schedules), 
+                "schedules": generated_schedules,
+                "warnings": warnings
+            }
         else:
-            return {"status": "infeasible", "count": 0}
+            return {"status": "infeasible", "count": 0, "warnings": []}
+
