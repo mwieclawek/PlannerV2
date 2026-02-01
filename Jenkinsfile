@@ -52,7 +52,7 @@ pipeline {
         stage('Frontend Tests') {
             agent {
                 docker {
-                    image 'ghcr.io/cirruslabs/flutter:3.27.4'
+                    image 'ghcr.io/cirruslabs/flutter:stable'
                     args '-u root'
                 }
             }
@@ -70,7 +70,7 @@ pipeline {
         stage('Build Flutter Web') {
             agent {
                 docker {
-                    image 'ghcr.io/cirruslabs/flutter:3.27.4'
+                    image 'ghcr.io/cirruslabs/flutter:stable'
                     args '-u root'
                 }
             }
