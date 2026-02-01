@@ -26,25 +26,34 @@ pipeline {
                 unstash 'source'
                 sh '''
                     pip install -r backend/requirements.txt
-                    pip install pytest httpx
+                    pip install pytest httpx pytest-asyncio
                 '''
                 sh 'python -m py_compile backend/app/main.py'
                 sh 'python -m py_compile backend/app/routers/auth.py'
                 sh 'python -m py_compile backend/app/routers/manager.py'
                 sh 'python -m py_compile backend/app/routers/scheduler.py'
+                sh 'mkdir -p test-results'
+                
+                // Unit tests (no server needed)
+                sh 'python -m pytest backend/tests/test_auth_unit.py -v --junitxml=test-results/auth-unit.xml || true'
+                sh 'python -m pytest backend/tests/test_solver_unit.py -v --junitxml=test-results/solver-unit.xml || true'
+                
+                // API and Integration tests (need server)
                 sh '''
                     cd backend
                     nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 &
                     sleep 5
                 '''
-                sh 'mkdir -p test-results'
-                sh 'python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-unit.xml || true'
+                sh 'python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
                 sh 'python -m pytest backend/tests/test_integration.py -v --junitxml=test-results/backend-integration.xml || true'
+                sh 'python -m pytest backend/tests/test_employee.py -v --junitxml=test-results/employee.xml || true'
+                sh 'python -m pytest backend/tests/test_manager_edge_cases.py -v --junitxml=test-results/manager-edge.xml || true'
+                sh 'python -m pytest backend/tests/test_scheduler_unit.py -v --junitxml=test-results/scheduler.xml || true'
             }
             post {
                 always {
                     junit allowEmptyResults: true, testResults: 'test-results/*.xml'
-                    sh 'pkill -f uvicorn || true'
+                    // Container cleanup handles process termination
                 }
             }
         }
@@ -90,9 +99,21 @@ pipeline {
                 unstash 'source'
                 unstash 'flutter-web'
                 
-                // Stop and remove existing containers (if any)
-                sh 'docker stop plannerv2-backend plannerv2-nginx plannerv2-db || true'
-                sh 'docker rm plannerv2-backend plannerv2-nginx plannerv2-db || true'
+                // Force stop and remove nginx first (it holds port 80)
+                sh '''
+                    docker stop plannerv2-nginx || true
+                    docker rm -f plannerv2-nginx || true
+                    sleep 2
+                '''
+                
+                // Stop and remove other containers
+                sh '''
+                    docker stop plannerv2-backend || true
+                    docker rm -f plannerv2-backend || true
+                    docker stop plannerv2-db || true
+                    docker rm -f plannerv2-db || true
+                    sleep 2
+                '''
                 
                 // Create network if not exists
                 sh 'docker network create plannerv2-network || true'
@@ -109,6 +130,9 @@ pipeline {
                         postgres:15
                 '''
                 
+                // Wait for postgres to be ready
+                sh 'sleep 5'
+                
                 // Build and start Backend
                 sh 'docker build -t plannerv2-backend:latest ./backend'
                 sh '''
@@ -119,7 +143,10 @@ pipeline {
                         plannerv2-backend:latest
                 '''
                 
-                // Start Nginx and copy files (can't mount from Jenkins container)
+                // Wait for backend to start
+                sh 'sleep 3'
+                
+                // Start Nginx (port 80 should be free now)
                 sh '''
                     docker run -d --name plannerv2-nginx \
                         --network plannerv2-network \
@@ -128,7 +155,7 @@ pipeline {
                         nginx:alpine
                     
                     # Wait for container to start
-                    sleep 2
+                    sleep 3
                     
                     # Copy nginx config
                     docker cp nginx/nginx.conf plannerv2-nginx:/etc/nginx/nginx.conf
@@ -143,7 +170,7 @@ pipeline {
                 
                 // Health check
                 sh '''
-                    sleep 10
+                    sleep 5
                     curl -f http://localhost/docs || echo "Backend health check pending..."
                 '''
             }
