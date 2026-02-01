@@ -7,7 +7,7 @@ pipeline {
     }
     
     stages {
-        // --- KROK 1: POBRANIE KODU ---
+        // --- ZMIANA 1: Agent zamiast 'any' dajemy 'alpine/git' ---
         stage('Checkout') {
             agent {
                 docker {
@@ -21,7 +21,7 @@ pipeline {
             }
         }
         
-        // --- KROK 2: BACKEND ---
+        // --- BEZ ZMIAN W LOGICE (Tylko wklejone Twoje działające skrypty) ---
         stage('Backend Tests') {
             agent {
                 docker {
@@ -36,21 +36,19 @@ pipeline {
                     pip install pytest httpx pytest-asyncio uvicorn
                 '''
                 
-                // Kompilacja (sprawdzenie składni)
                 sh 'python -m py_compile backend/app/main.py'
                 sh 'python -m py_compile backend/app/routers/auth.py'
                 sh 'python -m py_compile backend/app/routers/manager.py'
                 sh 'python -m py_compile backend/app/routers/scheduler.py'
                 sh 'mkdir -p test-results'
                 
-                // Uruchomienie serwera w tle z poprawnym PYTHONPATH
+                // Twoja działająca logika z PYTHONPATH
                 sh '''
                     export PYTHONPATH=$PWD
                     nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
                     sleep 5
                 '''
                 
-                // Uruchomienie testów (jednostkowe i integracyjne)
                 sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
                 sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_integration.py -v --junitxml=test-results/backend-integration.xml || true'
             }
@@ -62,8 +60,7 @@ pipeline {
             }
         }
         
-        // --- KROK 3: FRONTEND ---
-        stage('Frontend Tests & Build') {
+        stage('Frontend Tests') {
             agent {
                 docker {
                     image 'ghcr.io/cirruslabs/flutter:stable'
@@ -76,21 +73,34 @@ pipeline {
                     sh 'flutter pub get'
                     sh 'flutter analyze --no-fatal-infos || true'
                     sh 'flutter test --machine > ../test-results/frontend.json || true'
-                    
-                    // Budujemy od razu tutaj
+                }
+            }
+        }
+        
+        stage('Build Flutter Web') {
+            agent {
+                docker {
+                    image 'ghcr.io/cirruslabs/flutter:stable'
+                    args '-u root'
+                }
+            }
+            steps {
+                unstash 'source'
+                dir('frontend') {
+                    sh 'flutter pub get'
                     sh 'flutter build web --release'
                 }
                 stash includes: 'frontend/build/web/**/*', name: 'flutter-web'
             }
         }
         
-        // --- KROK 4: DEPLOY ---
+        // --- ZMIANA 2: Agent 'docker:cli' zamiast 'any' ---
         stage('Deploy') {
             agent {
                 docker {
-                    // Obraz z klientem dockera
+                    // Ten obraz ma w sobie polecenie 'docker'
                     image 'docker:cli'
-                    // Mapowanie socketa z hosta
+                    // To mapowanie pozwala mu sterować Dockerem na serwerze (Hoście)
                     args '-v /var/run/docker.sock:/var/run/docker.sock -u 0:0'
                 }
             }
@@ -99,7 +109,8 @@ pipeline {
                 unstash 'flutter-web'
                 
                 script {
-                    // Doinstalowanie curla (obraz docker:cli go nie ma, a potrzebujemy do healthchecka)
+                    // Doinstalowanie curla (obraz docker:cli jest bardzo lekki i go nie ma)
+                    // Jest to potrzebne tylko do healthchecka na końcu
                     sh 'apk add --no-cache curl || true'
 
                     echo "🧹 Cleaning up old containers..."
@@ -139,7 +150,7 @@ pipeline {
                     echo "⏳ Waiting for Backend to initialize..."
                     sh 'sleep 10'
                     
-                    // Diagnostyka
+                    // Twoja diagnostyka
                     sh '''
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend)" = "false" ]; then
                             echo "❌ CRITICAL: Backend container crashed!"
@@ -161,7 +172,7 @@ pipeline {
                     
                     sh 'sleep 5'
                     
-                    // Kopiowanie plików (przez socket hosta)
+                    // Twoja sprawdzona metoda kopiowania (działa idealnie przez socket)
                     sh '''
                         # Kopiowanie configu
                         docker cp nginx/nginx.conf plannerv2-nginx:/etc/nginx/nginx.conf
@@ -183,7 +194,9 @@ pipeline {
                         docker exec plannerv2-nginx nginx -s reload
                     '''
                     
-                    // Health check (używamy curla zainstalowanego na początku skryptu)
+                    // Health check (używamy curla z localhosta agenta lub wgeta)
+                    // Uwaga: localhost wewnątrz kontenera agenta to nie to samo co localhost hosta
+                    // Ale skoro to tylko check, zostawiamy tak jak u Ciebie (ew. failnie cicho)
                     sh '''
                         sleep 5
                         curl -f http://46.225.49.0:8090/docs || echo "Health check warning (connection check)"
