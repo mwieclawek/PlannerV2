@@ -1,5 +1,5 @@
 pipeline {
-    agent none
+    agent any
     
     environment {
         FLUTTER_HOME = '/opt/flutter'
@@ -8,7 +8,6 @@ pipeline {
     
     stages {
         stage('Checkout') {
-            agent any
             steps {
                 checkout scm
             }
@@ -16,9 +15,9 @@ pipeline {
         
         stage('Setup Python') {
             steps {
-                sh 'python -m pip install --upgrade pip'
-                sh 'pip install -r backend/requirements.txt'
-                sh 'pip install pytest httpx pytest-xdist'
+                sh 'python3 -m pip install --upgrade pip'
+                sh 'pip3 install -r backend/requirements.txt'
+                sh 'pip3 install pytest httpx pytest-xdist'
             }
         }
         
@@ -34,10 +33,10 @@ pipeline {
         stage('Backend Lint') {
             steps {
                 dir('backend') {
-                    sh 'python -m py_compile app/main.py'
-                    sh 'python -m py_compile app/routers/auth.py'
-                    sh 'python -m py_compile app/routers/manager.py'
-                    sh 'python -m py_compile app/routers/scheduler.py'
+                    sh 'python3 -m py_compile app/main.py'
+                    sh 'python3 -m py_compile app/routers/auth.py'
+                    sh 'python3 -m py_compile app/routers/manager.py'
+                    sh 'python3 -m py_compile app/routers/scheduler.py'
                 }
             }
         }
@@ -54,7 +53,7 @@ pipeline {
             steps {
                 sh '''
                     cd backend
-                    nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+                    nohup python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 &
                     sleep 5
                 '''
             }
@@ -62,7 +61,7 @@ pipeline {
         
         stage('Backend Unit Tests') {
             steps {
-                sh 'python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-unit.xml'
+                sh 'python3 -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-unit.xml'
             }
             post {
                 always {
@@ -73,7 +72,7 @@ pipeline {
         
         stage('Backend Integration Tests') {
             steps {
-                sh 'python -m pytest backend/tests/test_integration.py -v --junitxml=test-results/backend-integration.xml'
+                sh 'python3 -m pytest backend/tests/test_integration.py -v --junitxml=test-results/backend-integration.xml'
             }
             post {
                 always {
