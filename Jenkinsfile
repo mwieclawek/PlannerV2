@@ -1,5 +1,5 @@
 pipeline {
-    agent any
+    agent none
     
     environment {
         FLUTTER_HOME = '/opt/flutter'
@@ -8,6 +8,7 @@ pipeline {
     
     stages {
         stage('Checkout') {
+            agent any
             steps {
                 checkout scm
             }
