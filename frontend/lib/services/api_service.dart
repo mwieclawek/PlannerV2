@@ -220,7 +220,38 @@ class ApiService {
     await _dio.post('/scheduler/save_batch', data: {
       'start_date': startDate.toIso8601String().split('T').first,
       'end_date': endDate.toIso8601String().split('T').first,
-      'entries': data,
+      'items': data,
+    });
+  }
+
+  // Update Role
+  Future<void> updateRole(int roleId, String name, String colorHex) async {
+    await _dio.put('/manager/roles/$roleId', data: {
+      'name': name,
+      'color_hex': colorHex,
+    });
+  }
+
+  // Update Shift
+  Future<void> updateShift(int shiftId, String name, String startTime, String endTime) async {
+    await _dio.put('/manager/shifts/$shiftId', data: {
+      'name': name,
+      'start_time': startTime,
+      'end_time': endTime,
+    });
+  }
+
+  // Restaurant Config
+  Future<Map<String, dynamic>> getConfig() async {
+    final response = await _dio.get('/manager/config');
+    return response.data;
+  }
+
+  Future<void> saveConfig(String name, String openingHours, String? address) async {
+    await _dio.post('/manager/config', data: {
+      'name': name,
+      'opening_hours': openingHours,
+      'address': address,
     });
   }
 }

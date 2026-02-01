@@ -17,6 +17,73 @@ class _SetupTabState extends ConsumerState<SetupTab> {
   final _shiftNameController = TextEditingController();
   final _shiftStartController = TextEditingController();
   final _shiftEndController = TextEditingController();
+  
+  // Restaurant config controllers
+  final _restaurantNameController = TextEditingController();
+  final _openingHoursController = TextEditingController();
+  final _closingHoursController = TextEditingController();
+  final _addressController = TextEditingController();
+  bool _isLoadingConfig = true;
+  bool _isSavingConfig = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadConfig();
+  }
+
+  Future<void> _loadConfig() async {
+    try {
+      final config = await ref.read(apiServiceProvider).getConfig();
+      setState(() {
+        _restaurantNameController.text = config['name'] ?? '';
+        _addressController.text = config['address'] ?? '';
+        // Parse opening_hours JSON if present
+        final hours = config['opening_hours'] ?? '';
+        if (hours.isNotEmpty) {
+          // Simple format: "08:00-22:00"
+          if (hours.contains('-')) {
+            final parts = hours.split('-');
+            if (parts.length == 2) {
+              _openingHoursController.text = parts[0].trim();
+              _closingHoursController.text = parts[1].trim();
+            }
+          }
+        }
+        _isLoadingConfig = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingConfig = false);
+    }
+  }
+
+  Future<void> _saveConfig() async {
+    setState(() => _isSavingConfig = true);
+    try {
+      final openingHours = '${_openingHoursController.text}-${_closingHoursController.text}';
+      await ref.read(apiServiceProvider).saveConfig(
+        _restaurantNameController.text,
+        openingHours,
+        _addressController.text.isNotEmpty ? _addressController.text : null,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('✓ Zapisano ustawienia restauracji'),
+            backgroundColor: Colors.green.shade600,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red.shade600),
+        );
+      }
+    } finally {
+      setState(() => _isSavingConfig = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -25,6 +92,10 @@ class _SetupTabState extends ConsumerState<SetupTab> {
     _shiftNameController.dispose();
     _shiftStartController.dispose();
     _shiftEndController.dispose();
+    _restaurantNameController.dispose();
+    _openingHoursController.dispose();
+    _closingHoursController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -106,6 +177,70 @@ class _SetupTabState extends ConsumerState<SetupTab> {
     }
   }
 
+  Future<void> _showEditRoleDialog(JobRole role) async {
+    final nameController = TextEditingController(text: role.name);
+    final colorController = TextEditingController(text: role.colorHex);
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edytuj rolę'),
+        content: SizedBox(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Nazwa roli',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: colorController,
+                decoration: const InputDecoration(
+                  labelText: 'Kolor (hex)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Anuluj')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Zapisz'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ref.read(apiServiceProvider).updateRole(
+          role.id,
+          nameController.text,
+          colorController.text,
+        );
+        ref.invalidate(rolesProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('✓ Zaktualizowano rolę "${nameController.text}"')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red.shade600),
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _confirmDeleteRole(JobRole role) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -130,6 +265,88 @@ class _SetupTabState extends ConsumerState<SetupTab> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Usunięto rolę "${role.name}"'), backgroundColor: Colors.orange.shade600),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red.shade600),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _showEditShiftDialog(ShiftDefinition shift) async {
+    final nameController = TextEditingController(text: shift.name);
+    final startController = TextEditingController(text: shift.startTime);
+    final endController = TextEditingController(text: shift.endTime);
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edytuj zmianę'),
+        content: SizedBox(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Nazwa zmiany',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: startController,
+                      decoration: const InputDecoration(
+                        labelText: 'Start',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: endController,
+                      decoration: const InputDecoration(
+                        labelText: 'Koniec',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Anuluj')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Zapisz'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ref.read(apiServiceProvider).updateShift(
+          shift.id,
+          nameController.text,
+          startController.text,
+          endController.text,
+        );
+        ref.invalidate(shiftsProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('✓ Zaktualizowano zmianę "${nameController.text}"')),
           );
         }
       } catch (e) {
@@ -200,62 +417,79 @@ class _SetupTabState extends ConsumerState<SetupTab> {
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    decoration: const InputDecoration(
-                      labelText: 'Nazwa restauracji',
-                      hintText: 'np. Kawiarnia Pod Lipą',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.restaurant),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
+              child: _isLoadingConfig
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: _restaurantNameController,
                           decoration: const InputDecoration(
-                            labelText: 'Godziny otwarcia (od)',
-                            hintText: '08:00',
+                            labelText: 'Nazwa restauracji',
+                            hintText: 'np. Kawiarnia Pod Lipą',
                             border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.access_time),
+                            prefixIcon: Icon(Icons.restaurant),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextField(
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _addressController,
                           decoration: const InputDecoration(
-                            labelText: 'Godziny otwarcia (do)',
-                            hintText: '22:00',
+                            labelText: 'Adres',
+                            hintText: 'np. ul. Główna 15, Warszawa',
                             border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.access_time),
+                            prefixIcon: Icon(Icons.location_on),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Zapisano ustawienia restauracji')),
-                        );
-                      },
-                      icon: const Icon(Icons.save),
-                      label: const Text('Zapisz'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.indigo.shade700,
-                        foregroundColor: Colors.white,
-                      ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _openingHoursController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Godziny otwarcia (od)',
+                                  hintText: '08:00',
+                                  border: OutlineInputBorder(),
+                                  prefixIcon: Icon(Icons.access_time),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: TextField(
+                                controller: _closingHoursController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Godziny otwarcia (do)',
+                                  hintText: '22:00',
+                                  border: OutlineInputBorder(),
+                                  prefixIcon: Icon(Icons.access_time),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: ElevatedButton.icon(
+                            onPressed: _isSavingConfig ? null : _saveConfig,
+                            icon: _isSavingConfig
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.save),
+                            label: Text(_isSavingConfig ? 'Zapisywanie...' : 'Zapisz'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.indigo.shade700,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
             ),
           ),
           
@@ -341,9 +575,20 @@ class _SetupTabState extends ConsumerState<SetupTab> {
                               ),
                             ),
                             title: Text(role.name),
-                            trailing: IconButton(
-                              icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
-                              onPressed: () => _confirmDeleteRole(role),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.edit_outlined, color: Colors.blue.shade400),
+                                  onPressed: () => _showEditRoleDialog(role),
+                                  tooltip: 'Edytuj',
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                                  onPressed: () => _confirmDeleteRole(role),
+                                  tooltip: 'Usuń',
+                                ),
+                              ],
                             ),
                           );
                         }).toList(),
@@ -379,6 +624,14 @@ class _SetupTabState extends ConsumerState<SetupTab> {
                     style: GoogleFonts.inter(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Uwaga: Godziny zmiany muszą być unikalne (kluczem nie jest nazwa)',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -445,9 +698,20 @@ class _SetupTabState extends ConsumerState<SetupTab> {
                             leading: const Icon(Icons.schedule),
                             title: Text(shift.name),
                             subtitle: Text('${shift.startTime} - ${shift.endTime}'),
-                            trailing: IconButton(
-                              icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
-                              onPressed: () => _confirmDeleteShift(shift),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.edit_outlined, color: Colors.blue.shade400),
+                                  onPressed: () => _showEditShiftDialog(shift),
+                                  tooltip: 'Edytuj',
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                                  onPressed: () => _confirmDeleteShift(shift),
+                                  tooltip: 'Usuń',
+                                ),
+                              ],
                             ),
                           );
                         }).toList(),

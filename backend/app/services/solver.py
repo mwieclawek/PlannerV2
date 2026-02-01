@@ -9,12 +9,6 @@ class SolverService:
         self.session = session
 
     def solve(self, start_date: date, end_date: date, save: bool = True):
-        # ... (setup code remains same, omitted here for brevity as we are just changing signature and end block)
-        # Actually I need to replace the whole method signature or use careful partial replacement
-        # Let's target the definition and the end block.
-        pass # placeholder for this tool execution logic block, doing full replace below
-
-    # ...
         # 1. Fetch Data
         employees = self.session.exec(select(User)).all()
         shifts = self.session.exec(select(ShiftDefinition)).all()

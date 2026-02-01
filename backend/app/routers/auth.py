@@ -5,20 +5,9 @@ from datetime import timedelta
 from ..database import get_session
 from ..models import User, RoleSystem
 from ..auth_utils import verify_password, get_password_hash, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
-from pydantic import BaseModel
+from ..schemas import Token, UserCreate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-class UserCreate(BaseModel):
-    email: str
-    password: str
-    full_name: str
-    role_system: RoleSystem = RoleSystem.EMPLOYEE
-    manager_pin: str = None  # Optional, required only if role_system is MANAGER
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
 
 @router.post("/register", response_model=Token)
 def register(user_in: UserCreate, session: Session = Depends(get_session)):
@@ -33,15 +22,11 @@ def register(user_in: UserCreate, session: Session = Depends(get_session)):
 
     hashed_password = get_password_hash(user_in.password)
     
-    assigned_role = user_in.role_system
-    # Deprecated auto-promotion logic removed in favor of explicit selection + PIN
-    # if assigned_role == RoleSystem.EMPLOYEE: ...
-
     user = User(
         email=user_in.email,
         password_hash=hashed_password,
         full_name=user_in.full_name,
-        role_system=assigned_role
+        role_system=user_in.role_system
     )
     session.add(user)
     session.commit()

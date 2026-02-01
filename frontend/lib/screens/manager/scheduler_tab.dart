@@ -25,6 +25,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
   List<JobRole> _roles = [];
   List<TeamMember> _users = [];
   int _localIdCounter = -1; // For generating temporary IDs
+  bool _isFirstEdit = true; // To show info banner on first edit
 
   static DateTime _getMonday(DateTime date) {
     return date.subtract(Duration(days: date.weekday - 1));
@@ -68,6 +69,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       _scheduleEntries = [];
       _originalEntries = [];
       _hasUnsavedChanges = false;
+      _isFirstEdit = true;
       _lastResult = null;
     });
     _loadSchedule();
@@ -115,6 +117,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         _roles = roles;
         _users = users.where((u) => u.isEmployee).toList();
         _hasUnsavedChanges = false;
+        _isFirstEdit = true;
         if (schedules.isNotEmpty) {
           _lastResult = {'status': 'success', 'count': schedules.length};
         }
@@ -216,6 +219,35 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       roleName: role.name,
       shiftName: shift.name,
     );
+    
+    // Show info banner on first edit
+    if (_isFirstEdit && _originalEntries.isNotEmpty) {
+      _isFirstEdit = false;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue.shade600),
+              const SizedBox(width: 8),
+              const Text('Informacja'),
+            ],
+          ),
+          content: const Text(
+            'Edytujesz wygenerowany grafik.\n\n'
+            '• Kliknij "Zapisz zmiany" aby zachować edycje\n'
+            '• Ponowne wygenerowanie grafiku usunie Twoje zmiany\n'
+            '• Możesz dodać wielu pracowników do tej samej zmiany',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Rozumiem'),
+            ),
+          ],
+        ),
+      );
+    }
     
     setState(() {
       _scheduleEntries.add(newEntry);

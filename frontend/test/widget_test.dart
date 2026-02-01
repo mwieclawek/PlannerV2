@@ -1,30 +1,100 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// Widget Tests for PlannerV2 Frontend
+// Run with: flutter test
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:frontend/main.dart';
+import 'package:frontend/models/models.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('Model Tests', () {
+    test('User model parses correctly', () {
+      final json = {
+        'id': '123e4567-e89b-12d3-a456-426614174000',
+        'email': 'test@test.com',
+        'full_name': 'Test User',
+        'role_system': 'MANAGER',
+        'created_at': '2026-01-01T00:00:00Z',
+        'job_roles': [1, 2],
+      };
+      
+      final user = User.fromJson(json);
+      expect(user.email, 'test@test.com');
+      expect(user.isManager, true);
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    test('User isEmployee works correctly', () {
+      final json = {
+        'id': '123e4567-e89b-12d3-a456-426614174000',
+        'email': 'emp@test.com',
+        'full_name': 'Test Employee',
+        'role_system': 'EMPLOYEE',
+        'created_at': '2026-01-01T00:00:00Z',
+        'job_roles': [],
+      };
+      
+      final user = User.fromJson(json);
+      expect(user.isEmployee, true);
+      expect(user.isManager, false);
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    test('JobRole parses correctly', () {
+      final json = {
+        'id': 1,
+        'name': 'Barista',
+        'color_hex': '#FF5733',
+      };
+      
+      final role = JobRole.fromJson(json);
+      expect(role.name, 'Barista');
+      expect(role.colorHex, '#FF5733');
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('ShiftDefinition parses correctly', () {
+      final json = {
+        'id': 1,
+        'name': 'Morning',
+        'start_time': '08:00',
+        'end_time': '16:00',
+      };
+      
+      final shift = ShiftDefinition.fromJson(json);
+      expect(shift.name, 'Morning');
+      expect(shift.startTime, '08:00');
+      expect(shift.endTime, '16:00');
+    });
+
+    test('ScheduleEntry parses correctly', () {
+      final json = {
+        'id': '123',
+        'date': '2026-02-01',
+        'shift_def_id': 1,
+        'user_id': 'user-uuid',
+        'role_id': 2,
+        'is_published': false,
+        'user_name': 'John Doe',
+        'role_name': 'Barista',
+        'shift_name': 'Morning',
+      };
+      
+      final entry = ScheduleEntry.fromJson(json);
+      expect(entry.userName, 'John Doe');
+      expect(entry.roleName, 'Barista');
+      expect(entry.shiftName, 'Morning');
+      expect(entry.isPublished, false);
+    });
+
+    test('TeamMember parses correctly', () {
+      final json = {
+        'id': 'uuid-123',
+        'email': 'member@test.com',
+        'full_name': 'Team Member',
+        'role_system': 'EMPLOYEE',
+        'job_roles': [1, 2],
+      };
+      
+      final member = TeamMember.fromJson(json);
+      expect(member.fullName, 'Team Member');
+      expect(member.isEmployee, true);
+      expect(member.jobRoleIds, [1, 2]);
+    });
   });
 }
