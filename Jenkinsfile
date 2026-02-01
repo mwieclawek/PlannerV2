@@ -91,11 +91,11 @@ pipeline {
                 unstash 'flutter-web'
                 
                 // Stop existing containers (if any)
-                sh 'docker-compose down || true'
+                sh 'docker compose down || true'
                 
                 // Build and start all services
-                sh 'docker-compose build --no-cache backend'
-                sh 'docker-compose up -d'
+                sh 'docker compose build --no-cache backend'
+                sh 'docker compose up -d'
                 
                 // Health check
                 sh '''
