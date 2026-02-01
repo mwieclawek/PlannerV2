@@ -361,3 +361,38 @@ class TeamMember {
   bool get isManager => roleSystem == 'MANAGER';
   bool get isEmployee => roleSystem == 'EMPLOYEE';
 }
+
+class StaffingWarning {
+  final DateTime date;
+  final int shiftDefId;
+  final int roleId;
+  final String roleName;
+  final String shiftName;
+  final int required;
+  final int assigned;
+  final int missing;
+
+  StaffingWarning({
+    required this.date,
+    required this.shiftDefId,
+    required this.roleId,
+    required this.roleName,
+    required this.shiftName,
+    required this.required,
+    required this.assigned,
+    required this.missing,
+  });
+
+  factory StaffingWarning.fromJson(Map<String, dynamic> json) {
+    return StaffingWarning(
+      date: DateTime.parse(json['date']),
+      shiftDefId: json['shift_def_id'] as int,
+      roleId: json['role_id'] as int,
+      roleName: json['role_name'] as String,
+      shiftName: json['shift_name'] as String,
+      required: json['required'] as int,
+      assigned: json['assigned'] as int,
+      missing: json['missing'] as int,
+    );
+  }
+}

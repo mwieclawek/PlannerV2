@@ -8,6 +8,7 @@ class ScheduleViewer extends StatelessWidget {
   final List<ShiftDefinition> shifts;
   final List<JobRole> roles;
   final DateTime weekStart;
+  final List<StaffingWarning> warnings;
   final void Function(DateTime date, int shiftId)? onEmptyCellTap;
   final void Function(ScheduleEntry entry)? onAssignmentTap;
 
@@ -17,6 +18,7 @@ class ScheduleViewer extends StatelessWidget {
     required this.shifts,
     required this.roles,
     required this.weekStart,
+    this.warnings = const [],
     this.onEmptyCellTap,
     this.onAssignmentTap,
   });
@@ -40,6 +42,15 @@ class ScheduleViewer extends StatelessWidget {
           s.date.month == date.month &&
           s.date.day == date.day &&
           s.shiftDefId == shiftId;
+    }).toList();
+  }
+
+  List<StaffingWarning> _getWarningsForDayAndShift(DateTime date, int shiftId) {
+    return warnings.where((w) {
+      return w.date.year == date.year &&
+          w.date.month == date.month &&
+          w.date.day == date.day &&
+          w.shiftDefId == shiftId;
     }).toList();
   }
 
@@ -171,6 +182,8 @@ class ScheduleViewer extends StatelessWidget {
                         // Cells for each day
                         ...weekDays.map((day) {
                           final daySchedules = _getSchedulesForDayAndShift(day, shift.id);
+                          final dayWarnings = _getWarningsForDayAndShift(day, shift.id);
+                          final hasWarnings = dayWarnings.isNotEmpty;
                           
                           return GestureDetector(
                             onTap: daySchedules.isEmpty 
@@ -182,18 +195,57 @@ class ScheduleViewer extends StatelessWidget {
                                 margin: const EdgeInsets.symmetric(horizontal: 4),
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: daySchedules.isEmpty 
-                                      ? Colors.grey.shade100 
-                                      : Colors.indigo.shade50,
+                                  color: hasWarnings
+                                      ? Colors.orange.shade50
+                                      : (daySchedules.isEmpty 
+                                          ? Colors.grey.shade100 
+                                          : Colors.indigo.shade50),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                    color: daySchedules.isEmpty 
-                                        ? Colors.grey.shade300 
-                                        : Colors.indigo.shade200,
+                                    color: hasWarnings
+                                        ? Colors.orange.shade400
+                                        : (daySchedules.isEmpty 
+                                            ? Colors.grey.shade300 
+                                            : Colors.indigo.shade200),
+                                    width: hasWarnings ? 1.5 : 1,
                                   ),
                                 ),
-                                child: daySchedules.isEmpty
-                                    ? Center(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Show warnings at the top of the cell
+                                    if (hasWarnings)
+                                      ...dayWarnings.map((warning) => Container(
+                                        margin: const EdgeInsets.only(bottom: 4),
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.shade100,
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: Colors.orange.shade300),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.warning_amber_rounded, 
+                                                size: 12, color: Colors.orange.shade800),
+                                            const SizedBox(width: 4),
+                                            Flexible(
+                                              child: Text(
+                                                'Brakuje: ${warning.roleName} (${warning.missing})',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.orange.shade900,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )),
+                                    // Show assignments or empty state
+                                    if (daySchedules.isEmpty && !hasWarnings)
+                                      Center(
                                         child: Column(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
@@ -209,9 +261,37 @@ class ScheduleViewer extends StatelessWidget {
                                           ],
                                         ),
                                       )
-                                    : Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
+                                    else if (daySchedules.isEmpty && hasWarnings)
+                                      Center(
+                                        child: GestureDetector(
+                                          onTap: onEmptyCellTap != null ? () => onEmptyCellTap!(day, shift.id) : null,
+                                          child: Container(
+                                            margin: const EdgeInsets.only(top: 4),
+                                            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.orange.shade100,
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(Icons.add, size: 12, color: Colors.orange.shade700),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  'Dodaj',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 10,
+                                                    color: Colors.orange.shade700,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    else
+                                      ...[
                                           ...daySchedules.map((schedule) {
                                             return GestureDetector(
                                               onTap: onAssignmentTap != null 
@@ -272,19 +352,20 @@ class ScheduleViewer extends StatelessWidget {
                                                 margin: const EdgeInsets.only(top: 4),
                                                 padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                                                 decoration: BoxDecoration(
-                                                  color: Colors.indigo.shade100,
+                                                  color: hasWarnings ? Colors.orange.shade100 : Colors.indigo.shade100,
                                                   borderRadius: BorderRadius.circular(4),
                                                 ),
                                                 child: Row(
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
-                                                    Icon(Icons.add, size: 12, color: Colors.indigo.shade700),
+                                                    Icon(Icons.add, size: 12, 
+                                                        color: hasWarnings ? Colors.orange.shade700 : Colors.indigo.shade700),
                                                     const SizedBox(width: 4),
                                                     Text(
                                                       'Dodaj',
                                                       style: GoogleFonts.inter(
                                                         fontSize: 10,
-                                                        color: Colors.indigo.shade700,
+                                                        color: hasWarnings ? Colors.orange.shade700 : Colors.indigo.shade700,
                                                         fontWeight: FontWeight.w500,
                                                       ),
                                                     ),
@@ -293,7 +374,8 @@ class ScheduleViewer extends StatelessWidget {
                                               ),
                                             ),
                                         ],
-                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                           );
