@@ -99,23 +99,14 @@ pipeline {
                 unstash 'source'
                 unstash 'flutter-web'
                 
-                // Force stop and remove ANY container using port 80
+                // Force stop and remove nginx first
                 sh '''
-                    # Ensure no container is holding port 80
-                    echo "Checking for containers on port 80..."
-                    CONTAINER_IDS=$(docker ps -a -q --filter "publish=80")
-                    if [ ! -z "$CONTAINER_IDS" ]; then
-                        echo "Found containers on port 80: $CONTAINER_IDS"
-                        docker rm -f $CONTAINER_IDS || true
-                    fi
-                    
-                    # Also explicit cleanup by name
                     docker stop plannerv2-nginx || true
                     docker rm -f plannerv2-nginx || true
                     sleep 2
                 '''
                 
-                // Stop and remove other containers
+                // Stop and remove other container
                 sh '''
                     docker stop plannerv2-backend || true
                     docker rm -f plannerv2-backend || true
@@ -155,11 +146,11 @@ pipeline {
                 // Wait for backend to start
                 sh 'sleep 3'
                 
-                // Start Nginx (port 80 should be free now)
+                // Start Nginx (port 8090 to avoid conflicts with System/Jenkins on 80/8080)
                 sh '''
                     docker run -d --name plannerv2-nginx \
                         --network plannerv2-network \
-                        -p 80:80 \
+                        -p 8090:80 \
                         --restart unless-stopped \
                         nginx:alpine
                     
