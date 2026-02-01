@@ -141,9 +141,10 @@ class TestSolverConstraints:
     
     def test_solve_one_shift_per_day(self, session: Session, job_role):
         """Test that employee gets max 1 shift per day"""
+        from datetime import time
         # Create two shifts
-        shift1 = ShiftDefinition(name="Morning Test", start_time="06:00", end_time="14:00")
-        shift2 = ShiftDefinition(name="Evening Test", start_time="14:00", end_time="22:00")
+        shift1 = ShiftDefinition(name="Morning Test", start_time=time(6, 0), end_time=time(14, 0))
+        shift2 = ShiftDefinition(name="Evening Test", start_time=time(14, 0), end_time=time(22, 0))
         session.add(shift1)
         session.add(shift2)
         session.commit()

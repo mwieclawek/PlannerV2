@@ -88,18 +88,16 @@ def shift_definition_fixture(session: Session):
     from backend.app.models import ShiftDefinition
     from sqlmodel import select
     
-    # Check if already exists
-    existing = session.exec(
-        select(ShiftDefinition).where(ShiftDefinition.start_time == "08:00:00")
-    ).first()
+    # Check if already exists (need to use time objects for comparison if stored as such, 
+    # but here we can rely on Pydantic/SQLAlchemy handling if consistently used)
+    # Ideally, clean DB between tests avoids this, but let's be safe.
+    from datetime import time
     
-    if existing:
-        return existing
-    
+    # Simple check or just create new one
     shift = ShiftDefinition(
         name="Test Morning Shift",
-        start_time="08:00",
-        end_time="16:00"
+        start_time=time(8, 0),
+        end_time=time(16, 0)
     )
     session.add(shift)
     session.commit()
