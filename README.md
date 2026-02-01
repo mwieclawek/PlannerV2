@@ -1,121 +1,87 @@
-# Planner V2 - Automated Staff Scheduling System
+# PlannerV2 - System Planowania Grafików
 
-System do automatycznego generowania grafików pracy z wykorzystaniem Google OR-Tools.
+Aplikacja do automatycznego generowania grafików pracy dla restauracji i lokali gastronomicznych.
 
-## 🎯 Funkcjonalności
+## Funkcjonalności
 
-### Dla Pracowników
-- 📅 Składanie dyspozycyjności na cały tydzień
-- 🎨 Intuicyjny interfejs z kolorowym oznaczeniem statusów
-- 📱 Responsywny design (mobile-first)
-- 🔄 Łatwa zmiana preferencji (kliknięcie = zmiana statusu)
+### Manager
+- 🗓️ **Automatyczny generator grafików** (OR-Tools constraint solver)
+- 👥 **Zarządzanie zespołem** (role, zmiany, pracownicy)
+- ✏️ **Edycja grafiku** - ręczne poprawki po wygenerowaniu
+- ⚙️ **Konfiguracja restauracji** (nazwa, godziny otwarcia)
 
-### Dla Managerów
-- ⚙️ Definiowanie ról (Barista, Kucharz, etc.)
-- ⏰ Konfiguracja zmian (godziny pracy)
-- 📊 Ustawianie wymagań obsadowych
-- 🤖 Automatyczna generacja grafiku (Google OR-Tools)
+### Pracownik
+- 📅 **Podgląd grafiku** na dany tydzień
+- 📝 **Zgłaszanie dostępności** (preferowane/neutralne/niedostępny)
 
-## 🏗️ Architektura
+## Tech Stack
 
-### Backend (Python)
-- **Framework**: FastAPI
-- **Database**: PostgreSQL
-- **Auth**: JWT (Bearer Token)
-- **Solver**: Google OR-Tools (CP-SAT)
+| Warstwa | Technologia |
+|---------|-------------|
+| Frontend | Flutter Web |
+| Backend | FastAPI + SQLModel |
+| Solver | Google OR-Tools |
+| Database | SQLite (dev) / PostgreSQL (prod) |
+| Auth | JWT (python-jose) |
 
-### Frontend (Flutter)
-- **Platforms**: Web, iOS, Android
-- **State Management**: Riverpod
-- **Routing**: GoRouter
-- **HTTP Client**: Dio
-
-## 🚀 Quick Start
-
-### 1. Backend Setup
+## Szybki Start
 
 ```bash
-# Install dependencies
-pip install -r backend/requirements.txt
+# Backend
+cd backend
+pip install -r requirements.txt
+uvicorn backend.app.main:app --reload --port 8000
 
-# Run backend (uses SQLite by default)
-uvicorn backend.app.main:app --reload
-```
-
-API będzie dostępne na: `http://localhost:8000`
-Dokumentacja: `http://localhost:8000/docs`
-
-### 2. Frontend Setup
-
-```bash
+# Frontend
 cd frontend
-
-# Install dependencies
 flutter pub get
-
-# Run on web
-flutter run -d chrome
+flutter run -d web-server --web-port=5000
 ```
 
-## 📖 Workflow
+**Rejestracja Managera:** PIN = `1234`
 
-1. **Manager** definiuje role i zmiany w zakładce "Konfiguracja"
-2. **Manager** ustawia wymagania (ile osób potrzeba na każdej zmianie)
-3. **Pracownicy** logują się i wypełniają swoją dostępność
-4. **Manager** klika "Generuj Grafik" - algorytm OR-Tools automatycznie przypisuje pracowników
-5. System uwzględnia:
-   - ✅ Preferencje pracowników (maksymalizuje "Chcę pracować")
-   - ✅ Wymagania obsadowe (minimum osób na zmianie)
-   - ✅ Ograniczenia (max 1 zmiana dziennie, brak pracy gdy "Nie mogę")
+## Struktura Projektu
 
-## 🔐 Pierwsze Kroki
-
-1. Zarejestruj konto przez `/auth/register`
-2. Domyślnie konto jest typu EMPLOYEE
-3. Aby ustawić konto jako MANAGER, zmień `role_system` w bazie danych na `'MANAGER'`
-
-## 🛠️ Technologie
-
-**Backend:**
-- FastAPI
-- SQLModel
-- PostgreSQL
-- Google OR-Tools
-- JWT Authentication
-
-**Frontend:**
-- Flutter 3.29+
-- Riverpod
-- GoRouter
-- Dio
-- Google Fonts
-- flutter_secure_storage
-
-## 📱 Rozszerzenie na Mobile
-
-Aplikacja Flutter jest już gotowa do kompilacji na iOS i Android:
-
-```bash
-# Android
-flutter build apk
-
-# iOS
-flutter build ios
+```
+PlannerV2/
+├── backend/
+│   ├── app/
+│   │   ├── main.py          # FastAPI app
+│   │   ├── models.py        # SQLModel entities
+│   │   ├── routers/         # API endpoints
+│   │   └── services/
+│   │       └── solver.py    # OR-Tools constraint solver
+│   └── tests/
+├── frontend/
+│   └── lib/
+│       ├── screens/         # Manager & Employee views
+│       ├── providers/       # Riverpod state
+│       └── services/        # API client
+├── nginx/                   # Production reverse proxy
+├── docker-compose.yml
+└── Jenkinsfile              # CI/CD pipeline
 ```
 
-## 🤝 Współpraca Backend-Frontend
+## API Endpoints
 
-- Backend: `http://localhost:8000`
-- Frontend: Zmień `baseUrl` w `lib/services/api_service.dart` jeśli backend jest na innym adresie
+| Endpoint | Opis |
+|----------|------|
+| `POST /auth/register` | Rejestracja |
+| `POST /auth/token` | Login (OAuth2) |
+| `GET /manager/users` | Lista pracowników |
+| `POST /manager/roles` | Dodaj rolę |
+| `POST /manager/shifts` | Dodaj zmianę |
+| `POST /scheduler/generate` | Generuj grafik (AI) |
+| `POST /scheduler/save_batch` | Zapisz zmiany |
 
-## � Dokumentacja
+## Dokumentacja
 
-- **[⚡ QUICKSTART.md](QUICKSTART.md)** - Szybki start w 5 minut
-- **[📖 USER_GUIDE.md](USER_GUIDE.md)** - Szczegółowy przewodnik użytkownika
-- **[🏗️ ARCHITECTURE.md](ARCHITECTURE.md)** - Architektura systemu i diagramy
-- **[🔧 IMPLEMENTATION.md](IMPLEMENTATION.md)** - Szczegóły implementacji i TODO
-- **[🌐 API_EXAMPLES.md](API_EXAMPLES.md)** - Przykłady użycia API
+- [QUICKSTART.md](QUICKSTART.md) - Szczegółowa instrukcja uruchomienia
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Architektura systemu
+- [UI_DESIGN.md](UI_DESIGN.md) - Specyfikacja interfejsu
+- [TEST_PLAN.md](TEST_PLAN.md) - Plan testów
+- [USER_GUIDE.md](USER_GUIDE.md) - Podręcznik użytkownika
 
-## �📝 Licencja
+## Licencja
 
-Projekt prywatny - Planner V2
+MIT License

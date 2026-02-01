@@ -1,100 +1,79 @@
-# ⚡ Quick Start Guide
+# Szybki Start
 
-## 🚀 Uruchomienie w 5 minut
+## Wymagania
 
-### Wymagania
-- Python 3.9+
-- Flutter 3.0+
-- Docker Desktop (dla PostgreSQL)
+- Python 3.11+
+- Flutter 3.x
+- Node.js (opcjonalnie, dla narzędzi budowania)
 
-### Krok 1: Backend (Terminal 1)
+## Uruchomienie Lokalne
+
+### 1. Backend
+
 ```bash
-# Sklonuj/otwórz projekt
 cd PlannerV2
 
-# Zainstaluj zależności Python
+# Utwórz wirtualne środowisko (opcjonalnie)
+python -m venv venv
+venv\Scripts\activate  # Windows
+# source venv/bin/activate  # Linux/Mac
+
+# Zainstaluj zależności
 pip install -r backend/requirements.txt
 
-# Uruchom backend (Baza SQLite zostanie utworzona automatycznie)
-uvicorn backend.app.main:app --reload
+# Uruchom serwer
+uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-✅ Backend działa na: http://localhost:8000
-📖 Dokumentacja API: http://localhost:8000/docs
+Backend będzie dostępny pod: http://127.0.0.1:8000
+Dokumentacja API (Swagger): http://127.0.0.1:8000/docs
 
-### Krok 2: Seed Database (Terminal 2)
+### 2. Frontend
+
 ```bash
-# Wypełnij bazę przykładowymi danymi
-python backend/seed.py
-```
+cd PlannerV2/frontend
 
-✅ Utworzone konta:
-- Manager: manager@planner.com / manager123
-- Employee: anna@planner.com / employee123
-
-### Krok 3: Frontend (Terminal 3)
-```bash
-cd frontend
-
-# Zainstaluj zależności Flutter
+# Zainstaluj zależności
 flutter pub get
 
-# Uruchom aplikację web
-flutter run -d chrome
+# Uruchom serwer deweloperski
+flutter run -d web-server --web-hostname=127.0.0.1 --web-port=5000
 ```
 
-✅ Frontend działa w przeglądarce Chrome
+Aplikacja będzie dostępna pod: http://127.0.0.1:5000
 
-## 🎯 Pierwsze kroki
+## Pierwsza Konfiguracja
 
-1. **Zaloguj się jako Manager**
-   - Email: manager@planner.com
-   - Hasło: manager123
+1. Otwórz http://127.0.0.1:5000
+2. Kliknij "Zarejestruj się"
+3. Wybierz "MANAGER" i podaj PIN: `1234`
+4. Po zalogowaniu przejdź do zakładki "Ustawienia"
+5. Dodaj role (np. Barista, Kucharz)
+6. Dodaj zmiany (np. 08:00-16:00, 16:00-24:00)
+7. Zarejestruj pracowników (jako EMPLOYEE, bez PIN)
+8. Przypisz im role w zakładce "Zespół"
 
-2. **Dodaj role i zmiany**
-   - Zakładka "Konfiguracja"
-   - Dodaj np. "Barista", "Kucharz"
-   - Dodaj zmiany: "Poranna 06:00-14:00"
+## Generowanie Grafiku
 
-3. **Zaloguj się jako Pracownik** (nowa karta przeglądarki)
-   - Email: anna@planner.com
-   - Hasło: employee123
+1. Przejdź do zakładki "Grafik"
+2. Wybierz tydzień
+3. Kliknij "Generuj grafik"
+4. Edytuj ręcznie jeśli potrzeba
+5. Kliknij "Zapisz zmiany"
 
-4. **Wypełnij dostępność**
-   - Klikaj w komórki aby zmienić status
-   - Zielony = Chcę, Żółty = Mogę, Czerwony = Nie mogę
-   - Kliknij "Zapisz zmiany"
+## Docker (Produkcja)
 
-5. **Wróć jako Manager**
-   - Zakładka "Grafik"
-   - Kliknij "Generuj Grafik (AI)"
-   - Zobacz wynik!
+```bash
+docker-compose up -d
+```
 
-## 📚 Dalsze kroki
+Aplikacja będzie dostępna pod: http://localhost (port 80)
 
-- [README.md](README.md) - Pełna dokumentacja
-- [USER_GUIDE.md](USER_GUIDE.md) - Szczegółowy przewodnik użytkownika
-- [API_EXAMPLES.md](API_EXAMPLES.md) - Przykłady API
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Architektura systemu
-- [IMPLEMENTATION.md](IMPLEMENTATION.md) - Szczegóły implementacji
+## Rozwiązywanie Problemów
 
-## ❓ Problemy?
-
-### Backend nie startuje
-- Sprawdź czy Docker Desktop jest uruchomiony
-- Sprawdź czy port 8000 jest wolny
-- Sprawdź czy PostgreSQL działa: `docker ps`
-
-### Frontend nie kompiluje się
-- Uruchom: `flutter doctor`
-- Sprawdź czy Chrome jest zainstalowany
-- Sprawdź czy wszystkie zależności są zainstalowane: `flutter pub get`
-
-### Solver zwraca "infeasible"
-- Za mało pracowników z odpowiednimi rolami
-- Zbyt wysokie wymagania obsadowe
-- Zbyt wiele osób niedostępnych
-
-## 🎉 Gotowe!
-
-Twoja aplikacja do automatycznego planowania grafików jest gotowa do użycia!
+| Problem | Rozwiązanie |
+|---------|-------------|
+| "Invalid manager PIN" | Użyj PIN: `1234` |
+| "Shift already exists" | Zmiany muszą mieć unikalne godziny |
+| Pusty grafik | Sprawdź czy są pracownicy z przypisanymi rolami |
+| 401 Unauthorized | Wyloguj się i zaloguj ponownie |

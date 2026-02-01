@@ -1,137 +1,104 @@
-# Planner V2 - Project Structure
+# Architektura Systemu
 
-```
-PlannerV2/
-├── backend/                      # Python FastAPI Backend
-│   ├── app/
-│   │   ├── models.py            # SQLModel database models
-│   │   ├── database.py          # Database connection
-│   │   ├── main.py              # FastAPI app entry point
-│   │   ├── auth_utils.py        # JWT authentication
-│   │   ├── routers/             # API endpoints
-│   │   │   ├── auth.py          # /auth/* (login, register)
-│   │   │   ├── manager.py       # /manager/* (roles, shifts, requirements)
-│   │   │   ├── employee.py      # /employee/* (availability)
-│   │   │   └── scheduler.py     # /scheduler/* (generate schedule)
-│   │   └── services/
-│   │       └── solver.py        # Google OR-Tools solver logic
-│   ├── requirements.txt         # Python dependencies
-│   └── seed.py                  # Database seeding script
-│
-├── frontend/                     # Flutter Web/Mobile App
-│   ├── lib/
-│   │   ├── main.dart            # App entry point
-│   │   ├── models/
-│   │   │   └── models.dart      # Data models (User, Role, Shift, etc.)
-│   │   ├── services/
-│   │   │   └── api_service.dart # HTTP client with Dio
-│   │   ├── providers/
-│   │   │   └── providers.dart   # Riverpod state management
-│   │   ├── utils/
-│   │   │   └── router.dart      # GoRouter configuration
-│   │   ├── screens/
-│   │   │   ├── login_screen.dart
-│   │   │   ├── employee/
-│   │   │   │   └── employee_dashboard.dart
-│   │   │   └── manager/
-│   │   │       ├── manager_dashboard.dart
-│   │   │       ├── setup_tab.dart
-│   │   │       └── scheduler_tab.dart
-│   │   └── widgets/
-│   │       └── availability_grid.dart  # Interactive calendar
-│   ├── pubspec.yaml             # Flutter dependencies
-│   └── README.md
-│
-├── docker-compose.yml           # PostgreSQL container
-├── README.md                    # Main documentation
-├── IMPLEMENTATION.md            # Implementation details
-└── .gitignore
-
-```
-
-## Architecture Diagram
+## Diagram Komponentów
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Flutter Frontend                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │   Employee   │  │   Manager    │  │    Login     │      │
-│  │  Dashboard   │  │  Dashboard   │  │    Screen    │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-│         │                  │                  │              │
-│         └──────────────────┴──────────────────┘              │
+│                      FRONTEND (Flutter Web)                  │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ Login/Reg   │  │ Manager UI  │  │ Employee Dashboard  │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
 │                          │                                   │
-│                    ┌─────▼─────┐                            │
-│                    │ Riverpod  │                            │
-│                    │ Providers │                            │
-│                    └─────┬─────┘                            │
+│               ┌──────────┴──────────┐                       │
+│               │  ApiService (Dio)   │                       │
+│               └──────────┬──────────┘                       │
+└──────────────────────────┼──────────────────────────────────┘
+                           │ HTTP/REST
+┌──────────────────────────┼──────────────────────────────────┐
+│                      BACKEND (FastAPI)                       │
+├──────────────────────────┼──────────────────────────────────┤
+│               ┌──────────┴──────────┐                       │
+│               │    Routers Layer    │                       │
+│               │  auth │ manager │   │                       │
+│               │  scheduler│employee │                       │
+│               └──────────┬──────────┘                       │
 │                          │                                   │
-│                    ┌─────▼─────┐                            │
-│                    │    Dio    │                            │
-│                    │ API Client│                            │
-│                    └─────┬─────┘                            │
-└──────────────────────────┼───────────────────────────────────┘
-                           │ HTTP + JWT
+│  ┌───────────────────────┼───────────────────────────────┐  │
+│  │              Services Layer                            │  │
+│  │  ┌─────────────────────────────────────────────────┐  │  │
+│  │  │           SolverService (OR-Tools)               │  │  │
+│  │  │  - Constraint Programming                        │  │  │
+│  │  │  - Employee-Shift-Role Assignment               │  │  │
+│  │  └─────────────────────────────────────────────────┘  │  │
+│  └───────────────────────┬───────────────────────────────┘  │
+│                          │                                   │
+│               ┌──────────┴──────────┐                       │
+│               │   SQLModel (ORM)    │                       │
+│               └──────────┬──────────┘                       │
+└──────────────────────────┼──────────────────────────────────┘
                            │
-┌──────────────────────────▼───────────────────────────────────┐
-│                    FastAPI Backend                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │     Auth     │  │   Manager    │  │   Employee   │      │
-│  │   Router     │  │   Router     │  │   Router     │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-│         │                  │                  │              │
-│         └──────────────────┴──────────────────┘              │
-│                          │                                   │
-│                    ┌─────▼─────┐                            │
-│                    │ SQLModel  │                            │
-│                    │  Models   │                            │
-│                    └─────┬─────┘                            │
-│                          │                                   │
-│  ┌──────────────────────▼────────────────────┐             │
-│  │         Google OR-Tools Solver             │             │
-│  │  (Constraint Programming - CP-SAT)         │             │
-│  └────────────────────────────────────────────┘             │
-└──────────────────────────┬───────────────────────────────────┘
-                           │ SQL
-                           │
-┌──────────────────────────▼───────────────────────────────────┐
-│                    PostgreSQL Database                       │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │  users │ job_roles │ shifts │ availability │ schedule│   │
-│  └──────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────┘
+                   ┌───────┴───────┐
+                   │   SQLite DB   │
+                   └───────────────┘
 ```
 
-## Data Flow
+## Modele Danych
 
-### Employee submitting availability:
-1. Employee opens app → Flutter loads availability grid
-2. Taps cells to change status (Preferred/Neutral/Unavailable)
-3. Clicks "Save" → Dio sends POST to `/employee/availability`
-4. Backend validates and saves to PostgreSQL
-5. Returns success → UI shows confirmation
+| Model | Opis | Relacje |
+|-------|------|---------|
+| `User` | Użytkownik systemu | → JobRoles (M:N), → Schedules |
+| `JobRole` | Stanowisko (Barista, Kucharz) | → Users (M:N) |
+| `ShiftDefinition` | Definicja zmiany (8:00-16:00) | - |
+| `Schedule` | Przypisanie: kto, kiedy, gdzie | → User, → Shift, → Role |
+| `Availability` | Dostępność pracownika | → User, → Shift |
+| `StaffingRequirement` | Wymagania (3 baristów rano) | → Shift, → Role |
+| `RestaurantConfig` | Konfiguracja lokalu | Singleton |
 
-### Manager generating schedule:
-1. Manager clicks "Generate Schedule" button
-2. Flutter sends POST to `/scheduler/generate` with date range
-3. Backend:
-   - Fetches all availabilities from DB
-   - Fetches staffing requirements
-   - Runs OR-Tools CP-SAT solver
-   - Saves generated schedule to DB
-4. Returns result (success/infeasible) → UI shows feedback
+## Przepływ Generowania Grafiku
 
-## Technology Stack
+```mermaid
+sequenceDiagram
+    participant M as Manager
+    participant F as Frontend
+    participant B as Backend
+    participant S as Solver
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| Frontend | Flutter 3.29 | Cross-platform UI (Web, iOS, Android) |
-| State | Riverpod | Reactive state management |
-| Routing | GoRouter | Declarative routing with auth |
-| HTTP | Dio | REST API client with interceptors |
-| Backend | FastAPI | Modern Python web framework |
-| ORM | SQLModel | Type-safe database models |
-| Database | PostgreSQL | Relational database |
-| Solver | OR-Tools | Constraint optimization |
-| Auth | JWT | Stateless authentication |
-| Container | Docker | Database containerization |
+    M->>F: Klik "Generuj grafik"
+    F->>B: POST /scheduler/generate
+    B->>S: solve(start_date, end_date)
+    S->>S: Load constraints
+    S->>S: CP-SAT Solver
+    S-->>B: Schedule[]
+    B-->>F: {status, count, schedules}
+    F->>F: Display in grid
+    M->>F: Manual edits
+    M->>F: Klik "Zapisz"
+    F->>B: POST /scheduler/save_batch
+    B-->>F: {status: saved}
+```
+
+## Bezpieczeństwo
+
+- **JWT Auth**: Tokeny ważne 60 min
+- **Manager PIN**: Wymagany przy rejestracji managera (`1234`)
+- **Role-Based Access**: Manager vs Employee permissions
+- **CORS**: Skonfigurowany dla localhost (dev)
+
+## Skalowanie (Produkcja)
+
+```yaml
+# docker-compose.yml
+services:
+  backend:
+    replicas: 2
+    
+  frontend:
+    # Statyczne pliki przez nginx
+    
+  nginx:
+    # Load balancer + SSL termination
+    
+  postgres:
+    # Zamiast SQLite
+```
