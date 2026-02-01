@@ -90,16 +90,49 @@ pipeline {
                 unstash 'source'
                 unstash 'flutter-web'
                 
-                // Stop existing containers (if any)
-                sh 'docker compose down || true'
+                // Stop and remove existing containers (if any)
+                sh 'docker stop plannerv2-backend plannerv2-nginx plannerv2-db || true'
+                sh 'docker rm plannerv2-backend plannerv2-nginx plannerv2-db || true'
                 
-                // Build and start all services
-                sh 'docker compose build --no-cache backend'
-                sh 'docker compose up -d'
+                // Create network if not exists
+                sh 'docker network create plannerv2-network || true'
+                
+                // Start PostgreSQL
+                sh '''
+                    docker run -d --name plannerv2-db \
+                        --network plannerv2-network \
+                        -e POSTGRES_USER=planner_user \
+                        -e POSTGRES_PASSWORD=planner_password \
+                        -e POSTGRES_DB=planner_db \
+                        -v plannerv2_postgres_data:/var/lib/postgresql/data \
+                        --restart unless-stopped \
+                        postgres:15
+                '''
+                
+                // Build and start Backend
+                sh 'docker build -t plannerv2-backend:latest ./backend'
+                sh '''
+                    docker run -d --name plannerv2-backend \
+                        --network plannerv2-network \
+                        -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db \
+                        --restart unless-stopped \
+                        plannerv2-backend:latest
+                '''
+                
+                // Start Nginx with Flutter web
+                sh '''
+                    docker run -d --name plannerv2-nginx \
+                        --network plannerv2-network \
+                        -p 80:80 \
+                        -v $(pwd)/nginx/nginx.conf:/etc/nginx/nginx.conf:ro \
+                        -v $(pwd)/frontend/build/web:/var/www/plannerv2/web:ro \
+                        --restart unless-stopped \
+                        nginx:alpine
+                '''
                 
                 // Health check
                 sh '''
-                    sleep 10
+                    sleep 15
                     curl -f http://localhost/docs || echo "Backend health check pending..."
                 '''
             }
