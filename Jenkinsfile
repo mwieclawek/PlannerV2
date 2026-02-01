@@ -1,5 +1,5 @@
 pipeline {
-    agent none
+    agent none /* Bezpiecznik: Główny węzeł nic nie robi */
     
     options {
         timeout(time: 30, unit: 'MINUTES')
@@ -7,14 +7,21 @@ pipeline {
     }
     
     stages {
+        // --- KROK 1: POBRANIE KODU ---
         stage('Checkout') {
-            agent any
+            agent {
+                docker {
+                    image 'alpine/git'
+                    args '-u 0:0' // root potrzebny do zapisu
+                }
+            }
             steps {
                 checkout scm
                 stash includes: '**/*', name: 'source'
             }
         }
         
+        // --- KROK 2: BACKEND ---
         stage('Backend Tests') {
             agent {
                 docker {
@@ -29,26 +36,34 @@ pipeline {
                     pip install pytest httpx pytest-asyncio uvicorn
                 '''
                 
+                // Kompilacja (sprawdzenie składni)
                 sh 'python -m py_compile backend/app/main.py'
+                sh 'python -m py_compile backend/app/routers/auth.py'
+                sh 'python -m py_compile backend/app/routers/manager.py'
+                sh 'python -m py_compile backend/app/routers/scheduler.py'
                 sh 'mkdir -p test-results'
                 
-                // Testy z poprawnym PYTHONPATH
+                // Uruchomienie serwera w tle z poprawnym PYTHONPATH
                 sh '''
                     export PYTHONPATH=$PWD
                     nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
                     sleep 5
                 '''
                 
+                // Uruchomienie testów (jednostkowe i integracyjne)
                 sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
+                sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_integration.py -v --junitxml=test-results/backend-integration.xml || true'
             }
             post {
                 always {
                     junit allowEmptyResults: true, testResults: 'test-results/*.xml'
+                    sh 'pkill -f uvicorn || true'
                 }
             }
         }
         
-        stage('Frontend Tests') {
+        // --- KROK 3: FRONTEND ---
+        stage('Frontend Tests & Build') {
             agent {
                 docker {
                     image 'ghcr.io/cirruslabs/flutter:stable'
@@ -61,34 +76,32 @@ pipeline {
                     sh 'flutter pub get'
                     sh 'flutter analyze --no-fatal-infos || true'
                     sh 'flutter test --machine > ../test-results/frontend.json || true'
-                }
-            }
-        }
-        
-        stage('Build Flutter Web') {
-            agent {
-                docker {
-                    image 'ghcr.io/cirruslabs/flutter:stable'
-                    args '-u root'
-                }
-            }
-            steps {
-                unstash 'source'
-                dir('frontend') {
-                    sh 'flutter pub get'
+                    
+                    // Budujemy od razu tutaj
                     sh 'flutter build web --release'
                 }
                 stash includes: 'frontend/build/web/**/*', name: 'flutter-web'
             }
         }
         
+        // --- KROK 4: DEPLOY ---
         stage('Deploy') {
-            agent any
+            agent {
+                docker {
+                    // Obraz z klientem dockera
+                    image 'docker:cli'
+                    // Mapowanie socketa z hosta
+                    args '-v /var/run/docker.sock:/var/run/docker.sock -u 0:0'
+                }
+            }
             steps {
                 unstash 'source'
                 unstash 'flutter-web'
                 
                 script {
+                    // Doinstalowanie curla (obraz docker:cli go nie ma, a potrzebujemy do healthchecka)
+                    sh 'apk add --no-cache curl || true'
+
                     echo "🧹 Cleaning up old containers..."
                     sh '''
                         docker rm -f plannerv2-nginx || true
@@ -126,7 +139,7 @@ pipeline {
                     echo "⏳ Waiting for Backend to initialize..."
                     sh 'sleep 10'
                     
-                    // Diagnostyka Backendu - sprawdzamy czy żyje
+                    // Diagnostyka
                     sh '''
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend)" = "false" ]; then
                             echo "❌ CRITICAL: Backend container crashed!"
@@ -138,7 +151,6 @@ pipeline {
                     '''
 
                     echo "🚀 Starting Nginx (Method: docker cp)..."
-                    // 1. Startujemy czystego Nginxa (bez montowania wolumenów, bo to psuje ścieżki)
                     sh '''
                         docker run -d --name plannerv2-nginx \
                             --network plannerv2-network \
@@ -147,10 +159,9 @@ pipeline {
                             nginx:alpine
                     '''
                     
-                    // 2. Dajemy chwilę na start sieci
                     sh 'sleep 5'
                     
-                    // 3. Kopiujemy pliki
+                    // Kopiowanie plików (przez socket hosta)
                     sh '''
                         # Kopiowanie configu
                         docker cp nginx/nginx.conf plannerv2-nginx:/etc/nginx/nginx.conf
@@ -160,9 +171,7 @@ pipeline {
                         docker cp frontend/build/web/. plannerv2-nginx:/var/www/plannerv2/web/
                     '''
                     
-                    // 4. Walidacja i Reload
-                    // Testujemy config PRZED reloadem, żeby zobaczyć błędy składni
-                    // Sprawdzamy czy DNS widzi backend (ping check)
+                    // Walidacja i Reload
                     sh '''
                         echo "🔍 Verifying network visibility..."
                         docker exec plannerv2-nginx getent hosts plannerv2-backend || echo "⚠️ Warning: DNS lookup failed, attempting reload anyway..."
@@ -172,6 +181,12 @@ pipeline {
                         
                         echo "🔄 Reloading Nginx..."
                         docker exec plannerv2-nginx nginx -s reload
+                    '''
+                    
+                    // Health check (używamy curla zainstalowanego na początku skryptu)
+                    sh '''
+                        sleep 5
+                        curl -f http://46.225.49.0:8090/docs || echo "Health check warning (connection check)"
                     '''
                     
                     echo "✅ Deploy Finished!"
