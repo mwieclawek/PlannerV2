@@ -68,22 +68,15 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Mój Grafik',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.teal.shade700,
-        foregroundColor: Colors.white,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
+    // NOTE: No Scaffold here - this is embedded inside EmployeeDashboard which has AppBar
+    return _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+
                   // Week Selector
                   Card(
                     child: Padding(
@@ -301,9 +294,10 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                   ),
                 ],
               ),
-            ),
-    );
+            );
+
   }
+
 
   Map<DateTime, List<EmployeeScheduleEntry>> _groupByDate(List<EmployeeScheduleEntry> entries) {
     final Map<DateTime, List<EmployeeScheduleEntry>> grouped = {};

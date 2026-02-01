@@ -398,24 +398,60 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
             _selectedWeekEnd,
           );
 
-      setState(() {
-        _lastResult = result;
-        _isGenerating = false;
-      });
+      final status = result['status'];
+      
+      if (status == 'success') {
+        // Parse schedules directly from result (draft mode doesn't save to DB)
+        final List<dynamic> schedulesJson = result['schedules'] ?? [];
+        final List<ScheduleEntry> generatedEntries = [];
+        
+        for (final s in schedulesJson) {
+          // Find matching user, role, shift names
+          final userId = s['user_id']?.toString() ?? '';
+          final roleId = s['role_id'] as int? ?? 0;
+          final shiftDefId = s['shift_def_id'] as int? ?? 0;
+          
+          final user = _users.firstWhere((u) => u.id == userId, orElse: () => TeamMember(id: userId, email: '', fullName: 'Unknown', roleSystem: 'EMPLOYEE', jobRoleIds: []));
+          final role = _roles.firstWhere((r) => r.id == roleId, orElse: () => JobRole(id: roleId, name: 'Unknown', colorHex: '#888888'));
+          final shift = _shifts.firstWhere((sh) => sh.id == shiftDefId, orElse: () => ShiftDefinition(id: shiftDefId, name: 'Unknown', startTime: '00:00', endTime: '00:00'));
+          
+          generatedEntries.add(ScheduleEntry(
+            id: s['id']?.toString() ?? 'gen_${generatedEntries.length}',
+            date: DateTime.parse(s['date'].toString()),
+            shiftDefId: shiftDefId,
+            userId: userId,
+            roleId: roleId,
+            isPublished: false,
+            userName: user.fullName,
+            roleName: role.name,
+            shiftName: shift.name,
+          ));
+        }
 
-      // Reload the schedule to display it
-      await _loadSchedule();
+        setState(() {
+          _scheduleEntries = generatedEntries;
+          _originalEntries = List.from(generatedEntries);
+          _lastResult = result;
+          _isGenerating = false;
+          _hasUnsavedChanges = true; // Mark as unsaved since it's a draft
+          _isFirstEdit = true;
+        });
 
-      if (mounted) {
-        final status = result['status'];
-        if (status == 'success') {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('✓ Wygenerowano grafik (${result['count']} przypisań)'),
               backgroundColor: Colors.green,
             ),
           );
-        } else {
+        }
+      } else {
+        setState(() {
+          _lastResult = result;
+          _isGenerating = false;
+        });
+        
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('⚠ Nie udało się wygenerować grafiku - sprawdź wymagania i dostępność'),

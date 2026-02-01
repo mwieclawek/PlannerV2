@@ -27,7 +27,7 @@ class SchedulerService:
                 shift_def_id=item.shift_def_id,
                 user_id=item.user_id,
                 role_id=item.role_id,
-                is_published=False
+                is_published=True  # Visible to employees immediately after save
             )
             self.session.add(new_sched)
             count += 1

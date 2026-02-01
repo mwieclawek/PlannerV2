@@ -119,20 +119,31 @@ pipeline {
                         plannerv2-backend:latest
                 '''
                 
-                // Start Nginx with Flutter web
+                // Start Nginx and copy files (can't mount from Jenkins container)
                 sh '''
                     docker run -d --name plannerv2-nginx \
                         --network plannerv2-network \
                         -p 80:80 \
-                        -v $(pwd)/nginx/nginx.conf:/etc/nginx/nginx.conf:ro \
-                        -v $(pwd)/frontend/build/web:/var/www/plannerv2/web:ro \
                         --restart unless-stopped \
                         nginx:alpine
+                    
+                    # Wait for container to start
+                    sleep 2
+                    
+                    # Copy nginx config
+                    docker cp nginx/nginx.conf plannerv2-nginx:/etc/nginx/nginx.conf
+                    
+                    # Create web directory and copy Flutter build
+                    docker exec plannerv2-nginx mkdir -p /var/www/plannerv2/web
+                    docker cp frontend/build/web/. plannerv2-nginx:/var/www/plannerv2/web/
+                    
+                    # Reload nginx to apply config
+                    docker exec plannerv2-nginx nginx -s reload
                 '''
                 
                 // Health check
                 sh '''
-                    sleep 15
+                    sleep 10
                     curl -f http://localhost/docs || echo "Backend health check pending..."
                 '''
             }
