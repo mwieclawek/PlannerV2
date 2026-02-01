@@ -152,6 +152,10 @@ class ManagerService:
 
     # --- User Role Management ---
     def update_user_roles(self, user_id: UUID, role_ids: List[int]):
+        user = self.session.get(User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
         existing_links = self.session.exec(select(UserJobRoleLink).where(UserJobRoleLink.user_id == user_id)).all()
         for link in existing_links:
             self.session.delete(link)

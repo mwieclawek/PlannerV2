@@ -81,3 +81,49 @@ def employee_headers_fixture(session: Session) -> dict:
     
     token = create_access_token(data={"sub": user.email})
     return {"Authorization": f"Bearer {token}"}
+
+@pytest.fixture(name="shift_definition")
+def shift_definition_fixture(session: Session):
+    """Create a test shift definition"""
+    from backend.app.models import ShiftDefinition
+    from sqlmodel import select
+    
+    # Check if already exists (need to use time objects for comparison if stored as such, 
+    # but here we can rely on Pydantic/SQLAlchemy handling if consistently used)
+    # Ideally, clean DB between tests avoids this, but let's be safe.
+    from datetime import time
+    
+    # Simple check or just create new one
+    shift = ShiftDefinition(
+        name="Test Morning Shift",
+        start_time=time(8, 0),
+        end_time=time(16, 0)
+    )
+    session.add(shift)
+    session.commit()
+    session.refresh(shift)
+    return shift
+
+@pytest.fixture(name="job_role")
+def job_role_fixture(session: Session):
+    """Create a test job role"""
+    from backend.app.models import JobRole
+    from sqlmodel import select
+    
+    # Check if already exists
+    existing = session.exec(
+        select(JobRole).where(JobRole.name == "Test Role")
+    ).first()
+    
+    if existing:
+        return existing
+    
+    role = JobRole(
+        name="Test Role",
+        color_hex="#FF5733"
+    )
+    session.add(role)
+    session.commit()
+    session.refresh(role)
+    return role
+

@@ -3,9 +3,9 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
 from datetime import timedelta
 from ..database import get_session
-from ..models import User, RoleSystem
-from ..auth_utils import verify_password, get_password_hash, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
-from ..schemas import Token, UserCreate
+from backend.app.models import User, RoleSystem
+from backend.app.auth_utils import verify_password, get_password_hash, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
+from backend.app.schemas import Token, UserCreate
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
