@@ -1,0 +1,12 @@
+import sqlite3
+conn = sqlite3.connect('planner.db')
+cursor = conn.cursor()
+cursor.execute('DELETE FROM staffingrequirement')
+cursor.execute('DELETE FROM schedule')
+cursor.execute('DELETE FROM shiftdefinition WHERE name LIKE "Fast%" OR name LIKE "Alt%" OR name == "S1"')
+cursor.execute('DELETE FROM jobrole WHERE name LIKE "Fast%" OR name LIKE "Alt%" OR name == "R1"')
+conn.commit()
+print("Cleanup done.")
+cursor.execute('SELECT name FROM shiftdefinition')
+print("Shifts remains:", cursor.fetchall())
+conn.close()

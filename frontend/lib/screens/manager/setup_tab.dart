@@ -1,0 +1,475 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../providers/providers.dart';
+import '../../models/models.dart';
+
+class SetupTab extends ConsumerStatefulWidget {
+  const SetupTab({super.key});
+
+  @override
+  ConsumerState<SetupTab> createState() => _SetupTabState();
+}
+
+class _SetupTabState extends ConsumerState<SetupTab> {
+  final _roleNameController = TextEditingController();
+  final _roleColorController = TextEditingController(text: '#3B82F6');
+  final _shiftNameController = TextEditingController();
+  final _shiftStartController = TextEditingController();
+  final _shiftEndController = TextEditingController();
+
+  @override
+  void dispose() {
+    _roleNameController.dispose();
+    _roleColorController.dispose();
+    _shiftNameController.dispose();
+    _shiftStartController.dispose();
+    _shiftEndController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addRole() async {
+    if (_roleNameController.text.isEmpty) return;
+
+    try {
+      await ref.read(apiServiceProvider).createRole(
+            _roleNameController.text,
+            _roleColorController.text,
+          );
+      
+      _roleNameController.clear();
+      ref.invalidate(rolesProvider);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✓ Rola dodana')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Błąd: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _addShift() async {
+    if (_shiftNameController.text.isEmpty ||
+        _shiftStartController.text.isEmpty ||
+        _shiftEndController.text.isEmpty) return;
+
+    // Validate for duplicate times
+    final existingShifts = ref.read(shiftsProvider).value ?? [];
+    final newStart = _shiftStartController.text.trim();
+    final newEnd = _shiftEndController.text.trim();
+    
+    final duplicate = existingShifts.any((s) => 
+      s.startTime == newStart && s.endTime == newEnd
+    );
+    
+    if (duplicate) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Taka zmiana już istnieje (te same godziny)'),
+            backgroundColor: Colors.orange.shade600,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      await ref.read(apiServiceProvider).createShift(
+            _shiftNameController.text,
+            newStart,
+            newEnd,
+          );
+      
+      _shiftNameController.clear();
+      _shiftStartController.clear();
+      _shiftEndController.clear();
+      ref.invalidate(shiftsProvider);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✓ Zmiana dodana')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Błąd: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteRole(JobRole role) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Usuń rolę'),
+        content: Text('Czy na pewno chcesz usunąć rolę "${role.name}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Anuluj')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Usuń'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ref.read(apiServiceProvider).deleteRole(role.id);
+        ref.invalidate(rolesProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Usunięto rolę "${role.name}"'), backgroundColor: Colors.orange.shade600),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red.shade600),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _confirmDeleteShift(ShiftDefinition shift) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Usuń zmianę'),
+        content: Text('Czy na pewno chcesz usunąć zmianę "${shift.name}"?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Anuluj')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Usuń'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ref.read(apiServiceProvider).deleteShift(shift.id);
+        ref.invalidate(shiftsProvider);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Usunięto zmianę "${shift.name}"'), backgroundColor: Colors.orange.shade600),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red.shade600),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rolesAsync = ref.watch(rolesProvider);
+    final shiftsAsync = ref.watch(shiftsProvider);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Restaurant Section
+          Text(
+            'Restauracja',
+            style: GoogleFonts.outfit(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    decoration: const InputDecoration(
+                      labelText: 'Nazwa restauracji',
+                      hintText: 'np. Kawiarnia Pod Lipą',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.restaurant),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          decoration: const InputDecoration(
+                            labelText: 'Godziny otwarcia (od)',
+                            hintText: '08:00',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.access_time),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextField(
+                          decoration: const InputDecoration(
+                            labelText: 'Godziny otwarcia (do)',
+                            hintText: '22:00',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.access_time),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Zapisano ustawienia restauracji')),
+                        );
+                      },
+                      icon: const Icon(Icons.save),
+                      label: const Text('Zapisz'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.indigo.shade700,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 32),
+          
+          // Roles Section
+          Text(
+            'Role / Stanowiska',
+            style: GoogleFonts.outfit(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Dodaj nową rolę',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: _roleNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Nazwa roli',
+                            hintText: 'np. Barista, Kucharz',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _roleColorController,
+                          decoration: const InputDecoration(
+                            labelText: 'Kolor (hex)',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: _addRole,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Dodaj'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.indigo.shade700,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 20,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  rolesAsync.when(
+                    data: (roles) {
+                      if (roles.isEmpty) {
+                        return const Text('Brak zdefiniowanych ról');
+                      }
+                      return Column(
+                        children: roles.map((role) {
+                          return ListTile(
+                            leading: Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: _parseColor(role.colorHex),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            title: Text(role.name),
+                            trailing: IconButton(
+                              icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                              onPressed: () => _confirmDeleteRole(role),
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
+                    loading: () => const CircularProgressIndicator(),
+                    error: (e, s) => Text('Błąd: $e'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 32),
+          
+          // Shifts Section
+          Text(
+            'Zmiany',
+            style: GoogleFonts.outfit(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Dodaj nową zmianę',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: TextField(
+                          controller: _shiftNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Nazwa zmiany',
+                            hintText: 'np. Poranna, Popołudniowa',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _shiftStartController,
+                          decoration: const InputDecoration(
+                            labelText: 'Start (HH:MM)',
+                            hintText: '08:00',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: _shiftEndController,
+                          decoration: const InputDecoration(
+                            labelText: 'Koniec (HH:MM)',
+                            hintText: '16:00',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        onPressed: _addShift,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Dodaj'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.indigo.shade700,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 20,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  shiftsAsync.when(
+                    data: (shifts) {
+                      if (shifts.isEmpty) {
+                        return const Text('Brak zdefiniowanych zmian');
+                      }
+                      return Column(
+                        children: shifts.map((shift) {
+                          return ListTile(
+                            leading: const Icon(Icons.schedule),
+                            title: Text(shift.name),
+                            subtitle: Text('${shift.startTime} - ${shift.endTime}'),
+                            trailing: IconButton(
+                              icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                              onPressed: () => _confirmDeleteShift(shift),
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
+                    loading: () => const CircularProgressIndicator(),
+                    error: (e, s) => Text('Błąd: $e'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _parseColor(String hex) {
+    try {
+      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+    } catch (e) {
+      return Colors.blue;
+    }
+  }
+}

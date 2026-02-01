@@ -1,0 +1,10 @@
+import sqlite3
+conn = sqlite3.connect('planner.db')
+cursor = conn.cursor()
+cursor.execute('SELECT email, role_system FROM user WHERE email LIKE "%3102%"')
+print("Users:", cursor.fetchall())
+cursor.execute('SELECT name FROM jobrole WHERE name LIKE "%3102%"')
+print("Roles:", cursor.fetchall())
+cursor.execute('SELECT name FROM shiftdefinition WHERE name LIKE "%3102%"')
+print("Shifts:", cursor.fetchall())
+conn.close()

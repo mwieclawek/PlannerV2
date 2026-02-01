@@ -1,0 +1,226 @@
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../models/models.dart';
+
+class ApiService {
+  static const String baseUrl = 'http://127.0.0.1:8000';
+  final Dio _dio;
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
+  ApiService() : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
+    _dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) async {
+        final token = await _storage.read(key: 'access_token');
+        if (token != null) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
+        return handler.next(options);
+      },
+      onError: (error, handler) {
+        if (error.response?.statusCode == 401) {
+          // Token expired or invalid
+          _storage.delete(key: 'access_token');
+        }
+        return handler.next(error);
+      },
+    ));
+  }
+
+  // Auth
+  Future<String> login(String email, String password) async {
+    final response = await _dio.post(
+      '/auth/token',
+      data: {
+        'username': email,
+        'password': password,
+      },
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        // prevent throwing for 400 so we can inspect it, or just let it throw but ensure Interceptor handles it?
+        // Actually, let's keep it throwing but standard
+      ),
+    );
+    final token = response.data['access_token'];
+    await _storage.write(key: 'access_token', value: token);
+    return token;
+  }
+
+  Future<String> register(String email, String password, String fullName, String roleSystem, {String? managerPin}) async {
+    final data = {
+      'email': email,
+      'password': password,
+      'full_name': fullName,
+      'role_system': roleSystem,
+    };
+    if (managerPin != null && managerPin.isNotEmpty) {
+      data['manager_pin'] = managerPin;
+    }
+    final response = await _dio.post('/auth/register', data: data);
+    final token = response.data['access_token'];
+    await _storage.write(key: 'access_token', value: token);
+    return token;
+  }
+
+  Future<User> getCurrentUser() async {
+    final response = await _dio.get('/auth/me');
+    return User.fromJson(response.data);
+  }
+
+  Future<void> logout() async {
+    await _storage.delete(key: 'access_token');
+  }
+
+  // Roles
+  Future<List<JobRole>> getRoles() async {
+    final response = await _dio.get('/manager/roles');
+    return (response.data as List).map((e) => JobRole.fromJson(e)).toList();
+  }
+
+  Future<JobRole> createRole(String name, String colorHex) async {
+    final response = await _dio.post('/manager/roles', data: {
+      'name': name,
+      'color_hex': colorHex,
+    });
+    return JobRole.fromJson(response.data);
+  }
+
+  // Shifts
+  Future<List<ShiftDefinition>> getShifts() async {
+    final response = await _dio.get('/manager/shifts');
+    return (response.data as List).map((e) => ShiftDefinition.fromJson(e)).toList();
+  }
+
+  Future<ShiftDefinition> createShift(String name, String startTime, String endTime) async {
+    final response = await _dio.post('/manager/shifts', data: {
+      'name': name,
+      'start_time': startTime,
+      'end_time': endTime,
+    });
+    return ShiftDefinition.fromJson(response.data);
+  }
+
+  // Availability (Employee)
+  Future<List<Availability>> getAvailability(DateTime startDate, DateTime endDate) async {
+    final response = await _dio.get('/employee/availability', queryParameters: {
+      'start_date': startDate.toIso8601String().split('T')[0],
+      'end_date': endDate.toIso8601String().split('T')[0],
+    });
+    return (response.data as List).map((e) => Availability.fromJson(e)).toList();
+  }
+
+  Future<void> updateAvailability(List<AvailabilityUpdate> updates) async {
+    await _dio.post('/employee/availability', data: updates.map((e) => e.toJson()).toList());
+  }
+
+  // Scheduler (Manager)
+  Future<Map<String, dynamic>> generateSchedule(DateTime startDate, DateTime endDate) async {
+    final response = await _dio.post('/scheduler/generate', data: {
+      'start_date': startDate.toIso8601String().split('T')[0],
+      'end_date': endDate.toIso8601String().split('T')[0],
+    });
+    return response.data;
+  }
+
+  // Requirements (Manager)
+  Future<List<Requirement>> getRequirements(DateTime startDate, DateTime endDate) async {
+    final response = await _dio.get('/manager/requirements', queryParameters: {
+      'start_date': startDate.toIso8601String().split('T')[0],
+      'end_date': endDate.toIso8601String().split('T')[0],
+    });
+    return (response.data as List).map((e) => Requirement.fromJson(e)).toList();
+  }
+
+  Future<void> setRequirements(List<RequirementUpdate> requirements) async {
+    await _dio.post('/manager/requirements', 
+      data: requirements.map((e) => e.toJson()).toList()
+    );
+  }
+
+  // Schedule viewing (Manager)
+  Future<List<ScheduleEntry>> getManagerSchedule(DateTime startDate, DateTime endDate) async {
+    final response = await _dio.get('/scheduler/list', queryParameters: {
+      'start_date': startDate.toIso8601String().split('T')[0],
+      'end_date': endDate.toIso8601String().split('T')[0],
+    });
+    return (response.data as List).map((e) => ScheduleEntry.fromJson(e)).toList();
+  }
+
+  // Schedule viewing (Employee)
+  Future<List<EmployeeScheduleEntry>> getEmployeeSchedule(DateTime startDate, DateTime endDate) async {
+    final response = await _dio.get('/employee/my-schedule', queryParameters: {
+      'start_date': startDate.toIso8601String().split('T')[0],
+      'end_date': endDate.toIso8601String().split('T')[0],
+    });
+    return (response.data as List).map((e) => EmployeeScheduleEntry.fromJson(e)).toList();
+  }
+
+  // Check if user is logged in
+  Future<bool> isLoggedIn() async {
+    final token = await _storage.read(key: 'access_token');
+    return token != null;
+  }
+
+  // Team Management (Manager)
+  Future<List<TeamMember>> getUsers() async {
+    final response = await _dio.get('/manager/users');
+    return (response.data as List).map((e) => TeamMember.fromJson(e)).toList();
+  }
+
+  Future<void> setUserRoles(String userId, List<int> roleIds) async {
+    // Using PUT endpoint which clears existing roles and sets new ones
+    await _dio.put('/manager/users/$userId/roles', data: {
+      'role_ids': roleIds,
+    });
+  }
+
+  Future<void> resetUserPassword(String userId, String newPassword) async {
+    await _dio.put('/manager/users/$userId/password', data: {
+      'new_password': newPassword,
+    });
+  }
+
+  // Manual Schedule Editing
+  Future<void> createAssignment({
+    required DateTime date,
+    required int shiftDefId,
+    required String userId,
+    required int roleId,
+  }) async {
+    await _dio.post('/scheduler/assignment', data: {
+      'date': date.toIso8601String().split('T').first,
+      'shift_def_id': shiftDefId,
+      'user_id': userId,
+      'role_id': roleId,
+    });
+  }
+
+  Future<void> deleteAssignment(String scheduleId) async {
+    await _dio.delete('/scheduler/assignment/$scheduleId');
+  }
+
+  // Role Management
+  Future<void> deleteRole(int roleId) async {
+    await _dio.delete('/manager/roles/$roleId');
+  }
+
+  // Shift Management
+  Future<void> deleteShift(int shiftId) async {
+    await _dio.delete('/manager/shifts/$shiftId');
+  }
+
+  // Batch Schedule Save
+  Future<void> saveBatchSchedule(DateTime startDate, DateTime endDate, List<ScheduleEntry> entries) async {
+    final data = entries.map((e) => {
+      'date': e.date.toIso8601String().split('T').first,
+      'shift_def_id': e.shiftDefId,
+      'user_id': e.userId,
+      'role_id': e.roleId,
+    }).toList();
+    
+    await _dio.post('/scheduler/save_batch', data: {
+      'start_date': startDate.toIso8601String().split('T').first,
+      'end_date': endDate.toIso8601String().split('T').first,
+      'entries': data,
+    });
+  }
+}

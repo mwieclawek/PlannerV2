@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+sqlmodel
+psycopg2-binary
+asyncpg
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+ortools
+requests
+pytest
+pytest-asyncio
+httpx
