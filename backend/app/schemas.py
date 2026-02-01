@@ -1,8 +1,10 @@
-from datetime import date, time
+from pydantic import BaseModel, field_validator, ValidationInfo
+from datetime import datetime, date, time
 from typing import List, Optional
 from uuid import UUID
-from pydantic import BaseModel
-from .models import RoleSystem, AvailabilityStatus
+from backend.app.models import RoleSystem, AvailabilityStatus
+
+# ... (Previous imports remain, but need field_validator, ValidationInfo)
 
 # --- Auth ---
 class Token(BaseModel):
@@ -31,7 +33,12 @@ class JobRoleBase(BaseModel):
     color_hex: str
 
 class JobRoleCreate(JobRoleBase):
-    pass
+    @field_validator('name')
+    @classmethod
+    def name_must_not_be_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError('Name cannot be empty')
+        return v
 
 class JobRoleResponse(JobRoleBase):
     id: int
@@ -46,7 +53,14 @@ class ShiftDefBase(BaseModel):
     end_time: str   # HH:MM
 
 class ShiftDefCreate(ShiftDefBase):
-    pass
+    @field_validator('start_time', 'end_time')
+    @classmethod
+    def validate_time_format(cls, v: str) -> str:
+        try:
+            datetime.strptime(v, "%H:%M")
+        except ValueError:
+            raise ValueError("Time must be in HH:MM format")
+        return v
 
 class ShiftDefResponse(BaseModel):
     id: int
@@ -80,7 +94,12 @@ class RequirementBase(BaseModel):
     min_count: int
 
 class RequirementCreate(RequirementBase):
-    pass
+    @field_validator('min_count')
+    @classmethod
+    def min_count_non_negative(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError('min_count must be non-negative')
+        return v
 
 class RequirementResponse(RequirementBase):
     id: UUID
