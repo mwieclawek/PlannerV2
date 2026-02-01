@@ -3,14 +3,43 @@ version: '3.8'
 services:
   db:
     image: postgres:15
+    restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=planner_user
       - POSTGRES_PASSWORD=planner_password
       - POSTGRES_DB=planner_db
+    networks:
+      - plannerv2-network
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://planner_user:planner_password@db:5432/planner_db
+    networks:
+      - plannerv2-network
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/build/web:/var/www/plannerv2/web:ro
+    depends_on:
+      - backend
+    networks:
+      - plannerv2-network
 
 volumes:
   postgres_data:
+
+
+networks:
+  plannerv2-network:
+    driver: bridge

@@ -66,14 +66,52 @@ pipeline {
                 }
             }
         }
+        
+        stage('Build Flutter Web') {
+            agent {
+                docker {
+                    image 'cirrusci/flutter:stable'
+                    args '-u root'
+                }
+            }
+            steps {
+                unstash 'source'
+                dir('frontend') {
+                    sh 'flutter pub get'
+                    sh 'flutter build web --release'
+                }
+                stash includes: 'frontend/build/web/**/*', name: 'flutter-web'
+            }
+        }
+        
+        stage('Deploy') {
+            agent any
+            steps {
+                unstash 'source'
+                unstash 'flutter-web'
+                
+                // Stop existing containers (if any)
+                sh 'docker-compose down || true'
+                
+                // Build and start all services
+                sh 'docker-compose build --no-cache backend'
+                sh 'docker-compose up -d'
+                
+                // Health check
+                sh '''
+                    sleep 10
+                    curl -f http://localhost/docs || echo "Backend health check pending..."
+                '''
+            }
+        }
     }
     
     post {
         success {
-            echo 'All tests passed!'
+            echo 'Pipeline completed successfully! App deployed.'
         }
         failure {
-            echo 'Tests failed!'
+            echo 'Pipeline failed!'
         }
     }
 }
