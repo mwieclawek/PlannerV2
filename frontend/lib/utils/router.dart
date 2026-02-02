@@ -6,12 +6,29 @@ import '../screens/login_screen.dart';
 import '../screens/employee/employee_dashboard.dart';
 import '../screens/manager/manager_dashboard.dart';
 
-final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
+/// Listenable that notifies when auth state changes
+class AuthNotifierListenable extends ChangeNotifier {
+  AuthNotifierListenable(this._ref) {
+    _ref.listen(authProvider, (_, __) {
+      notifyListeners();
+    });
+  }
+  
+  final Ref _ref;
+}
 
+final authListenableProvider = Provider<AuthNotifierListenable>((ref) {
+  return AuthNotifierListenable(ref);
+});
+
+final routerProvider = Provider<GoRouter>((ref) {
+  final authListenable = ref.watch(authListenableProvider);
+  
   return GoRouter(
     initialLocation: '/login',
+    refreshListenable: authListenable,
     redirect: (context, state) {
+      final authState = ref.read(authProvider);
       final isLoading = authState.isLoading;
       final user = authState.value;
       final isLoggedIn = user != null;
@@ -53,3 +70,4 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
