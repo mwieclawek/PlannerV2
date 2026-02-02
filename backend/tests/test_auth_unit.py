@@ -146,5 +146,49 @@ class TestTokenValidation:
             jwt.decode("", SECRET_KEY, algorithms=[ALGORITHM])
 
 
+class TestAuthMeEndpoint:
+    """Tests for /auth/me endpoint response format"""
+    
+    @pytest.mark.asyncio
+    async def test_auth_me_returns_required_fields(self, client, auth_headers):
+        """Test that /auth/me returns all fields expected by frontend"""
+        response = await client.get("/auth/me", headers=auth_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Frontend User.fromJson expects these fields
+        assert "id" in data
+        assert "email" in data
+        assert "full_name" in data
+        assert "role_system" in data
+        assert "created_at" in data  # Critical field for frontend
+        
+    @pytest.mark.asyncio
+    async def test_auth_me_created_at_is_parseable(self, client, auth_headers):
+        """Test that created_at is a valid ISO datetime string"""
+        response = await client.get("/auth/me", headers=auth_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Verify created_at can be parsed as datetime
+        from datetime import datetime
+        created_at = data.get("created_at")
+        assert created_at is not None
+        # Should not raise exception
+        datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+    
+    @pytest.mark.asyncio
+    async def test_auth_me_role_system_is_string(self, client, auth_headers):
+        """Test that role_system is a string value (MANAGER or EMPLOYEE)"""
+        response = await client.get("/auth/me", headers=auth_headers)
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert data["role_system"] in ["MANAGER", "EMPLOYEE"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
