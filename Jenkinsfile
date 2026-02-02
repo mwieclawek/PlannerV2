@@ -40,6 +40,12 @@ pipeline {
                 sh 'python -m py_compile backend/app/routers/scheduler.py'
                 sh 'mkdir -p test-results'
                 
+                // Najpierw uruchom testy jednostkowe (nie wymagają serwera)
+                sh '''
+                    export PYTHONPATH=$PWD
+                    python -m pytest backend/tests/test_auth_unit.py backend/tests/test_employee.py backend/tests/test_manager_edge_cases.py backend/tests/test_scheduler_unit.py backend/tests/test_solver_unit.py -v --junitxml=test-results/backend-unit.xml || true
+                '''
+                
                 // Uruchomienie serwera w tle z poprawnym PYTHONPATH (kluczowe!)
                 sh '''
                     export PYTHONPATH=$PWD
@@ -47,7 +53,7 @@ pipeline {
                     sleep 5
                 '''
                 
-                // Uruchomienie wszystkich testów
+                // Uruchomienie testów API i integracyjnych (wymagają serwera)
                 sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
                 sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_integration.py -v --junitxml=test-results/backend-integration.xml || true'
             }
