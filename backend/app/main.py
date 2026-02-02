@@ -2,14 +2,27 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import init_db
 from contextlib import asynccontextmanager
+import time
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    try:
-        init_db()
-    except Exception as e:
-        print(f"Database connection failed (expected if DB not running yet): {e}")
+    # Startup: Retry DB connection
+    max_retries = 5
+    for i in range(max_retries):
+        try:
+            init_db()
+            logger.info("Database initialized successfully.")
+            break
+        except Exception as e:
+            logger.warning(f"Database connection failed (attempt {i+1}/{max_retries}): {e}")
+            if i == max_retries - 1:
+                logger.error("Could not connect to database after retries. Exiting.")
+                # We could raise here to crash container if critical
+            time.sleep(5)
     yield
     # Shutdown
 
