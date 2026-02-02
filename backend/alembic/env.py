@@ -10,13 +10,14 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from alembic import context
 
-# Add backend to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add project root to path for consistent imports (backend.app.*)
+# This goes up: env.py -> alembic -> backend -> project_root
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from sqlmodel import SQLModel
 
 # Import all models so they are registered with SQLModel.metadata
-from app.models import (
+from backend.app.models import (
     User, JobRole, ShiftDefinition, Availability,
     StaffingRequirement, Schedule, RestaurantConfig, UserJobRoleLink
 )
