@@ -22,7 +22,8 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: UUID
-    job_roles: List[int]
+    created_at: datetime
+    job_roles: List[int] = []
 
     class Config:
         from_attributes = True

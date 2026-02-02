@@ -5,7 +5,7 @@ from datetime import timedelta
 from ..database import get_session
 from backend.app.models import User, RoleSystem
 from backend.app.auth_utils import verify_password, get_password_hash, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
-from backend.app.schemas import Token, UserCreate
+from backend.app.schemas import Token, UserCreate, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -47,6 +47,15 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), ses
     access_token = create_access_token(data={"sub": user.email}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.get("/me", response_model=User)
+@router.get("/me", response_model=UserResponse)
 def read_users_me(current_user: User = Depends(get_current_user)):
-    return current_user
+    # Manually build response with job_roles as list of IDs
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role_system": current_user.role_system,
+        "created_at": current_user.created_at,
+        "job_roles": [role.id for role in current_user.job_roles] if current_user.job_roles else []
+    }
+
