@@ -64,9 +64,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       if (mounted) {
         String message = 'Wystąpił błąd';
-        if (e is DioException && e.response?.data != null) {
-          if (e.response!.data is Map && e.response!.data['detail'] != null) {
-            message = e.response!.data['detail'].toString();
+        if (e is DioException) {
+          final responseData = e.response?.data;
+          if (responseData is Map && responseData['detail'] != null) {
+            message = responseData['detail'].toString();
             // Translate common errors
             if (message == 'Email already registered') {
               message = 'Ten email jest już zarejestrowany';
