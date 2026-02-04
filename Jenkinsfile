@@ -77,15 +77,23 @@ pipeline {
                 unstash 'flutter-web'
                 script {
                     sh 'apk add --no-cache curl sed || true'
+                    
+                    echo "🧹 Sprzątanie środowiska DEV..."
                     sh 'docker rm -f plannerv2-nginx-dev plannerv2-backend-dev plannerv2-db-dev || true'
+                    
+                    // Upewniamy się, że sieć istnieje
                     sh 'docker network create plannerv2-network || true'
                     
+                    echo "🗄️ Start Bazy DEV..."
                     sh '''docker run -d --name plannerv2-db-dev --network plannerv2-network \
                           -e POSTGRES_USER=planner_user -e POSTGRES_PASSWORD=planner_password -e POSTGRES_DB=planner_db \
                           -v plannerv2_postgres_data_dev:/var/lib/postgresql/data --restart unless-stopped postgres:15'''
-                    sh 'sleep 5'
+                    sh 'sleep 10' // Dajemy bazie więcej czasu na start
                     
+                    echo "🐍 Start Backend DEV..."
                     sh 'docker build -t plannerv2-backend:dev ./backend'
+                    
+                    // Startujemy backend
                     sh '''
                         docker run -d --name plannerv2-backend-dev --network plannerv2-network \
                         -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db \
@@ -93,16 +101,37 @@ pipeline {
                         /bin/sh -c "ln -s /app /app/backend && export PYTHONPATH=/app && uvicorn app.main:app --host 0.0.0.0 --port 8000"
                     '''
                     
+                    echo "⏳ Czekam na start Backendu..."
+                    sh 'sleep 10'
+                    
+                    // --- DIAGNOSTYKA (To pokaże dlaczego backend pada) ---
+                    sh '''
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev)" = "false" ]; then
+                            echo "❌ CRITICAL: Backend DEV crashed!"
+                            echo "🔍 LOGI BACKENDU:"
+                            docker logs plannerv2-backend-dev
+                            exit 1
+                        else
+                            echo "✅ Backend DEV działa."
+                        fi
+                    '''
+                    
+                    echo "🔧 Konfiguracja Nginxa dla DEV..."
+                    // Zamieniamy nazwę hosta w configu, żeby Nginx szukał 'plannerv2-backend-dev'
                     sh "sed -i 's/plannerv2-backend/plannerv2-backend-dev/g' nginx/nginx.conf"
                     
+                    echo "🚀 Start Nginxa DEV (Port 8091)..."
                     sh 'docker run -d --name plannerv2-nginx-dev --network plannerv2-network -p 8091:80 --restart unless-stopped nginx:alpine'
                     sh 'sleep 5'
+                    
                     sh '''
                         docker cp nginx/nginx.conf plannerv2-nginx-dev:/etc/nginx/nginx.conf
                         docker exec plannerv2-nginx-dev mkdir -p /var/www/plannerv2/web
                         docker cp frontend/build/web/. plannerv2-nginx-dev:/var/www/plannerv2/web/
                         docker exec plannerv2-nginx-dev nginx -s reload
                     '''
+                    
+                    echo "✅ DEV Wdrożony na porcie 8091!"
                 }
             }
         }
@@ -138,6 +167,15 @@ pipeline {
                         /bin/sh -c "ln -s /app /app/backend && export PYTHONPATH=/app && uvicorn app.main:app --host 0.0.0.0 --port 8000"
                     '''
                     sh 'sleep 10'
+                    
+                    // Diagnostyka PROD
+                    sh '''
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend)" = "false" ]; then
+                            echo "❌ CRITICAL: Backend PROD crashed!"
+                            docker logs plannerv2-backend
+                            exit 1
+                        fi
+                    '''
                     
                     sh 'docker run -d --name plannerv2-nginx --network plannerv2-network -p 8090:80 --restart unless-stopped nginx:alpine'
                     sh 'sleep 5'
