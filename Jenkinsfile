@@ -35,6 +35,7 @@ pipeline {
                     nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
                     sleep 5
                 '''
+                // Używamy "|| true" żeby błędy testów nie blokowały pipeline'u na tym etapie (opcjonalnie)
                 sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
             }
             post {
@@ -81,19 +82,19 @@ pipeline {
                     echo "🧹 Sprzątanie środowiska DEV..."
                     sh 'docker rm -f plannerv2-nginx-dev plannerv2-backend-dev plannerv2-db-dev || true'
                     
-                    // Upewniamy się, że sieć istnieje
+                    echo "🌐 Network..."
                     sh 'docker network create plannerv2-network || true'
                     
                     echo "🗄️ Start Bazy DEV..."
                     sh '''docker run -d --name plannerv2-db-dev --network plannerv2-network \
                           -e POSTGRES_USER=planner_user -e POSTGRES_PASSWORD=planner_password -e POSTGRES_DB=planner_db \
                           -v plannerv2_postgres_data_dev:/var/lib/postgresql/data --restart unless-stopped postgres:15'''
-                    sh 'sleep 10' // Dajemy bazie więcej czasu na start
+                    
+                    echo "⏳ Czekanie 10s na inicjalizację bazy..."
+                    sh 'sleep 10' 
                     
                     echo "🐍 Start Backend DEV..."
                     sh 'docker build -t plannerv2-backend:dev ./backend'
-                    
-                    // Startujemy backend
                     sh '''
                         docker run -d --name plannerv2-backend-dev --network plannerv2-network \
                         -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db \
@@ -101,23 +102,24 @@ pipeline {
                         /bin/sh -c "ln -s /app /app/backend && export PYTHONPATH=/app && uvicorn app.main:app --host 0.0.0.0 --port 8000"
                     '''
                     
-                    echo "⏳ Czekam na start Backendu..."
+                    echo "⏳ Czekanie 10s na start Backendu..."
                     sh 'sleep 10'
                     
-                    // --- DIAGNOSTYKA (To pokaże dlaczego backend pada) ---
+                    // --- KLUCZOWA ZMIANA: SPRAWDZAMY CZY BACKEND ŻYJE ---
                     sh '''
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev)" = "false" ]; then
-                            echo "❌ CRITICAL: Backend DEV crashed!"
-                            echo "🔍 LOGI BACKENDU:"
+                            echo "❌ CRITICAL: Backend DEV crashed! Nie uruchamiam Nginxa."
+                            echo "🔍 OTO LOGI Z KONTENERA BACKENDU:"
                             docker logs plannerv2-backend-dev
                             exit 1
                         else
-                            echo "✅ Backend DEV działa."
+                            echo "✅ Backend DEV działa stabilnie."
                         fi
                     '''
                     
                     echo "🔧 Konfiguracja Nginxa dla DEV..."
-                    // Zamieniamy nazwę hosta w configu, żeby Nginx szukał 'plannerv2-backend-dev'
+                    // Resetujemy plik configu do stanu z repozytorium (żeby sed nie dublował zmian)
+                    sh 'git checkout nginx/nginx.conf || true' 
                     sh "sed -i 's/plannerv2-backend/plannerv2-backend-dev/g' nginx/nginx.conf"
                     
                     echo "🚀 Start Nginxa DEV (Port 8091)..."
@@ -128,6 +130,8 @@ pipeline {
                         docker cp nginx/nginx.conf plannerv2-nginx-dev:/etc/nginx/nginx.conf
                         docker exec plannerv2-nginx-dev mkdir -p /var/www/plannerv2/web
                         docker cp frontend/build/web/. plannerv2-nginx-dev:/var/www/plannerv2/web/
+                        
+                        echo "🔄 Reloading Nginx..."
                         docker exec plannerv2-nginx-dev nginx -s reload
                     '''
                     
@@ -157,7 +161,7 @@ pipeline {
                     sh '''docker run -d --name plannerv2-db --network plannerv2-network \
                           -e POSTGRES_USER=planner_user -e POSTGRES_PASSWORD=planner_password -e POSTGRES_DB=planner_db \
                           -v plannerv2_postgres_data:/var/lib/postgresql/data --restart unless-stopped postgres:15'''
-                    sh 'sleep 5'
+                    sh 'sleep 10'
                     
                     sh 'docker build -t plannerv2-backend:latest ./backend'
                     sh '''
@@ -168,7 +172,6 @@ pipeline {
                     '''
                     sh 'sleep 10'
                     
-                    // Diagnostyka PROD
                     sh '''
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend)" = "false" ]; then
                             echo "❌ CRITICAL: Backend PROD crashed!"
@@ -179,6 +182,10 @@ pipeline {
                     
                     sh 'docker run -d --name plannerv2-nginx --network plannerv2-network -p 8090:80 --restart unless-stopped nginx:alpine'
                     sh 'sleep 5'
+                    
+                    // Dla produkcji upewniamy się, że mamy czysty config (bez dopisków -dev)
+                    sh 'git checkout nginx/nginx.conf || true'
+                    
                     sh '''
                         docker cp nginx/nginx.conf plannerv2-nginx:/etc/nginx/nginx.conf
                         docker exec plannerv2-nginx mkdir -p /var/www/plannerv2/web
