@@ -35,7 +35,6 @@ pipeline {
                     nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
                     sleep 5
                 '''
-                // Używamy "|| true" żeby błędy testów nie blokowały pipeline'u na tym etapie (opcjonalnie)
                 sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
             }
             post {
@@ -81,20 +80,17 @@ pipeline {
                     
                     echo "🧹 Sprzątanie środowiska DEV..."
                     sh 'docker rm -f plannerv2-nginx-dev plannerv2-backend-dev plannerv2-db-dev || true'
-                    
-                    echo "🌐 Network..."
                     sh 'docker network create plannerv2-network || true'
                     
                     echo "🗄️ Start Bazy DEV..."
                     sh '''docker run -d --name plannerv2-db-dev --network plannerv2-network \
                           -e POSTGRES_USER=planner_user -e POSTGRES_PASSWORD=planner_password -e POSTGRES_DB=planner_db \
                           -v plannerv2_postgres_data_dev:/var/lib/postgresql/data --restart unless-stopped postgres:15'''
-                    
-                    echo "⏳ Czekanie 10s na inicjalizację bazy..."
                     sh 'sleep 10' 
                     
                     echo "🐍 Start Backend DEV..."
                     sh 'docker build -t plannerv2-backend:dev ./backend'
+                    
                     sh '''
                         docker run -d --name plannerv2-backend-dev --network plannerv2-network \
                         -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db \
@@ -102,38 +98,36 @@ pipeline {
                         /bin/sh -c "ln -s /app /app/backend && export PYTHONPATH=/app && uvicorn app.main:app --host 0.0.0.0 --port 8000"
                     '''
                     
-                    echo "⏳ Czekanie 10s na start Backendu..."
+                    echo "⏳ Czekanie na start Backendu..."
                     sh 'sleep 10'
                     
-                    // --- KLUCZOWA ZMIANA: SPRAWDZAMY CZY BACKEND ŻYJE ---
+                    // Healthcheck backendu
                     sh '''
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev)" = "false" ]; then
-                            echo "❌ CRITICAL: Backend DEV crashed! Nie uruchamiam Nginxa."
-                            echo "🔍 OTO LOGI Z KONTENERA BACKENDU:"
+                            echo "❌ CRITICAL: Backend DEV crashed!"
                             docker logs plannerv2-backend-dev
                             exit 1
-                        else
-                            echo "✅ Backend DEV działa stabilnie."
                         fi
                     '''
                     
-                    echo "🔧 Konfiguracja Nginxa dla DEV..."
-                    // Resetujemy plik configu do stanu z repozytorium (żeby sed nie dublował zmian)
+                    echo "🔧 Przygotowanie Nginxa dla DEV..."
                     sh 'git checkout nginx/nginx.conf || true' 
                     sh "sed -i 's/plannerv2-backend/plannerv2-backend-dev/g' nginx/nginx.conf"
                     
-                    echo "🚀 Start Nginxa DEV (Port 8091)..."
-                    sh 'docker run -d --name plannerv2-nginx-dev --network plannerv2-network -p 8091:80 --restart unless-stopped nginx:alpine'
-                    sh 'sleep 5'
+                    // --- ZMIANA METODY URUCHAMIANIA NGINXA (Fix "host not found") ---
+                    // 1. Tworzymy kontener (create), ale nie uruchamiamy
+                    sh 'docker create --name plannerv2-nginx-dev --network plannerv2-network -p 8091:80 --restart unless-stopped nginx:alpine'
                     
+                    // 2. Kopiujemy pliki do "martwego" kontenera
                     sh '''
                         docker cp nginx/nginx.conf plannerv2-nginx-dev:/etc/nginx/nginx.conf
-                        docker exec plannerv2-nginx-dev mkdir -p /var/www/plannerv2/web
+                        docker exec plannerv2-nginx-dev mkdir -p /var/www/plannerv2/web || true
                         docker cp frontend/build/web/. plannerv2-nginx-dev:/var/www/plannerv2/web/
-                        
-                        echo "🔄 Reloading Nginx..."
-                        docker exec plannerv2-nginx-dev nginx -s reload
                     '''
+                    
+                    // 3. Dopiero teraz startujemy (wstanie od razu z dobrym configiem)
+                    echo "🚀 Start Nginxa DEV..."
+                    sh 'docker start plannerv2-nginx-dev'
                     
                     echo "✅ DEV Wdrożony na porcie 8091!"
                 }
@@ -180,18 +174,18 @@ pipeline {
                         fi
                     '''
                     
-                    sh 'docker run -d --name plannerv2-nginx --network plannerv2-network -p 8090:80 --restart unless-stopped nginx:alpine'
-                    sh 'sleep 5'
-                    
-                    // Dla produkcji upewniamy się, że mamy czysty config (bez dopisków -dev)
                     sh 'git checkout nginx/nginx.conf || true'
                     
+                    // Dla produkcji też używamy metody create -> cp -> start dla stabilności
+                    sh 'docker create --name plannerv2-nginx --network plannerv2-network -p 8090:80 --restart unless-stopped nginx:alpine'
                     sh '''
                         docker cp nginx/nginx.conf plannerv2-nginx:/etc/nginx/nginx.conf
-                        docker exec plannerv2-nginx mkdir -p /var/www/plannerv2/web
+                        docker exec plannerv2-nginx mkdir -p /var/www/plannerv2/web || true
                         docker cp frontend/build/web/. plannerv2-nginx:/var/www/plannerv2/web/
-                        docker exec plannerv2-nginx nginx -s reload
                     '''
+                    sh 'docker start plannerv2-nginx'
+                    
+                    echo "✅ PRODUKCJA Wdrożona!"
                 }
             }
         }
