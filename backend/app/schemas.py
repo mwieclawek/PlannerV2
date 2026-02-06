@@ -2,7 +2,7 @@ from pydantic import BaseModel, field_validator, ValidationInfo
 from datetime import datetime, date, time
 from typing import List, Optional
 from uuid import UUID
-from backend.app.models import RoleSystem, AvailabilityStatus
+from .models import RoleSystem, AvailabilityStatus
 
 # ... (Previous imports remain, but need field_validator, ValidationInfo)
 
@@ -12,13 +12,23 @@ class Token(BaseModel):
     token_type: str
 
 class UserBase(BaseModel):
-    email: str
+    username: str
     full_name: str
     role_system: RoleSystem
+    email: Optional[str] = None  # Optional for contact
 
 class UserCreate(UserBase):
     password: str
     manager_pin: Optional[str] = None
+
+    @field_validator('username')
+    @classmethod
+    def username_must_be_valid(cls, v: str) -> str:
+        if not v or len(v) < 3:
+            raise ValueError('Username must be at least 3 characters')
+        if ' ' in v:
+            raise ValueError('Username cannot contain spaces')
+        return v.lower()  # Normalize to lowercase
 
 class UserResponse(UserBase):
     id: UUID
@@ -52,6 +62,7 @@ class ShiftDefBase(BaseModel):
     name: str
     start_time: str # HH:MM - handled as string in input
     end_time: str   # HH:MM
+    applicable_days: List[int] = [0, 1, 2, 3, 4, 5, 6]  # 0=Mon, 6=Sun, default all days
 
 class ShiftDefCreate(ShiftDefBase):
     @field_validator('start_time', 'end_time')
@@ -68,6 +79,14 @@ class ShiftDefResponse(BaseModel):
     name: str
     start_time: time
     end_time: time
+    applicable_days: List[int] = [0, 1, 2, 3, 4, 5, 6]
+
+    @field_validator('applicable_days', mode='before')
+    @classmethod
+    def parse_applicable_days(cls, v):
+        if isinstance(v, str):
+            return [int(x) for x in v.split(',') if x.strip()]
+        return v
 
     class Config:
         from_attributes = True

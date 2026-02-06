@@ -41,13 +41,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: Session
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
+        username: str = payload.get("sub")
+        if username is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
     
-    statement = select(User).where(User.email == email)
+    statement = select(User).where(User.username == username)
     user = session.exec(statement).first()
     if user is None:
         raise credentials_exception

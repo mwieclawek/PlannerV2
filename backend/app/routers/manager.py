@@ -146,9 +146,11 @@ def get_users(session: Session = Depends(get_session), _: User = Depends(get_man
     for u in users:
         result.append({
             "id": u.id,
+            "username": u.username,
             "email": u.email,
             "full_name": u.full_name,
             "role_system": u.role_system,
+            "created_at": u.created_at,
             "job_roles": [r.id for r in u.job_roles]
         })
     return result

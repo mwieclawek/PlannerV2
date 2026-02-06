@@ -18,13 +18,13 @@ class TestFullWorkflow:
         return httpx.Client(base_url=BASE_URL, timeout=30.0)
     
     @pytest.fixture(scope="class")
-    def unique_email(self):
-        return f"integration_test_{uuid.uuid4().hex[:8]}@test.com"
+    def unique_username(self):
+        return f"integration_test_{uuid.uuid4().hex[:8]}"
     
-    def test_01_register_manager(self, client, unique_email):
+    def test_01_register_manager(self, client, unique_username):
         """Step 1: Register a new manager"""
         response = client.post("/auth/register", json={
-            "email": unique_email,
+            "username": unique_username,
             "password": "securepass123",
             "full_name": "Integration Test Manager",
             "role_system": "MANAGER",
@@ -69,16 +69,16 @@ class TestFullWorkflow:
     
     def test_04_register_employee(self, client):
         """Step 4: Register an employee"""
-        employee_email = f"employee_{uuid.uuid4().hex[:8]}@test.com"
+        employee_username = f"employee_{uuid.uuid4().hex[:8]}"
         
         response = client.post("/auth/register", json={
-            "email": employee_email,
+            "username": employee_username,
             "password": "emppass123",
             "full_name": "Test Employee",
             "role_system": "EMPLOYEE"
         })
         assert response.status_code == 200
-        self.__class__.employee_email = employee_email
+        self.__class__.employee_username = employee_username
     
     def test_05_assign_role_to_employee(self, client):
         """Step 5: Manager assigns role to employee"""
@@ -88,7 +88,7 @@ class TestFullWorkflow:
         users = response.json()
         
         # Find the employee we created
-        employee = next((u for u in users if u["email"] == self.__class__.employee_email), None)
+        employee = next((u for u in users if u["username"] == self.__class__.employee_username), None)
         assert employee is not None
         
         # Get roles

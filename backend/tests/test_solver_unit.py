@@ -32,7 +32,7 @@ class TestSolverBasic:
         """Test solver with no staffing requirements"""
         # Create employee with role
         user = User(
-            email="solver_test@test.com",
+            username="solver_test",
             password_hash=get_password_hash("test"),
             full_name="Solver Test",
             role_system=RoleSystem.EMPLOYEE
@@ -58,7 +58,7 @@ class TestSolverBasic:
         """Test solver with a requirement"""
         # Create employee with role
         user = User(
-            email="solver_req_test@test.com",
+            username="solver_req_test",
             password_hash=get_password_hash("test"),
             full_name="Solver Req Test",
             role_system=RoleSystem.EMPLOYEE
@@ -98,7 +98,7 @@ class TestSolverConstraints:
     ):
         """Test that unavailable employee is not assigned"""
         user = User(
-            email="unavail_test@test.com",
+            username="unavail_test",
             password_hash=get_password_hash("test"),
             full_name="Unavailable Test",
             role_system=RoleSystem.EMPLOYEE
@@ -150,7 +150,7 @@ class TestSolverConstraints:
         session.commit()
         
         user = User(
-            email="oneshift_test@test.com",
+            username="oneshift_test",
             password_hash=get_password_hash("test"),
             full_name="One Shift Test",
             role_system=RoleSystem.EMPLOYEE
@@ -188,7 +188,7 @@ class TestSolverConstraints:
         
         # Create employee with only role1
         user = User(
-            email="role_match@test.com",
+            username="role_match",
             password_hash=get_password_hash("test"),
             full_name="Role Match Test",
             role_system=RoleSystem.EMPLOYEE
@@ -222,13 +222,13 @@ class TestSolverPreferences:
         """Test that preferred availability is prioritized"""
         # Create two employees
         user1 = User(
-            email="pref_user1@test.com",
+            username="pref_user1",
             password_hash=get_password_hash("test"),
             full_name="Preferred User",
             role_system=RoleSystem.EMPLOYEE
         )
         user2 = User(
-            email="pref_user2@test.com",
+            username="pref_user2",
             password_hash=get_password_hash("test"),
             full_name="Neutral User",
             role_system=RoleSystem.EMPLOYEE
@@ -306,7 +306,7 @@ class TestSolverSave:
     def test_solve_save_false_does_not_persist(self, session: Session, job_role, shift_definition):
         """Test that save=False doesn't persist to database"""
         user = User(
-            email="nosave_test@test.com",
+            username="nosave_test",
             password_hash=get_password_hash("test"),
             full_name="No Save Test",
             role_system=RoleSystem.EMPLOYEE
@@ -340,7 +340,7 @@ class TestSolverEdgeCases:
     def test_solve_multiple_days(self, session: Session, job_role, shift_definition):
         """Test solving for multiple days"""
         user = User(
-            email="multiday@test.com",
+            username="multiday",
             password_hash=get_password_hash("test"),
             full_name="Multi Day Test",
             role_system=RoleSystem.EMPLOYEE

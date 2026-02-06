@@ -54,7 +54,15 @@ class ManagerService:
         if existing:
             raise HTTPException(status_code=400, detail="Shift with these hours already exists")
 
-        shift = ShiftDefinition(name=shift_in.name, start_time=s_time, end_time=e_time)
+        # Convert List[int] to comma-separated string
+        applicable_days_str = ",".join(str(d) for d in shift_in.applicable_days)
+        
+        shift = ShiftDefinition(
+            name=shift_in.name, 
+            start_time=s_time, 
+            end_time=e_time,
+            applicable_days=applicable_days_str
+        )
         self.session.add(shift)
         self.session.commit()
         self.session.refresh(shift)
@@ -76,9 +84,13 @@ class ManagerService:
         if existing:
             raise HTTPException(status_code=400, detail="Shift with these hours already exists")
 
+        # Convert List[int] to comma-separated string
+        applicable_days_str = ",".join(str(d) for d in shift_in.applicable_days)
+
         shift.name = shift_in.name
         shift.start_time = s_time
         shift.end_time = e_time
+        shift.applicable_days = applicable_days_str
         self.session.add(shift)
         self.session.commit()
         self.session.refresh(shift)

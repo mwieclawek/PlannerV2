@@ -1,13 +1,15 @@
 class User {
   final String id;
-  final String email;
+  final String username;
+  final String? email;  // Now optional
   final String fullName;
   final String roleSystem;
   final DateTime createdAt;
 
   User({
     required this.id,
-    required this.email,
+    required this.username,
+    this.email,
     required this.fullName,
     required this.roleSystem,
     required this.createdAt,
@@ -16,6 +18,7 @@ class User {
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
       id: json['id'],
+      username: json['username'] ?? '',
       email: json['email'],
       fullName: json['full_name'],
       roleSystem: json['role_system'],
@@ -26,6 +29,7 @@ class User {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'username': username,
       'email': email,
       'full_name': fullName,
       'role_system': roleSystem,
@@ -70,20 +74,28 @@ class ShiftDefinition {
   final String name;
   final String startTime;
   final String endTime;
+  final List<int> applicableDays; // 0=Mon, 1=Tue ... 6=Sun
 
   ShiftDefinition({
     required this.id,
     required this.name,
     required this.startTime,
     required this.endTime,
+    this.applicableDays = const [0, 1, 2, 3, 4, 5, 6], // Default: all days
   });
 
   factory ShiftDefinition.fromJson(Map<String, dynamic> json) {
+    // Parse applicable_days from backend (List<int>)
+    List<int> days = const [0, 1, 2, 3, 4, 5, 6];
+    if (json['applicable_days'] != null) {
+      days = List<int>.from(json['applicable_days']);
+    }
     return ShiftDefinition(
       id: json['id'],
       name: json['name'],
       startTime: json['start_time'],
       endTime: json['end_time'],
+      applicableDays: days,
     );
   }
 
@@ -93,6 +105,7 @@ class ShiftDefinition {
       'name': name,
       'start_time': startTime,
       'end_time': endTime,
+      'applicable_days': applicableDays,
     };
   }
 }
@@ -335,14 +348,16 @@ class EmployeeScheduleEntry {
 
 class TeamMember {
   final String id;
-  final String email;
+  final String username;
+  final String? email;  // Now optional
   final String fullName;
   final String roleSystem;
   final List<int> jobRoleIds;
 
   TeamMember({
     required this.id,
-    required this.email,
+    required this.username,
+    this.email,
     required this.fullName,
     required this.roleSystem,
     required this.jobRoleIds,
@@ -351,6 +366,7 @@ class TeamMember {
   factory TeamMember.fromJson(Map<String, dynamic> json) {
     return TeamMember(
       id: json['id'],
+      username: json['username'] ?? '',
       email: json['email'],
       fullName: json['full_name'],
       roleSystem: json['role_system'],

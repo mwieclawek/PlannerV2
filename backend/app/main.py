@@ -2,14 +2,23 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
+import os
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup - Alembic migrations run before uvicorn via entrypoint.sh
-    logger.info("Application startup complete. Database migrations handled by Alembic.")
+    # Startup
+    from .database import init_db, DATABASE_URL
+    
+    # For local SQLite development, create tables directly
+    # In production, Alembic migrations are used
+    if "sqlite" in DATABASE_URL:
+        logger.info("SQLite detected - creating tables via SQLModel...")
+        init_db()
+    
+    logger.info("Application startup complete. Database ready.")
     yield
     # Shutdown
     logger.info("Application shutdown.")

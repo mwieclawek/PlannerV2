@@ -10,21 +10,21 @@ import uuid
 
 BASE_URL = "http://127.0.0.1:8000"
 
-def get_unique_email(prefix="user"):
-    return f"{prefix}_{uuid.uuid4().hex[:8]}@test.com"
+def get_unique_username(prefix="user"):
+    return f"{prefix}_{uuid.uuid4().hex[:8]}"
 
 # --- Test Data Helpers ---
 def get_employee_data():
     return {
-        "email": get_unique_email("employee"),
+        "username": get_unique_username("employee"),
         "password": "testpass123",
         "full_name": "Test Employee",
         "role_system": "EMPLOYEE"
     }
 
-MANAGER_EMAIL = get_unique_email("manager")
+MANAGER_USERNAME = get_unique_username("manager")
 TEST_MANAGER = {
-    "email": MANAGER_EMAIL,
+    "username": MANAGER_USERNAME,
     "password": "testpass123",
     "full_name": "Test Manager",
     "role_system": "MANAGER",
@@ -151,6 +151,20 @@ class TestManagerEndpoints:
         })
         assert res_dup.status_code == 400
         assert "already exists" in res_dup.json()["detail"]
+
+    def test_get_users_returns_created_at(self, client, auth_headers):
+        """Regression test: /manager/users must return created_at field"""
+        response = client.get("/manager/users", headers=auth_headers)
+        assert response.status_code == 200
+        users = response.json()
+        assert len(users) > 0, "Should have at least one user"
+        for user in users:
+            assert "created_at" in user, f"User {user.get('id')} missing created_at field"
+            assert "id" in user
+            assert "email" in user
+            assert "full_name" in user
+            assert "role_system" in user
+            assert "job_roles" in user
 
 
 class TestSolverLogic:
