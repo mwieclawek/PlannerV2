@@ -28,7 +28,8 @@ class JobRole(SQLModel, table=True):
 
 class User(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    email: str = Field(unique=True, index=True)
+    username: str = Field(unique=True, index=True)
+    email: Optional[str] = Field(default=None)  # Optional, for contact only
     password_hash: str
     full_name: str
     role_system: RoleSystem = Field(default=RoleSystem.EMPLOYEE)
@@ -43,6 +44,7 @@ class ShiftDefinition(SQLModel, table=True):
     name: str
     start_time: time
     end_time: time
+    applicable_days: str = Field(default="0,1,2,3,4,5,6")  # Comma-separated: 0=Mon, 6=Sun
 
 class Availability(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)

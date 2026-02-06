@@ -47,6 +47,12 @@ class SolverService:
         for e in employees:
             for d in days:
                 for s in shifts:
+                    # Check if shift is applicable for this weekday
+                    weekday = d.weekday()  # 0=Mon, 6=Sun (matches applicable_days format)
+                    applicable_days = [int(x) for x in s.applicable_days.split(",")] if s.applicable_days else list(range(7))
+                    if weekday not in applicable_days:
+                        continue  # Skip this shift for this day
+                    
                     for r in roles:
                         # Check if employee has this role
                         # In the real world, check e.job_roles links. Assuming simple check:

@@ -80,10 +80,10 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     }
   }
 
-  Future<void> login(String email, String password) async {
+  Future<void> login(String username, String password) async {
     state = const AsyncValue.loading();
     try {
-      await _api.login(email, password);
+      await _api.login(username, password);
       final user = await _api.getCurrentUser();
       state = AsyncValue.data(user);
     } catch (e, stack) {
@@ -92,10 +92,10 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     }
   }
 
-  Future<void> register(String email, String password, String fullName, String roleSystem, {String? managerPin}) async {
+  Future<void> register(String username, String password, String fullName, String roleSystem, {String? managerPin}) async {
     state = const AsyncValue.loading();
     try {
-      await _api.register(email, password, fullName, roleSystem, managerPin: managerPin);
+      await _api.register(username, password, fullName, roleSystem, managerPin: managerPin);
       final user = await _api.getCurrentUser();
       state = AsyncValue.data(user);
     } catch (e, stack) {

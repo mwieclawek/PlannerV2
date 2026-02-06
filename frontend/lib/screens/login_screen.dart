@@ -12,7 +12,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _fullNameController = TextEditingController();
   final _pinController = TextEditingController();
@@ -22,7 +22,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     _fullNameController.dispose();
     _pinController.dispose();
@@ -30,7 +30,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _submit() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Wypełnij wszystkie pola')),
       );
@@ -49,7 +49,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       if (_isRegisterMode) {
         await ref.read(authProvider.notifier).register(
-              _emailController.text,
+              _usernameController.text,
               _passwordController.text,
               _fullNameController.text,
               _selectedRole,
@@ -57,7 +57,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             );
       } else {
         await ref.read(authProvider.notifier).login(
-              _emailController.text,
+              _usernameController.text,
               _passwordController.text,
             );
       }
@@ -69,10 +69,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           if (responseData is Map && responseData['detail'] != null) {
             message = responseData['detail'].toString();
             // Translate common errors
-            if (message == 'Email already registered') {
-              message = 'Ten email jest już zarejestrowany';
+            if (message == 'Username already registered') {
+              message = 'Ten login jest już zajęty';
             } else if (message == 'Incorrect username or password') {
-              message = 'Nieprawidłowy email lub hasło';
+              message = 'Nieprawidłowy login lub hasło';
             } else if (message == 'Invalid manager PIN') {
               message = 'Nieprawidłowy kod PIN managera';
             }
@@ -163,15 +163,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           const SizedBox(height: 16),
                         ],
                         TextField(
-                          controller: _emailController,
+                          controller: _usernameController,
                           decoration: InputDecoration(
-                            labelText: 'Email',
-                            prefixIcon: const Icon(Icons.email),
+                            labelText: 'Login',
+                            prefixIcon: const Icon(Icons.person_outline),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          keyboardType: TextInputType.emailAddress,
+                          keyboardType: TextInputType.text,
                         ),
                         const SizedBox(height: 16),
                         TextField(

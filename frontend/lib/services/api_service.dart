@@ -51,9 +51,9 @@ class ApiService {
     return token;
   }
 
-  Future<String> register(String email, String password, String fullName, String roleSystem, {String? managerPin}) async {
+  Future<String> register(String username, String password, String fullName, String roleSystem, {String? managerPin}) async {
     final data = {
-      'email': email,
+      'username': username,
       'password': password,
       'full_name': fullName,
       'role_system': roleSystem,
@@ -96,11 +96,12 @@ class ApiService {
     return (response.data as List).map((e) => ShiftDefinition.fromJson(e)).toList();
   }
 
-  Future<ShiftDefinition> createShift(String name, String startTime, String endTime) async {
+  Future<ShiftDefinition> createShift(String name, String startTime, String endTime, {List<int>? applicableDays}) async {
     final response = await _dio.post('/manager/shifts', data: {
       'name': name,
       'start_time': startTime,
       'end_time': endTime,
+      'applicable_days': applicableDays ?? [0, 1, 2, 3, 4, 5, 6],
     });
     return ShiftDefinition.fromJson(response.data);
   }
@@ -239,11 +240,12 @@ class ApiService {
   }
 
   // Update Shift
-  Future<void> updateShift(int shiftId, String name, String startTime, String endTime) async {
+  Future<void> updateShift(int shiftId, String name, String startTime, String endTime, {List<int>? applicableDays}) async {
     await _dio.put('/manager/shifts/$shiftId', data: {
       'name': name,
       'start_time': startTime,
       'end_time': endTime,
+      'applicable_days': applicableDays ?? [0, 1, 2, 3, 4, 5, 6],
     });
   }
 

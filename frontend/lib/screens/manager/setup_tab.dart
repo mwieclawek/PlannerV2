@@ -25,6 +25,9 @@ class _SetupTabState extends ConsumerState<SetupTab> {
   final _addressController = TextEditingController();
   bool _isLoadingConfig = true;
   bool _isSavingConfig = false;
+  
+  // Shift applicable days selector (0=Mon, 6=Sun)
+  List<int> _selectedDays = [0, 1, 2, 3, 4, 5, 6]; // Default: all days
 
   @override
   void initState() {
@@ -156,11 +159,13 @@ class _SetupTabState extends ConsumerState<SetupTab> {
             _shiftNameController.text,
             newStart,
             newEnd,
+            applicableDays: _selectedDays,
           );
       
       _shiftNameController.clear();
       _shiftStartController.clear();
       _shiftEndController.clear();
+      setState(() => _selectedDays = [0, 1, 2, 3, 4, 5, 6]); // Reset to all days
       ref.invalidate(shiftsProvider);
       
       if (mounted) {
@@ -686,6 +691,52 @@ class _SetupTabState extends ConsumerState<SetupTab> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  // Weekday selector
+                  Row(
+                    children: [
+                      Text(
+                        'Dni tygodnia: ',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            for (int i = 0; i < 7; i++)
+                              FilterChip(
+                                label: Text(
+                                  ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'][i],
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: _selectedDays.contains(i) ? Colors.white : Colors.grey.shade700,
+                                  ),
+                                ),
+                                selected: _selectedDays.contains(i),
+                                onSelected: (selected) {
+                                  setState(() {
+                                    if (selected) {
+                                      _selectedDays.add(i);
+                                      _selectedDays.sort();
+                                    } else {
+                                      _selectedDays.remove(i);
+                                    }
+                                  });
+                                },
+                                selectedColor: Colors.indigo.shade600,
+                                checkmarkColor: Colors.white,
+                                backgroundColor: Colors.grey.shade200,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   shiftsAsync.when(
                     data: (shifts) {
@@ -697,7 +748,9 @@ class _SetupTabState extends ConsumerState<SetupTab> {
                           return ListTile(
                             leading: const Icon(Icons.schedule),
                             title: Text(shift.name),
-                            subtitle: Text('${shift.startTime} - ${shift.endTime}'),
+                            subtitle: Text(
+                              '${shift.startTime} - ${shift.endTime}  •  ${_formatDays(shift.applicableDays)}'
+                            ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -735,5 +788,12 @@ class _SetupTabState extends ConsumerState<SetupTab> {
     } catch (e) {
       return Colors.blue;
     }
+  }
+
+  String _formatDays(List<int> days) {
+    if (days.length == 7) return 'Codziennie';
+    if (days.isEmpty) return 'Brak dni';
+    const dayNames = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'];
+    return days.map((d) => dayNames[d]).join(', ');
   }
 }

@@ -290,7 +290,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(user.email, style: TextStyle(color: Colors.grey.shade600)),
+                  Text('@${user.username}', style: TextStyle(color: Colors.grey.shade600)),
                   if (userRoles.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Wrap(

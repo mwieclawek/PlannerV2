@@ -51,6 +51,7 @@ def auth_headers_fixture(session: Session) -> dict:
     
     # Create user
     user = User(
+        username="manager_test",
         email="manager@test.com",
         password_hash=get_password_hash("secret"),
         full_name="Test Manager",
@@ -60,7 +61,7 @@ def auth_headers_fixture(session: Session) -> dict:
     session.commit()
     session.refresh(user)
     
-    token = create_access_token(data={"sub": user.email})
+    token = create_access_token(data={"sub": user.username})
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture(name="employee_headers")
@@ -70,6 +71,7 @@ def employee_headers_fixture(session: Session) -> dict:
     
     # Create user
     user = User(
+        username="employee_test",
         email="employee@test.com",
         password_hash=get_password_hash("secret"),
         full_name="Test Employee",
@@ -79,7 +81,7 @@ def employee_headers_fixture(session: Session) -> dict:
     session.commit()
     session.refresh(user)
     
-    token = create_access_token(data={"sub": user.email})
+    token = create_access_token(data={"sub": user.username})
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture(name="shift_definition")

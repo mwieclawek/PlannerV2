@@ -125,13 +125,27 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         }
       });
     } catch (e) {
-      // Silently fail - no schedule exists yet
-      setState(() {
-        _scheduleEntries = [];
-        _shifts = [];
-        _roles = [];
-        _users = [];
-      });
+      // Schedule loading failed, but still try to load metadata for generation
+      try {
+        final api = ref.read(apiServiceProvider);
+        final shifts = await api.getShifts();
+        final roles = await api.getRoles();
+        final users = await api.getUsers();
+        setState(() {
+          _scheduleEntries = [];
+          _shifts = shifts;
+          _roles = roles;
+          _users = users.where((u) => u.isEmployee).toList();
+        });
+      } catch (_) {
+        // Complete failure - clear everything
+        setState(() {
+          _scheduleEntries = [];
+          _shifts = [];
+          _roles = [];
+          _users = [];
+        });
+      }
     }
   }
 
@@ -395,7 +409,21 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     setState(() => _isGenerating = true);
 
     try {
-      final result = await ref.read(apiServiceProvider).generateSchedule(
+      final api = ref.read(apiServiceProvider);
+      
+      // Ensure we have shifts, roles, users loaded (required for display)
+      if (_shifts.isEmpty || _roles.isEmpty || _users.isEmpty) {
+        final shifts = await api.getShifts();
+        final roles = await api.getRoles();
+        final users = await api.getUsers();
+        setState(() {
+          _shifts = shifts;
+          _roles = roles;
+          _users = users.where((u) => u.isEmployee).toList();
+        });
+      }
+      
+      final result = await api.generateSchedule(
             _selectedWeekStart,
             _selectedWeekEnd,
           );
@@ -413,7 +441,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           final roleId = s['role_id'] as int? ?? 0;
           final shiftDefId = s['shift_def_id'] as int? ?? 0;
           
-          final user = _users.firstWhere((u) => u.id == userId, orElse: () => TeamMember(id: userId, email: '', fullName: 'Unknown', roleSystem: 'EMPLOYEE', jobRoleIds: []));
+          final user = _users.firstWhere((u) => u.id == userId, orElse: () => TeamMember(id: userId, username: '', fullName: 'Unknown', roleSystem: 'EMPLOYEE', jobRoleIds: []));
           final role = _roles.firstWhere((r) => r.id == roleId, orElse: () => JobRole(id: roleId, name: 'Unknown', colorHex: '#888888'));
           final shift = _shifts.firstWhere((sh) => sh.id == shiftDefId, orElse: () => ShiftDefinition(id: shiftDefId, name: 'Unknown', startTime: '00:00', endTime: '00:00'));
           
