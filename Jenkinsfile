@@ -35,7 +35,6 @@ pipeline {
                     nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
                     sleep 10
                 '''
-                // Dodany || true, żeby testy nie blokowały deployu (skoro tak chciałeś w logach)
                 sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
             }
             post {
@@ -109,18 +108,28 @@ pipeline {
                         fi
                     '''
                     
-                    echo "🔧 Nginx DEV..."
+                    echo "🔧 Nginx DEV Setup..."
                     sh 'git checkout nginx/nginx.conf || true' 
                     sh "sed -i 's/plannerv2-backend/plannerv2-backend-dev/g' nginx/nginx.conf"
                     
-                    // BEZPIECZNY START NGINXA
-                    sh 'docker create --name plannerv2-nginx-dev --network plannerv2-network -p 8091:80 --restart unless-stopped nginx:alpine'
+                    // 1. URUCHAMIAMY CZYSTEGO NGINXA (To gwarantuje, że kontener działa)
+                    sh 'docker run -d --name plannerv2-nginx-dev --network plannerv2-network -p 8091:80 --restart unless-stopped nginx:alpine'
+                    sh 'sleep 5'
+                    
+                    // 2. TERAZ MOŻEMY ROBIĆ EXEC (Bo kontener działa)
                     sh '''
-                        docker cp nginx/nginx.conf plannerv2-nginx-dev:/etc/nginx/nginx.conf
-                        docker exec plannerv2-nginx-dev mkdir -p /var/www/plannerv2/web || true
+                        # Tworzymy katalogi
+                        docker exec plannerv2-nginx-dev mkdir -p /var/www/plannerv2/web
+                        
+                        # Kopiujemy frontend
                         docker cp frontend/build/web/. plannerv2-nginx-dev:/var/www/plannerv2/web/
+                        
+                        # Podmieniamy config na nasz
+                        docker cp nginx/nginx.conf plannerv2-nginx-dev:/etc/nginx/nginx.conf
+                        
+                        # Przeładowujemy, żeby załapał nowy config
+                        docker exec plannerv2-nginx-dev nginx -s reload
                     '''
-                    sh 'docker start plannerv2-nginx-dev'
                     
                     echo "✅ DEV gotowy na porcie 8091"
                 }
@@ -170,14 +179,16 @@ pipeline {
                     
                     sh 'git checkout nginx/nginx.conf || true'
                     
-                    // BEZPIECZNY START NGINXA (PROD)
-                    sh 'docker create --name plannerv2-nginx --network plannerv2-network -p 8090:80 --restart unless-stopped nginx:alpine'
+                    // PROD: Ta sama metoda Start -> Setup -> Swap
+                    sh 'docker run -d --name plannerv2-nginx --network plannerv2-network -p 8090:80 --restart unless-stopped nginx:alpine'
+                    sh 'sleep 5'
+                    
                     sh '''
-                        docker cp nginx/nginx.conf plannerv2-nginx:/etc/nginx/nginx.conf
-                        docker exec plannerv2-nginx mkdir -p /var/www/plannerv2/web || true
+                        docker exec plannerv2-nginx mkdir -p /var/www/plannerv2/web
                         docker cp frontend/build/web/. plannerv2-nginx:/var/www/plannerv2/web/
+                        docker cp nginx/nginx.conf plannerv2-nginx:/etc/nginx/nginx.conf
+                        docker exec plannerv2-nginx nginx -s reload
                     '''
-                    sh 'docker start plannerv2-nginx'
                     
                     echo "✅ PRODUKCJA Wdrożona!"
                 }
