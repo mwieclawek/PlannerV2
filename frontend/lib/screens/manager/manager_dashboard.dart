@@ -6,6 +6,8 @@ import 'setup_tab.dart';
 import 'scheduler_tab.dart';
 import 'requirements_tab.dart';
 import 'team_tab.dart';
+import 'availability_view_tab.dart';
+import 'attendance_approval_tab.dart';
 
 class ManagerDashboard extends ConsumerStatefulWidget {
   const ManagerDashboard({super.key});
@@ -48,6 +50,8 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
               SetupTab(),
               RequirementsTab(),
               SchedulerTab(),
+              AvailabilityViewTab(),
+              AttendanceApprovalTab(),
               TeamTab(),
             ],
           );
@@ -97,6 +101,14 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
           NavigationDestination(
             icon: Icon(Icons.calendar_month),
             label: 'Grafik',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.event_available),
+            label: 'Dostępność',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.fact_check),
+            label: 'Obecności',
           ),
           NavigationDestination(
             icon: Icon(Icons.people),

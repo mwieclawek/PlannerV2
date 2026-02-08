@@ -78,3 +78,22 @@ class RestaurantConfig(SQLModel, table=True):
     name: str
     opening_hours: str = Field(default="{}") # JSON string for flexibility
     address: Optional[str] = None
+
+class AttendanceStatus(str, Enum):
+    PENDING = "PENDING"       # Waiting for manager approval (unscheduled)
+    CONFIRMED = "CONFIRMED"   # Confirmed attendance
+    REJECTED = "REJECTED"     # Rejected by manager
+
+class Attendance(SQLModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="user.id")
+    date: date
+    check_in: time
+    check_out: time
+    was_scheduled: bool = Field(default=True)  # Was this person scheduled that day?
+    status: AttendanceStatus = Field(default=AttendanceStatus.CONFIRMED)
+    schedule_id: Optional[UUID] = Field(default=None, foreign_key="schedule.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    user: User = Relationship()
+

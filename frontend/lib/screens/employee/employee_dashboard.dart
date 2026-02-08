@@ -6,6 +6,7 @@ import '../../providers/providers.dart';
 import '../../models/models.dart';
 import '../../widgets/availability_grid.dart';
 import 'my_schedule_screen.dart';
+import 'attendance_tab.dart';
 
 class EmployeeDashboard extends ConsumerStatefulWidget {
   const EmployeeDashboard({super.key});
@@ -44,10 +45,10 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _selectedIndex == 0 ? 'Moja Dostępność' : 'Mój Grafik',
+          _selectedIndex == 0 ? 'Mój Grafik' : _selectedIndex == 1 ? 'Moja Dostępność' : 'Obecność',
           style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: _selectedIndex == 0 ? Colors.blue.shade700 : Colors.teal.shade700,
+        backgroundColor: _selectedIndex == 0 ? Colors.teal.shade700 : _selectedIndex == 1 ? Colors.blue.shade700 : Colors.purple.shade700,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -62,9 +63,14 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
         data: (user) {
           if (user == null) return const Center(child: Text('Nie zalogowano'));
           
-          if (_selectedIndex == 1) {
+          if (_selectedIndex == 0) {
             // My Schedule Tab
             return const MyScheduleScreen();
+          }
+          
+          if (_selectedIndex == 2) {
+            // Attendance Tab
+            return const AttendanceTab();
           }
           
           // Availability Tab
@@ -158,12 +164,16 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
         },
         destinations: const [
           NavigationDestination(
+            icon: Icon(Icons.calendar_month),
+            label: 'Mój Grafik',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.event_available),
             label: 'Dostępność',
           ),
           NavigationDestination(
-            icon: Icon(Icons.calendar_month),
-            label: 'Mój Grafik',
+            icon: Icon(Icons.access_time),
+            label: 'Obecność',
           ),
         ],
       ),
