@@ -412,3 +412,47 @@ class StaffingWarning {
     );
   }
 }
+
+// Manager Availability View Models
+class AvailabilityEntry {
+  final String date;
+  final int shiftDefId;
+  final String status;
+
+  AvailabilityEntry({
+    required this.date,
+    required this.shiftDefId,
+    required this.status,
+  });
+
+  factory AvailabilityEntry.fromJson(Map<String, dynamic> json) {
+    return AvailabilityEntry(
+      date: json['date'] as String,
+      shiftDefId: json['shift_def_id'] as int,
+      status: json['status'] as String,
+    );
+  }
+}
+
+class TeamAvailability {
+  final String userId;
+  final String userName;
+  final List<AvailabilityEntry> entries;
+
+  TeamAvailability({
+    required this.userId,
+    required this.userName,
+    required this.entries,
+  });
+
+  factory TeamAvailability.fromJson(Map<String, dynamic> json) {
+    return TeamAvailability(
+      userId: json['user_id'] as String,
+      userName: json['user_name'] as String,
+      entries: (json['entries'] as List)
+          .map((e) => AvailabilityEntry.fromJson(e))
+          .toList(),
+    );
+  }
+}
+

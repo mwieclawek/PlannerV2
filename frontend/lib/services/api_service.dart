@@ -262,4 +262,50 @@ class ApiService {
       'address': address,
     });
   }
+
+  // Team Availability (Manager)
+  Future<List<TeamAvailability>> getTeamAvailability(DateTime weekStart, DateTime weekEnd) async {
+    final response = await _dio.get('/manager/availability', queryParameters: {
+      'week_start': weekStart.toIso8601String().split('T')[0],
+      'week_end': weekEnd.toIso8601String().split('T')[0],
+    });
+    return (response.data as List).map((e) => TeamAvailability.fromJson(e)).toList();
+  }
+
+  // Attendance (Employee)
+  Future<Map<String, dynamic>> getAttendanceDefaults(DateTime date) async {
+    final response = await _dio.get('/employee/attendance/defaults/${date.toIso8601String().split('T')[0]}');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> registerAttendance(DateTime date, String checkIn, String checkOut) async {
+    final response = await _dio.post('/employee/attendance', queryParameters: {
+      'target_date': date.toIso8601String().split('T')[0],
+      'check_in': checkIn,
+      'check_out': checkOut,
+    });
+    return response.data;
+  }
+
+  Future<List<Map<String, dynamic>>> getMyAttendance(DateTime startDate, DateTime endDate) async {
+    final response = await _dio.get('/employee/attendance/my', queryParameters: {
+      'start_date': startDate.toIso8601String().split('T')[0],
+      'end_date': endDate.toIso8601String().split('T')[0],
+    });
+    return (response.data as List).cast<Map<String, dynamic>>();
+  }
+
+  // Attendance (Manager)
+  Future<List<Map<String, dynamic>>> getPendingAttendance() async {
+    final response = await _dio.get('/manager/attendance/pending');
+    return (response.data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> confirmAttendance(String attendanceId) async {
+    await _dio.put('/manager/attendance/$attendanceId/confirm');
+  }
+
+  Future<void> rejectAttendance(String attendanceId) async {
+    await _dio.put('/manager/attendance/$attendanceId/reject');
+  }
 }

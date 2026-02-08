@@ -133,7 +133,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Planner V2',
+                          'RestoPlan V2',
                           style: GoogleFonts.outfit(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,

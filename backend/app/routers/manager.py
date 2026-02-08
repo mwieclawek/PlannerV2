@@ -166,3 +166,95 @@ def update_config(
     _: User = Depends(get_manager_user)
 ):
     return service.update_config(update)
+
+@router.get("/availability")
+def get_team_availability(
+    week_start: date,
+    week_end: date,
+    session: Session = Depends(get_session),
+    _: User = Depends(get_manager_user)
+):
+    """Zwraca dostępność wszystkich pracowników w danym tygodniu"""
+    from ..models import Availability
+    availabilities = session.exec(
+        select(Availability)
+        .where(Availability.date >= week_start)
+        .where(Availability.date <= week_end)
+    ).all()
+    
+    # Group by user
+    result = {}
+    for av in availabilities:
+        user_id = str(av.user_id)
+        if user_id not in result:
+            result[user_id] = {
+                "user_id": user_id,
+                "user_name": av.user.full_name,
+                "entries": []
+            }
+        result[user_id]["entries"].append({
+            "date": av.date.isoformat(),
+            "shift_def_id": av.shift_def_id,
+            "status": av.status.value
+        })
+    
+    return list(result.values())
+
+# Attendance Management Endpoints
+from ..models import Attendance, AttendanceStatus
+
+@router.get("/attendance/pending")
+def get_pending_attendance(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_manager_user)
+):
+    """Get all attendance records pending manager approval"""
+    attendances = session.exec(
+        select(Attendance).where(Attendance.status == AttendanceStatus.PENDING)
+    ).all()
+    
+    return [{
+        "id": str(a.id),
+        "user_id": str(a.user_id),
+        "user_name": a.user.full_name,
+        "date": a.date.isoformat(),
+        "check_in": a.check_in.strftime("%H:%M"),
+        "check_out": a.check_out.strftime("%H:%M"),
+        "was_scheduled": a.was_scheduled,
+        "status": a.status.value
+    } for a in attendances]
+
+@router.put("/attendance/{attendance_id}/confirm")
+def confirm_attendance(
+    attendance_id: str,
+    session: Session = Depends(get_session),
+    _: User = Depends(get_manager_user)
+):
+    """Manager confirms unscheduled attendance"""
+    from uuid import UUID
+    attendance = session.get(Attendance, UUID(attendance_id))
+    if not attendance:
+        raise HTTPException(status_code=404, detail="Attendance not found")
+    
+    attendance.status = AttendanceStatus.CONFIRMED
+    session.add(attendance)
+    session.commit()
+    return {"status": "confirmed"}
+
+@router.put("/attendance/{attendance_id}/reject")
+def reject_attendance(
+    attendance_id: str,
+    session: Session = Depends(get_session),
+    _: User = Depends(get_manager_user)
+):
+    """Manager rejects unscheduled attendance"""
+    from uuid import UUID
+    attendance = session.get(Attendance, UUID(attendance_id))
+    if not attendance:
+        raise HTTPException(status_code=404, detail="Attendance not found")
+    
+    attendance.status = AttendanceStatus.REJECTED
+    session.add(attendance)
+    session.commit()
+    return {"status": "rejected"}
+

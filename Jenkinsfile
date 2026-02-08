@@ -33,8 +33,9 @@ pipeline {
                 sh '''
                     export PYTHONPATH=$PWD
                     nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
-                    sleep 5
+                    sleep 10
                 '''
+                // Dodany || true, żeby testy nie blokowały deployu (skoro tak chciałeś w logach)
                 sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
             }
             post {
@@ -78,17 +79,17 @@ pipeline {
                 script {
                     sh 'apk add --no-cache curl sed || true'
                     
-                    echo "🧹 Sprzątanie środowiska DEV..."
+                    echo "🧹 Sprzątanie DEV..."
                     sh 'docker rm -f plannerv2-nginx-dev plannerv2-backend-dev plannerv2-db-dev || true'
                     sh 'docker network create plannerv2-network || true'
                     
-                    echo "🗄️ Start Bazy DEV..."
+                    echo "🗄️ Baza DEV..."
                     sh '''docker run -d --name plannerv2-db-dev --network plannerv2-network \
                           -e POSTGRES_USER=planner_user -e POSTGRES_PASSWORD=planner_password -e POSTGRES_DB=planner_db \
                           -v plannerv2_postgres_data_dev:/var/lib/postgresql/data --restart unless-stopped postgres:15'''
                     sh 'sleep 10' 
                     
-                    echo "🐍 Start Backend DEV..."
+                    echo "🐍 Backend DEV..."
                     sh 'docker build -t plannerv2-backend:dev ./backend'
                     
                     sh '''
@@ -97,39 +98,31 @@ pipeline {
                         --restart unless-stopped plannerv2-backend:dev \
                         /bin/sh -c "ln -s /app /app/backend && export PYTHONPATH=/app && uvicorn app.main:app --host 0.0.0.0 --port 8000"
                     '''
-                    
-                    echo "⏳ Czekanie na start Backendu..."
                     sh 'sleep 10'
                     
-                    // Healthcheck backendu
+                    // Healthcheck
                     sh '''
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev)" = "false" ]; then
-                            echo "❌ CRITICAL: Backend DEV crashed!"
+                            echo "❌ Backend DEV padł! Logi:"
                             docker logs plannerv2-backend-dev
                             exit 1
                         fi
                     '''
                     
-                    echo "🔧 Przygotowanie Nginxa dla DEV..."
+                    echo "🔧 Nginx DEV..."
                     sh 'git checkout nginx/nginx.conf || true' 
                     sh "sed -i 's/plannerv2-backend/plannerv2-backend-dev/g' nginx/nginx.conf"
                     
-                    // --- ZMIANA METODY URUCHAMIANIA NGINXA (Fix "host not found") ---
-                    // 1. Tworzymy kontener (create), ale nie uruchamiamy
+                    // BEZPIECZNY START NGINXA
                     sh 'docker create --name plannerv2-nginx-dev --network plannerv2-network -p 8091:80 --restart unless-stopped nginx:alpine'
-                    
-                    // 2. Kopiujemy pliki do "martwego" kontenera
                     sh '''
                         docker cp nginx/nginx.conf plannerv2-nginx-dev:/etc/nginx/nginx.conf
                         docker exec plannerv2-nginx-dev mkdir -p /var/www/plannerv2/web || true
                         docker cp frontend/build/web/. plannerv2-nginx-dev:/var/www/plannerv2/web/
                     '''
-                    
-                    // 3. Dopiero teraz startujemy (wstanie od razu z dobrym configiem)
-                    echo "🚀 Start Nginxa DEV..."
                     sh 'docker start plannerv2-nginx-dev'
                     
-                    echo "✅ DEV Wdrożony na porcie 8091!"
+                    echo "✅ DEV gotowy na porcie 8091"
                 }
             }
         }
@@ -148,6 +141,7 @@ pipeline {
                 unstash 'source'
                 unstash 'flutter-web'
                 script {
+                    echo "🚀 DEPLOY PRODUKCJI: ${env.TAG_NAME}"
                     sh 'apk add --no-cache curl || true'
                     sh 'docker rm -f plannerv2-nginx plannerv2-backend plannerv2-db || true'
                     sh 'docker network create plannerv2-network || true'
@@ -168,7 +162,7 @@ pipeline {
                     
                     sh '''
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend)" = "false" ]; then
-                            echo "❌ CRITICAL: Backend PROD crashed!"
+                            echo "❌ Backend PROD padł! Logi:"
                             docker logs plannerv2-backend
                             exit 1
                         fi
@@ -176,7 +170,7 @@ pipeline {
                     
                     sh 'git checkout nginx/nginx.conf || true'
                     
-                    // Dla produkcji też używamy metody create -> cp -> start dla stabilności
+                    // BEZPIECZNY START NGINXA (PROD)
                     sh 'docker create --name plannerv2-nginx --network plannerv2-network -p 8090:80 --restart unless-stopped nginx:alpine'
                     sh '''
                         docker cp nginx/nginx.conf plannerv2-nginx:/etc/nginx/nginx.conf
@@ -192,7 +186,7 @@ pipeline {
     }
     
     post {
-        success { echo '✅ Pipeline completed successfully!' }
-        failure { echo '❌ Pipeline failed!' }
+        success { echo '✅ Pipeline OK' }
+        failure { echo '❌ Pipeline FAILED' }
     }
 }
