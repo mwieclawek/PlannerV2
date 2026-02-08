@@ -82,7 +82,7 @@ pipeline {
                     sh 'docker rm -f plannerv2-nginx-dev plannerv2-backend-dev plannerv2-db-dev || true'
                     sh 'docker network create plannerv2-network || true'
                     
-                    echo "🗄️ Baza DEV..."
+                    echo "🗄️ Start Bazy DEV..."
                     sh '''docker run -d --name plannerv2-db-dev --network plannerv2-network \
                           -e POSTGRES_USER=planner_user -e POSTGRES_PASSWORD=planner_password -e POSTGRES_DB=planner_db \
                           -v plannerv2_postgres_data_dev:/var/lib/postgresql/data --restart unless-stopped postgres:15'''
@@ -99,10 +99,10 @@ pipeline {
                     '''
                     sh 'sleep 10'
                     
-                    // Healthcheck
+                    // Healthcheck backendu
                     sh '''
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev)" = "false" ]; then
-                            echo "❌ Backend DEV padł! Logi:"
+                            echo "❌ CRITICAL: Backend DEV padł przed startem Nginxa! Logi:"
                             docker logs plannerv2-backend-dev
                             exit 1
                         fi
@@ -112,22 +112,37 @@ pipeline {
                     sh 'git checkout nginx/nginx.conf || true' 
                     sh "sed -i 's/plannerv2-backend/plannerv2-backend-dev/g' nginx/nginx.conf"
                     
-                    // 1. URUCHAMIAMY CZYSTEGO NGINXA (To gwarantuje, że kontener działa)
+                    // 1. Startujemy Nginxa z domyślnym konfigiem (żeby kontener działał i miał sieć)
                     sh 'docker run -d --name plannerv2-nginx-dev --network plannerv2-network -p 8091:80 --restart unless-stopped nginx:alpine'
-                    sh 'sleep 5'
                     
-                    // 2. TERAZ MOŻEMY ROBIĆ EXEC (Bo kontener działa)
+                    // 2. KLUCZOWY FIX: Pętla czekająca na DNS
+                    // Nginx nie może zrobić reloadu, dopóki nie widzi backendu. Sprawdzamy to.
                     sh '''
-                        # Tworzymy katalogi
+                        echo "⏳ Czekam na widoczność Backendu w sieci Docker..."
+                        for i in 1 2 3 4 5; do
+                            if docker exec plannerv2-nginx-dev getent hosts plannerv2-backend-dev; then
+                                echo "✅ DNS OK: Nginx widzi Backend!"
+                                break
+                            else
+                                echo "⚠️ DNS jeszcze nie gotowy, czekam..."
+                                sleep 5
+                            fi
+                        done
+                    '''
+
+                    // 3. Dopiero teraz kopiujemy i przeładowujemy
+                    sh '''
+                        # Foldery
                         docker exec plannerv2-nginx-dev mkdir -p /var/www/plannerv2/web
                         
-                        # Kopiujemy frontend
+                        # Frontend
                         docker cp frontend/build/web/. plannerv2-nginx-dev:/var/www/plannerv2/web/
                         
-                        # Podmieniamy config na nasz
+                        # Config
                         docker cp nginx/nginx.conf plannerv2-nginx-dev:/etc/nginx/nginx.conf
                         
-                        # Przeładowujemy, żeby załapał nowy config
+                        # Reload (teraz powinno być bezpieczne)
+                        echo "🔄 Reloading Nginx..."
                         docker exec plannerv2-nginx-dev nginx -s reload
                     '''
                     
@@ -179,9 +194,20 @@ pipeline {
                     
                     sh 'git checkout nginx/nginx.conf || true'
                     
-                    // PROD: Ta sama metoda Start -> Setup -> Swap
+                    // PROD: Ta sama bezpieczna procedura
                     sh 'docker run -d --name plannerv2-nginx --network plannerv2-network -p 8090:80 --restart unless-stopped nginx:alpine'
-                    sh 'sleep 5'
+                    
+                    // Pętla czekająca na DNS dla Produkcji
+                    sh '''
+                        for i in 1 2 3 4 5; do
+                            if docker exec plannerv2-nginx getent hosts plannerv2-backend; then
+                                echo "✅ DNS OK"
+                                break
+                            else
+                                sleep 5
+                            fi
+                        done
+                    '''
                     
                     sh '''
                         docker exec plannerv2-nginx mkdir -p /var/www/plannerv2/web
