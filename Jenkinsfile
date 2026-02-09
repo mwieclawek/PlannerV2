@@ -172,7 +172,10 @@ pipeline {
         // --- 5. DEPLOY NA PROD (Tylko Tagi v*) ---
         stage('Deploy to PRODUCTION') {
             when {
-                tag "v*"
+                anyOf {
+                    tag "v*"
+                    branch 'main'  // TEMPORARY: Remove after tag discovery is fixed
+                }
             }
             agent {
                 docker {
