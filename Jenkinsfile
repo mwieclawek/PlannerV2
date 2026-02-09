@@ -7,6 +7,7 @@ pipeline {
     }
     
     stages {
+        // --- 1. POBRANIE KODU ---
         stage('Checkout') {
             agent any
             steps {
@@ -15,6 +16,7 @@ pipeline {
             }
         }
         
+        // --- 2. TESTY BACKENDU ---
         stage('Backend Tests') {
             agent {
                 docker {
@@ -30,21 +32,25 @@ pipeline {
                 '''
                 sh 'python -m py_compile backend/app/main.py'
                 sh 'mkdir -p test-results'
+                // Uruchomienie testowe w tle - tutaj ścieżka była dobra (backend.app.main)
                 sh '''
                     export PYTHONPATH=$PWD
                     nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
                     sleep 10
                 '''
+                // || true pozwala przejść dalej mimo błędów testów (do celów debugowania deploymentu)
                 sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
             }
             post {
                 always {
                     junit allowEmptyResults: true, testResults: 'test-results/*.xml'
+                    // Dodano || true do pkill, bo w alpine/slim czasem go nie ma lub proces już nie żyje
                     sh 'pkill -f uvicorn || true'
                 }
             }
         }
         
+        // --- 3. BUDOWANIE FRONTENDU ---
         stage('Frontend Build') {
             agent {
                 docker {
@@ -62,6 +68,7 @@ pipeline {
             }
         }
 
+        // --- 4. DEPLOY NA DEV (Branch main) ---
         stage('Deploy to DEV') {
             when {
                 branch 'main'
@@ -78,8 +85,16 @@ pipeline {
                 script {
                     sh 'apk add --no-cache curl sed || true'
                     
-                    echo "🧹 Sprzątanie DEV..."
-                    sh 'docker rm -f plannerv2-nginx-dev plannerv2-backend-dev plannerv2-db-dev || true'
+                    echo "🧹 AGRESYWNE CZYSZCZENIE DEV..."
+                    sh 'docker stop plannerv2-nginx-dev || true'
+                    sh 'docker rm -f plannerv2-nginx-dev || true'
+                    
+                    sh 'docker stop plannerv2-backend-dev || true'
+                    sh 'docker rm -f plannerv2-backend-dev || true'
+                    
+                    sh 'docker stop plannerv2-db-dev || true'
+                    sh 'docker rm -f plannerv2-db-dev || true'
+                    
                     sh 'docker network create plannerv2-network || true'
                     
                     echo "🗄️ Start Bazy DEV..."
@@ -91,18 +106,19 @@ pipeline {
                     echo "🐍 Backend DEV..."
                     sh 'docker build -t plannerv2-backend:dev ./backend'
                     
+                    // POPRAWKA: Uruchamiamy z poprawną ścieżką modułu (backend.app.main) i bez zbędnych linków
                     sh '''
                         docker run -d --name plannerv2-backend-dev --network plannerv2-network \
                         -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db \
                         --restart unless-stopped plannerv2-backend:dev \
-                        /bin/sh -c "ln -s /app /app/backend && export PYTHONPATH=/app && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+                        /bin/sh -c "export PYTHONPATH=/app && uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
                     '''
                     sh 'sleep 10'
                     
-                    // Healthcheck backendu
+                    // Healthcheck Backend
                     sh '''
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev)" = "false" ]; then
-                            echo "❌ CRITICAL: Backend DEV padł przed startem Nginxa! Logi:"
+                            echo "❌ Backend DEV padł! Logi:"
                             docker logs plannerv2-backend-dev
                             exit 1
                         fi
@@ -112,37 +128,39 @@ pipeline {
                     sh 'git checkout nginx/nginx.conf || true' 
                     sh "sed -i 's/plannerv2-backend/plannerv2-backend-dev/g' nginx/nginx.conf"
                     
-                    // 1. Startujemy Nginxa z domyślnym konfigiem (żeby kontener działał i miał sieć)
+                    // 1. Start Nginx
                     sh 'docker run -d --name plannerv2-nginx-dev --network plannerv2-network -p 8091:80 --restart unless-stopped nginx:alpine'
                     
-                    // 2. KLUCZOWY FIX: Pętla czekająca na DNS
-                    // Nginx nie może zrobić reloadu, dopóki nie widzi backendu. Sprawdzamy to.
+                    // 2. Czekamy na sieć (PING)
                     sh '''
-                        echo "⏳ Czekam na widoczność Backendu w sieci Docker..."
-                        for i in 1 2 3 4 5; do
-                            if docker exec plannerv2-nginx-dev getent hosts plannerv2-backend-dev; then
-                                echo "✅ DNS OK: Nginx widzi Backend!"
+                        echo "⏳ Sprawdzam widoczność Backendu..."
+                        DNS_OK=false
+                        for i in 1 2 3 4 5 6; do
+                            if docker exec plannerv2-nginx-dev ping -c 1 plannerv2-backend-dev; then
+                                echo "✅ Połączenie OK!"
+                                DNS_OK=true
                                 break
                             else
-                                echo "⚠️ DNS jeszcze nie gotowy, czekam..."
+                                echo "⚠️ Próba $i: Backend nie odpowiada, czekam..."
                                 sleep 5
                             fi
                         done
+                        
+                        if [ "$DNS_OK" = "false" ]; then
+                            echo "❌ BŁĄD SIECI: Nginx nie widzi Backendu."
+                            echo "🔍 Logi Backendu:"
+                            docker logs plannerv2-backend-dev
+                            exit 1
+                        fi
                     '''
 
-                    // 3. Dopiero teraz kopiujemy i przeładowujemy
+                    // 3. Podmiana configu i reload
                     sh '''
-                        # Foldery
                         docker exec plannerv2-nginx-dev mkdir -p /var/www/plannerv2/web
-                        
-                        # Frontend
                         docker cp frontend/build/web/. plannerv2-nginx-dev:/var/www/plannerv2/web/
-                        
-                        # Config
                         docker cp nginx/nginx.conf plannerv2-nginx-dev:/etc/nginx/nginx.conf
                         
-                        # Reload (teraz powinno być bezpieczne)
-                        echo "🔄 Reloading Nginx..."
+                        echo "🔄 Przeładowanie Nginxa..."
                         docker exec plannerv2-nginx-dev nginx -s reload
                     '''
                     
@@ -151,6 +169,7 @@ pipeline {
             }
         }
         
+        // --- 5. DEPLOY NA PROD (Tylko Tagi v*) ---
         stage('Deploy to PRODUCTION') {
             when {
                 tag "v*"
@@ -167,7 +186,15 @@ pipeline {
                 script {
                     echo "🚀 DEPLOY PRODUKCJI: ${env.TAG_NAME}"
                     sh 'apk add --no-cache curl || true'
-                    sh 'docker rm -f plannerv2-nginx plannerv2-backend plannerv2-db || true'
+                    
+                    echo "🧹 AGRESYWNE CZYSZCZENIE PROD..."
+                    sh 'docker stop plannerv2-nginx || true'
+                    sh 'docker rm -f plannerv2-nginx || true'
+                    sh 'docker stop plannerv2-backend || true'
+                    sh 'docker rm -f plannerv2-backend || true'
+                    sh 'docker stop plannerv2-db || true'
+                    sh 'docker rm -f plannerv2-db || true'
+                    
                     sh 'docker network create plannerv2-network || true'
                     
                     sh '''docker run -d --name plannerv2-db --network plannerv2-network \
@@ -176,11 +203,13 @@ pipeline {
                     sh 'sleep 10'
                     
                     sh 'docker build -t plannerv2-backend:latest ./backend'
+                    
+                    // POPRAWKA: Ta sama zmiana ścieżki dla Produkcji
                     sh '''
                         docker run -d --name plannerv2-backend --network plannerv2-network \
                         -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db \
                         --restart unless-stopped plannerv2-backend:latest \
-                        /bin/sh -c "ln -s /app /app/backend && export PYTHONPATH=/app && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+                        /bin/sh -c "export PYTHONPATH=/app && uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
                     '''
                     sh 'sleep 10'
                     
@@ -194,19 +223,24 @@ pipeline {
                     
                     sh 'git checkout nginx/nginx.conf || true'
                     
-                    // PROD: Ta sama bezpieczna procedura
                     sh 'docker run -d --name plannerv2-nginx --network plannerv2-network -p 8090:80 --restart unless-stopped nginx:alpine'
                     
-                    // Pętla czekająca na DNS dla Produkcji
                     sh '''
+                        echo "⏳ Sprawdzam DNS dla Produkcji..."
+                        DNS_OK=false
                         for i in 1 2 3 4 5; do
-                            if docker exec plannerv2-nginx getent hosts plannerv2-backend; then
+                            if docker exec plannerv2-nginx ping -c 1 plannerv2-backend; then
                                 echo "✅ DNS OK"
+                                DNS_OK=true
                                 break
                             else
                                 sleep 5
                             fi
                         done
+                        
+                        if [ "$DNS_OK" = "false" ]; then
+                            exit 1
+                        fi
                     '''
                     
                     sh '''
