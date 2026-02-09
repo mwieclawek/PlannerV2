@@ -106,12 +106,11 @@ pipeline {
                     echo "🐍 Backend DEV..."
                     sh 'docker build -t plannerv2-backend:dev ./backend'
                     
-                    // POPRAWKA: Uruchamiamy z poprawną ścieżką modułu (backend.app.main) i bez zbędnych linków
+                    // Używamy domyślnego entrypoint.sh z Dockerfile (alembic upgrade head + uvicorn)
                     sh '''
                         docker run -d --name plannerv2-backend-dev --network plannerv2-network \
                         -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db \
-                        --restart unless-stopped plannerv2-backend:dev \
-                        /bin/sh -c "export PYTHONPATH=/app && uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
+                        --restart unless-stopped plannerv2-backend:dev
                     '''
                     sh 'sleep 10'
                     
@@ -204,12 +203,11 @@ pipeline {
                     
                     sh 'docker build -t plannerv2-backend:latest ./backend'
                     
-                    // POPRAWKA: Ta sama zmiana ścieżki dla Produkcji
+                    // Używamy domyślnego entrypoint.sh z Dockerfile (alembic upgrade head + uvicorn)
                     sh '''
                         docker run -d --name plannerv2-backend --network plannerv2-network \
                         -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db \
-                        --restart unless-stopped plannerv2-backend:latest \
-                        /bin/sh -c "export PYTHONPATH=/app && uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"
+                        --restart unless-stopped plannerv2-backend:latest
                     '''
                     sh 'sleep 10'
                     
