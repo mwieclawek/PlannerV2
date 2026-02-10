@@ -23,7 +23,7 @@ def upgrade() -> None:
     op.add_column('user', sa.Column('username', sqlmodel.sql.sqltypes.AutoString(), nullable=True))
     
     # Copy email values to username for existing users (migration of existing data)
-    op.execute("UPDATE user SET username = email WHERE username IS NULL")
+    op.execute('UPDATE "user" SET username = email WHERE username IS NULL')
     
     # Make username NOT NULL after data migration
     op.alter_column('user', 'username', nullable=False)
