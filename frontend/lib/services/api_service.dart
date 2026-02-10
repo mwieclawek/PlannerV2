@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 
 class ApiService {
@@ -11,21 +11,23 @@ class ApiService {
     return 'http://127.0.0.1:8000';
   }
   final Dio _dio;
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
 
   ApiService() : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final token = await _storage.read(key: 'access_token');
+        final prefs = await SharedPreferences.getInstance();
+        final token = prefs.getString('access_token');
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';
         }
         return handler.next(options);
       },
-      onError: (error, handler) {
+      onError: (error, handler) async {
         if (error.response?.statusCode == 401) {
           // Token expired or invalid
-          _storage.delete(key: 'access_token');
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('access_token');
         }
         return handler.next(error);
       },
@@ -47,7 +49,8 @@ class ApiService {
       ),
     );
     final token = response.data['access_token'];
-    await _storage.write(key: 'access_token', value: token);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('access_token', token);
     return token;
   }
 
@@ -63,7 +66,8 @@ class ApiService {
     }
     final response = await _dio.post('/auth/register', data: data);
     final token = response.data['access_token'];
-    await _storage.write(key: 'access_token', value: token);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('access_token', token);
     return token;
   }
 
@@ -73,7 +77,8 @@ class ApiService {
   }
 
   Future<void> logout() async {
-    await _storage.delete(key: 'access_token');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('access_token');
   }
 
   // Roles
@@ -163,7 +168,8 @@ class ApiService {
 
   // Check if user is logged in
   Future<bool> isLoggedIn() async {
-    final token = await _storage.read(key: 'access_token');
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('access_token');
     return token != null;
   }
 
