@@ -1,7 +1,7 @@
-from typing import List
+from typing import List, Optional
 from uuid import UUID
-from datetime import date
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import date, datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 from ..database import get_session
 from ..models import User, JobRole, ShiftDefinition, StaffingRequirement, RoleSystem, RestaurantConfig
@@ -257,4 +257,118 @@ def reject_attendance(
     session.add(attendance)
     session.commit()
     return {"status": "rejected"}
+
+@router.get("/attendance")
+def get_all_attendance(
+    start_date: date,
+    end_date: date,
+    status: Optional[str] = Query(None, description="Filter by status: PENDING, CONFIRMED, REJECTED"),
+    session: Session = Depends(get_session),
+    _: User = Depends(get_manager_user)
+):
+    """Get all attendance records within date range, optionally filtered by status"""
+    query = select(Attendance).where(
+        Attendance.date >= start_date,
+        Attendance.date <= end_date
+    )
+    
+    if status:
+        try:
+            status_enum = AttendanceStatus(status.upper())
+            query = query.where(Attendance.status == status_enum)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}. Must be PENDING, CONFIRMED, or REJECTED.")
+    
+    attendances = session.exec(query).all()
+    
+    return [{
+        "id": str(a.id),
+        "user_id": str(a.user_id),
+        "user_name": a.user.full_name,
+        "date": a.date.isoformat(),
+        "check_in": a.check_in.strftime("%H:%M"),
+        "check_out": a.check_out.strftime("%H:%M"),
+        "was_scheduled": a.was_scheduled,
+        "status": a.status.value
+    } for a in attendances]
+
+@router.get("/employee-hours")
+def get_employee_hours(
+    month: int = Query(..., ge=1, le=12),
+    year: int = Query(..., ge=2000, le=2100),
+    session: Session = Depends(get_session),
+    _: User = Depends(get_manager_user)
+):
+    """Get monthly hours summary for all employees with availability info"""
+    from ..models import Schedule, Availability
+    from calendar import monthrange
+    
+    # Calculate month date range
+    first_day = date(year, month, 1)
+    last_day = date(year, month, monthrange(year, month)[1])
+    
+    # Get all schedules for the month
+    schedules = session.exec(
+        select(Schedule).where(
+            Schedule.date >= first_day,
+            Schedule.date <= last_day
+        )
+    ).all()
+    
+    # Get shift definitions for time calculations
+    all_shifts = session.exec(select(ShiftDefinition)).all()
+    shift_map = {s.id: s for s in all_shifts}
+    
+    # Get all employees
+    employees = session.exec(
+        select(User).where(User.role_system == RoleSystem.EMPLOYEE)
+    ).all()
+    
+    # Get availability for the month (to know who submitted)
+    availabilities = session.exec(
+        select(Availability).where(
+            Availability.date >= first_day,
+            Availability.date <= last_day
+        )
+    ).all()
+    users_with_availability = {str(a.user_id) for a in availabilities}
+    
+    # Calculate hours per employee
+    hours_by_user = {}
+    for schedule in schedules:
+        uid = str(schedule.user_id)
+        shift = shift_map.get(schedule.shift_def_id)
+        if not shift:
+            continue
+        
+        # Calculate shift duration in hours
+        start_dt = datetime.combine(date.today(), shift.start_time)
+        end_dt = datetime.combine(date.today(), shift.end_time)
+        if end_dt <= start_dt:
+            # Overnight shift
+            end_dt += timedelta(days=1)
+        duration_hours = (end_dt - start_dt).total_seconds() / 3600
+        
+        if uid not in hours_by_user:
+            hours_by_user[uid] = {"total_hours": 0.0, "shift_count": 0}
+        hours_by_user[uid]["total_hours"] += duration_hours
+        hours_by_user[uid]["shift_count"] += 1
+    
+    # Build result for all employees
+    result = []
+    for emp in employees:
+        uid = str(emp.id)
+        data = hours_by_user.get(uid, {"total_hours": 0.0, "shift_count": 0})
+        result.append({
+            "user_id": uid,
+            "user_name": emp.full_name,
+            "total_hours": round(data["total_hours"], 1),
+            "shift_count": data["shift_count"],
+            "has_availability": uid in users_with_availability
+        })
+    
+    # Sort by total_hours descending
+    result.sort(key=lambda x: x["total_hours"], reverse=True)
+    
+    return result
 

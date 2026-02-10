@@ -86,6 +86,37 @@ export PYTHONPATH=$PWD
 pytest backend/tests/ -v
 ```
 
+## Nowe endpointy (2026-02-10)
+
+### GET /manager/attendance
+Pobiera listę **wszystkich** obecności (nie tylko PENDING) z filtrowaniem po datach i opcjonalnie po statusie.
+
+**Parametry query:**
+- `start_date` (date, wymagany) — początek zakresu dat
+- `end_date` (date, wymagany) — koniec zakresu dat
+- `status` (string, opcjonalny) — filtr statusu: `PENDING`, `CONFIRMED`, `REJECTED`
+
+**Przykład:**
+```bash
+GET /manager/attendance?start_date=2026-02-01&end_date=2026-02-28&status=PENDING
+```
+
+### GET /manager/employee-hours
+Zwraca podsumowanie godzin pracy każdego pracownika w danym miesiącu, wraz z informacją czy złożył dyspozycję.
+
+**Parametry query:**
+- `month` (int, 1-12, wymagany) — miesiąc
+- `year` (int, wymagany) — rok
+
+**Zwraca:**
+- `user_id`, `user_name`, `total_hours`, `shift_count`, `has_availability`
+- Lista posortowana malejąco po `total_hours`
+
+**Przykład:**
+```bash
+GET /manager/employee-hours?month=2&year=2026
+```
+
 ## API Docs
 
 Po uruchomieniu serwera dokumentacja jest dostępna pod:
