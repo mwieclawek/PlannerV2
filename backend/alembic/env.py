@@ -19,7 +19,8 @@ from sqlmodel import SQLModel
 # Import all models so they are registered with SQLModel.metadata
 from backend.app.models import (
     User, JobRole, ShiftDefinition, Availability,
-    StaffingRequirement, Schedule, RestaurantConfig, UserJobRoleLink
+    StaffingRequirement, Schedule, RestaurantConfig, UserJobRoleLink,
+    Attendance, AttendanceStatus
 )
 
 # this is the Alembic Config object
