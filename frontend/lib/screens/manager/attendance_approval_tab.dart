@@ -54,7 +54,9 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab> {
   
   void _exportPdf() async {
     final api = ref.read(apiServiceProvider);
-    final url = api.getAttendanceExportUrl(_startDate, _endDate, status: _statusFilter);
+    final token = await api.getToken();
+    final url = api.getAttendanceExportUrl(_startDate, _endDate, status: _statusFilter, token: token);
+    
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url));
     } else {

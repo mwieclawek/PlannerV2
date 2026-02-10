@@ -779,7 +779,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               ),
             ),
             ),
-          ),
+
           
           if (_isLoadingStats)
             const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
@@ -828,9 +828,9 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
   }
 
   Widget _buildEmployeeStatItem(Map<String, dynamic> stat) {
-    final hasAvailability = stat['has_submitted_availability'] as bool;
-    final totalHours = (stat['total_hours'] as num).toDouble();
-    final shiftsCount = stat['shift_count'] as int;
+    final hasAvailability = stat['has_submitted_availability'] as bool? ?? false;
+    final totalHours = (stat['total_hours'] as num?)?.toDouble() ?? 0.0;
+    final shiftsCount = stat['shift_count'] as int? ?? 0;
     
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),

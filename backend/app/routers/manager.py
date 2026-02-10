@@ -10,7 +10,7 @@ from reportlab.lib import colors
 from sqlmodel import Session, select
 from ..database import get_session
 from ..models import User, JobRole, ShiftDefinition, StaffingRequirement, RoleSystem, RestaurantConfig
-from ..auth_utils import get_current_user
+from ..auth_utils import get_current_user, verify_user_token
 from ..schemas import (
     JobRoleCreate, JobRoleResponse, 
     ShiftDefCreate, ShiftDefResponse,
@@ -264,14 +264,23 @@ def reject_attendance(
     return {"status": "rejected"}
 
 @router.get("/attendance/export")
-def export_attendance_pdf(
+async def export_attendance_pdf(
     start_date: date,
     end_date: date,
     status: Optional[str] = Query(None, description="Filter by status: PENDING, CONFIRMED, REJECTED"),
-    session: Session = Depends(get_session),
-    _: User = Depends(get_manager_user)
+    token: Optional[str] = Query(None),
+    session: Session = Depends(get_session)
 ):
     """Export attendance list to PDF"""
+    # Verify auth via token query param
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    user = await verify_user_token(token, session)
+    # Check if user is manager (using RoleSystem enum from models)
+    if user.role_system != RoleSystem.MANAGER:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
     query = select(Attendance).where(
         Attendance.date >= start_date,
         Attendance.date <= end_date
