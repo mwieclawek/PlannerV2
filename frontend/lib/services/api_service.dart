@@ -308,4 +308,27 @@ class ApiService {
   Future<void> rejectAttendance(String attendanceId) async {
     await _dio.put('/manager/attendance/$attendanceId/reject');
   }
+
+  Future<List<Map<String, dynamic>>> getAllAttendance(
+    DateTime startDate,
+    DateTime endDate, {
+    String? status,
+  }) async {
+    final params = {
+      'start_date': startDate.toIso8601String().split('T')[0],
+      'end_date': endDate.toIso8601String().split('T')[0],
+      if (status != null) 'status': status,
+    };
+    final response = await _dio.get('/manager/attendance', queryParameters: params);
+    return (response.data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<List<Map<String, dynamic>>> getEmployeeHours(int month, int year) async {
+    final response = await _dio.get(
+      '/manager/employee-hours',
+      queryParameters: {'month': month, 'year': year},
+    );
+    return (response.data as List).cast<Map<String, dynamic>>();
+  }
+
 }
