@@ -323,6 +323,17 @@ class ApiService {
     return (response.data as List).cast<Map<String, dynamic>>();
   }
 
+  String getAttendanceExportUrl(DateTime startDate, DateTime endDate, {String? status}) {
+    final baseUrl = ApiService.baseUrl;
+    final start = startDate.toIso8601String().split('T')[0];
+    final end = endDate.toIso8601String().split('T')[0];
+    String url = '$baseUrl/manager/attendance/export?start_date=$start&end_date=$end';
+    if (status != null) {
+      url += '&status=$status';
+    }
+    return url;
+  }
+
   Future<List<Map<String, dynamic>>> getEmployeeHours(int month, int year) async {
     final response = await _dio.get(
       '/manager/employee-hours',

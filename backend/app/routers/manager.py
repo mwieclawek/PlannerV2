@@ -1,7 +1,12 @@
 from typing import List, Optional
 from uuid import UUID
 from datetime import date, datetime, timedelta
+from io import BytesIO
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
 from sqlmodel import Session, select
 from ..database import get_session
 from ..models import User, JobRole, ShiftDefinition, StaffingRequirement, RoleSystem, RestaurantConfig
@@ -257,6 +262,79 @@ def reject_attendance(
     session.add(attendance)
     session.commit()
     return {"status": "rejected"}
+
+@router.get("/attendance/export")
+def export_attendance_pdf(
+    start_date: date,
+    end_date: date,
+    status: Optional[str] = Query(None, description="Filter by status: PENDING, CONFIRMED, REJECTED"),
+    session: Session = Depends(get_session),
+    _: User = Depends(get_manager_user)
+):
+    """Export attendance list to PDF"""
+    query = select(Attendance).where(
+        Attendance.date >= start_date,
+        Attendance.date <= end_date
+    )
+    
+    if status:
+        try:
+            status_enum = AttendanceStatus(status.upper())
+            query = query.where(Attendance.status == status_enum)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+            
+    attendances = session.exec(query).all()
+    
+    # Generate PDF
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    y = height - 50
+    
+    # Title
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(50, y, f"Attendance List: {start_date} - {end_date}")
+    y -= 30
+    
+    # Filters
+    p.setFont("Helvetica", 10)
+    if status:
+        p.drawString(50, y, f"Filter Status: {status}")
+        y -= 20
+        
+    # Table Header
+    y -= 20
+    p.setFont("Helvetica-Bold", 10)
+    p.drawString(50, y, "Employee")
+    p.drawString(200, y, "Date")
+    p.drawString(300, y, "Time")
+    p.drawString(400, y, "Status")
+    p.line(50, y-5, 500, y-5)
+    y -= 20
+    
+    # Data
+    p.setFont("Helvetica", 10)
+    for att in attendances:
+        if y < 50:
+            p.showPage()
+            y = height - 50
+            p.setFont("Helvetica", 10)
+            
+        p.drawString(50, y, att.user.full_name)
+        p.drawString(200, y, str(att.date))
+        p.drawString(300, y, f"{att.check_in.strftime('%H:%M')} - {att.check_out.strftime('%H:%M')}")
+        p.drawString(400, y, att.status.value)
+        y -= 15
+        
+    p.save()
+    buffer.seek(0)
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=attendance_export.pdf"}
+    )
 
 @router.get("/attendance")
 def get_all_attendance(

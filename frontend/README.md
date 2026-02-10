@@ -29,6 +29,10 @@
 - Role and shift configuration
 - Schedule generation using OR-Tools
 - Week-by-week planning
+- **Zarządzanie Zespołem**: Dodawanie pracowników, przypisywanie ról.
+- **Auto-kolor Ról**: Automatyczne generowanie kolorów role.
+- **Obecności**: Ewidencja czasu pracy, zatwierdzanie/odrzucanie, eksport do PDF.
+- **Scheduler**: Automatyczne generowanie grafiku z podglądem statystyk godzin.
 
 ## Architecture
 

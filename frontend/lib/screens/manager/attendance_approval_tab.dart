@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
 
+import 'package:url_launcher/url_launcher.dart';
+
 class AttendanceApprovalTab extends ConsumerStatefulWidget {
   const AttendanceApprovalTab({super.key});
 
@@ -47,6 +49,20 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab> {
         _error = e.toString();
         _isLoading = false;
       });
+    }
+  }
+  
+  void _exportPdf() async {
+    final api = ref.read(apiServiceProvider);
+    final url = api.getAttendanceExportUrl(_startDate, _endDate, status: _statusFilter);
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url));
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nie można otworzyć linku eksportu')),
+        );
+      }
     }
   }
 
@@ -93,6 +109,13 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab> {
         title: Text('Obecności', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.indigo.shade700,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            tooltip: 'Eksportuj do PDF',
+            onPressed: _exportPdf,
+          ),
+        ],
       ),
       body: Column(
         children: [
