@@ -43,7 +43,7 @@ def manager_token(client):
     # Ignore error if exists (unlikely with unique email but safe)
     
     response = client.post("/auth/token", data={
-        "username": TEST_MANAGER["email"],
+        "username": TEST_MANAGER["username"],
         "password": TEST_MANAGER["password"]
     })
     
@@ -91,7 +91,7 @@ class TestAuthentication:
         # Ensure manager exists first
         client.post("/auth/register", json=TEST_MANAGER)
         response = client.post("/auth/token", data={
-            "username": TEST_MANAGER["email"],
+            "username": TEST_MANAGER["username"],
             "password": TEST_MANAGER["password"]
         })
         assert response.status_code == 200
@@ -100,7 +100,7 @@ class TestAuthentication:
         # Ensure manager exists first
         client.post("/auth/register", json=TEST_MANAGER)
         response = client.post("/auth/token", data={
-            "username": TEST_MANAGER["email"],
+            "username": TEST_MANAGER["username"],
             "password": "wrongpassword"
         })
         assert response.status_code == 401

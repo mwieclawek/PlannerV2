@@ -13,8 +13,9 @@ SECRET_KEY = "CHANGE_THIS_IN_PRODUCTION_SECRET_KEY"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 
-# Using pbkdf2_sha256 to avoid bcrypt environmental issues on Windows
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+# pbkdf2_sha256 is primary (avoids bcrypt issues on Windows)
+# bcrypt kept as deprecated so old production hashes still verify
+pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated=["bcrypt"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 def verify_password(plain_password, hashed_password):
