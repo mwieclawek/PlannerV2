@@ -76,7 +76,7 @@ Note: Integration tests in `tests/test_api.py` require a running backend server 
 
 3. Uruchom serwer (z katalogu głównego projektu):
    ```bash
-   uvicorn backend.app.main:app --reload --port 8080
+   uvicorn backend.app.main:app --reload --port 8000
    ```
 
 ### Algorytm Grafiku (Solver)
