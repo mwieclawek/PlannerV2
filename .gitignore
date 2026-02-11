@@ -41,3 +41,11 @@ Thumbs.db
 .env
 *.pem
 *.key
+
+# Testing & Logs
+test-results/
+.pytest_cache/
+*.log
+test_output*.txt
+coverage.xml
+*.xml
