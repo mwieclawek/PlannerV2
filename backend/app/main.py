@@ -12,11 +12,11 @@ async def lifespan(app: FastAPI):
     # Startup
     from .database import init_db, DATABASE_URL
     
-    # For local SQLite development, create tables directly
-    # In production, Alembic migrations are used
-    if "sqlite" in DATABASE_URL:
-        logger.info("SQLite detected - creating tables via SQLModel...")
-        init_db()
+    # For local SQLite development AND Jenkins test environment.
+    # In a full production env with migrations, this might be redundant but is generally safe 
+    # as create_all checks for existence.
+    logger.info(f"Initializing database structure (URL starts with: {DATABASE_URL[:10]}...)...")
+    init_db()
     
     logger.info("Application startup complete. Database ready.")
     yield

@@ -51,6 +51,24 @@ Wymagane: Python 3.11+, PostgreSQL (opcjonalnie, domyślnie SQLite).
    pip install -r requirements.txt
    ```
 
+## Database Initialization
+
+The application automatically initializes the database (creates tables) on startup if they do not exist. This applies to both SQLite (local development) and PostgreSQL (test/production environments), ensuring that the application can run in environments where Alembic migrations might not be executed automatically (e.g., Jenkins test stage).
+
+## Testing
+
+To run backend tests:
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run tests
+pytest tests/ -v
+```
+
+Note: Integration tests in `tests/test_api.py` require a running backend server or valid database connection. The `conftest.py` is configured to use an in-memory SQLite database for isolated testing.
+
 2. Uruchom migracje:
    ```bash
    alembic upgrade head
