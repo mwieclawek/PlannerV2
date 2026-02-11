@@ -12,11 +12,11 @@ async def lifespan(app: FastAPI):
     # Startup
     from .database import init_db, DATABASE_URL
     
-    # For local SQLite development, create tables directly
-    # In production, Alembic migrations are used
-    if "sqlite" in DATABASE_URL:
-        logger.info("SQLite detected - creating tables via SQLModel...")
-        init_db()
+    # For local SQLite development AND Jenkins test environment.
+    # In a full production env with migrations, this might be redundant but is generally safe 
+    # as create_all checks for existence.
+    logger.info(f"Initializing database structure (URL starts with: {DATABASE_URL[:10]}...)...")
+    init_db()
     
     logger.info("Application startup complete. Database ready.")
     yield
@@ -28,10 +28,17 @@ app = FastAPI(title="Planner V2", lifespan=lifespan)
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins (good for local dev)
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:5000",
+        "http://127.0.0.1:5000",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 from .routers import auth, manager, employee, scheduler

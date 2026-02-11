@@ -30,12 +30,12 @@ Aplikacja do automatycznego generowania grafików pracy dla restauracji i lokali
 # Backend
 cd backend
 pip install -r requirements.txt
-uvicorn backend.app.main:app --reload --port 8000
+uvicorn backend.app.main:app --reload --port 8080
 
 # Frontend
 cd frontend
 flutter pub get
-flutter run -d web-server --web-port=5000
+flutter run -d chrome --web-port 5000
 ```
 
 **Rejestracja Managera:** PIN = `1234`

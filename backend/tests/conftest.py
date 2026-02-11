@@ -20,6 +20,7 @@ engine = create_engine(
 
 @pytest.fixture(name="session")
 def session_fixture() -> Generator[Session, None, None]:
+    SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield session

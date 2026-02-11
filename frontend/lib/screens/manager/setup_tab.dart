@@ -13,7 +13,7 @@ class SetupTab extends ConsumerStatefulWidget {
 
 class _SetupTabState extends ConsumerState<SetupTab> {
   final _roleNameController = TextEditingController();
-  final _roleColorController = TextEditingController(text: '#3B82F6');
+  int _roleColorIndex = 0; // For auto-color generation
   final _shiftNameController = TextEditingController();
   final _shiftStartController = TextEditingController();
   final _shiftEndController = TextEditingController();
@@ -91,7 +91,6 @@ class _SetupTabState extends ConsumerState<SetupTab> {
   @override
   void dispose() {
     _roleNameController.dispose();
-    _roleColorController.dispose();
     _shiftNameController.dispose();
     _shiftStartController.dispose();
     _shiftEndController.dispose();
@@ -102,13 +101,49 @@ class _SetupTabState extends ConsumerState<SetupTab> {
     super.dispose();
   }
 
+ String _generateRoleColor() {
+    // Generate pleasant colors using golden ratio
+    final hue = (_roleColorIndex * 137.508) % 360; // Golden angle
+    final saturation = 0.65 + (_roleColorIndex % 3) * 0.1; // Vary saturation
+    final lightness = 0.50 + (_roleColorIndex % 2) * 0.05; // Vary lightness
+    
+    // Convert HSL to RGB
+    final c = (1 - (2 * lightness - 1).abs()) * saturation;
+    final x = c * (1 - ((hue / 60) % 2 - 1).abs());
+    final m = lightness - c / 2;
+    
+    double r = 0, g = 0, b = 0;
+    if (hue < 60) {
+      r = c; g = x;
+    } else if (hue < 120) {
+      r = x; g = c;
+    } else if (hue < 180) {
+      g = c; b = x;
+    } else if (hue < 240) {
+      g = x; b = c;
+    } else if (hue < 300) {
+      r = x; b = c;
+    } else {
+      r = c; b = x;
+    }
+    
+    final red = ((r + m) * 255).round();
+    final green = ((g + m) * 255).round();
+    final blue = ((b + m) * 255).round();
+    
+    _roleColorIndex++;
+    return '#${red.toRadixString(16).padLeft(2, '0')}${green.toRadixString(16).padLeft(2, '0')}${blue.toRadixString(16).padLeft(2, '0')}'.toUpperCase();
+  }
+
   Future<void> _addRole() async {
     if (_roleNameController.text.isEmpty) return;
+
+    final autoColor = _generateRoleColor();
 
     try {
       await ref.read(apiServiceProvider).createRole(
             _roleNameController.text,
-            _roleColorController.text,
+            autoColor,
           );
       
       _roleNameController.clear();
@@ -347,6 +382,7 @@ class _SetupTabState extends ConsumerState<SetupTab> {
           nameController.text,
           startController.text,
           endController.text,
+          shift.applicableDays,
         );
         ref.invalidate(shiftsProvider);
         if (mounted) {
@@ -526,23 +562,14 @@ class _SetupTabState extends ConsumerState<SetupTab> {
                   Row(
                     children: [
                       Expanded(
-                        flex: 2,
                         child: TextField(
                           controller: _roleNameController,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Nazwa roli',
                             hintText: 'np. Barista, Kucharz',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _roleColorController,
-                          decoration: const InputDecoration(
-                            labelText: 'Kolor (hex)',
-                            border: OutlineInputBorder(),
+                            border: const OutlineInputBorder(),
+                            helperText: 'Kolor zostanie przypisany automatycznie',
+                            helperStyle: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                           ),
                         ),
                       ),

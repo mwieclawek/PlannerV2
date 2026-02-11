@@ -1,8 +1,8 @@
-from pydantic import BaseModel, field_validator, ValidationInfo
-from datetime import datetime, date, time
+from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
+from datetime import datetime, date as date_type, time
 from typing import List, Optional
 from uuid import UUID
-from .models import RoleSystem, AvailabilityStatus
+from .models import RoleSystem, AvailabilityStatus, AttendanceStatus
 
 # ... (Previous imports remain, but need field_validator, ValidationInfo)
 
@@ -16,6 +16,8 @@ class UserBase(BaseModel):
     full_name: str
     role_system: RoleSystem
     email: Optional[str] = None  # Optional for contact
+    target_hours_per_month: Optional[int] = None
+    target_shifts_per_month: Optional[int] = None
 
 class UserCreate(UserBase):
     password: str
@@ -30,10 +32,31 @@ class UserCreate(UserBase):
             raise ValueError('Username cannot contain spaces')
         return v.lower()  # Normalize to lowercase
 
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    role_system: Optional[RoleSystem] = None
+    target_hours_per_month: Optional[int] = None
+    target_shifts_per_month: Optional[int] = None
+
 class UserResponse(UserBase):
     id: UUID
     created_at: datetime
     job_roles: List[int] = []
+
+    @model_validator(mode='before')
+    @classmethod
+    def extract_role_ids(cls, data):
+        """Convert JobRole ORM objects to plain int IDs."""
+        if hasattr(data, 'job_roles'):
+            roles = data.job_roles
+            if roles and hasattr(roles[0], 'id'):
+                data.__dict__['job_roles'] = [r.id for r in roles]
+        elif isinstance(data, dict) and 'job_roles' in data:
+            roles = data['job_roles']
+            if roles and hasattr(roles[0], 'id'):
+                data['job_roles'] = [r.id for r in roles]
+        return data
 
     class Config:
         from_attributes = True
@@ -68,11 +91,19 @@ class ShiftDefCreate(ShiftDefBase):
     @field_validator('start_time', 'end_time')
     @classmethod
     def validate_time_format(cls, v: str) -> str:
+        # Try HH:MM first
         try:
             datetime.strptime(v, "%H:%M")
+            return v
         except ValueError:
-            raise ValueError("Time must be in HH:MM format")
-        return v
+            pass
+            
+        # Try HH:MM:SS
+        try:
+            val = datetime.strptime(v, "%H:%M:%S")
+            return val.strftime("%H:%M") # standardized to HH:MM
+        except ValueError:
+            raise ValueError("Time must be in HH:MM or HH:MM:SS format")
 
 class ShiftDefResponse(BaseModel):
     id: int
@@ -93,7 +124,7 @@ class ShiftDefResponse(BaseModel):
 
 # --- Availability ---
 class AvailabilityBase(BaseModel):
-    date: date
+    date: date_type
     shift_def_id: int
     status: AvailabilityStatus
 
@@ -108,10 +139,26 @@ class AvailabilityResponse(AvailabilityBase):
 
 # --- Requirements ---
 class RequirementBase(BaseModel):
-    date: date
+    date: Optional[date_type] = None
+    day_of_week: Optional[int] = None
     shift_def_id: int
     role_id: int
     min_count: int
+
+    @model_validator(mode='after')
+    def check_date_or_day(self) -> 'RequirementBase':
+        if self.date is None and self.day_of_week is None:
+            raise ValueError('Either date or day_of_week must be provided')
+        if self.date is not None and self.day_of_week is not None:
+             raise ValueError('Cannot provide both date and day_of_week')
+        return self
+
+    @field_validator('day_of_week')
+    @classmethod
+    def validate_day(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and (v < 0 or v > 6):
+            raise ValueError('day_of_week must be between 0 and 6')
+        return v
 
 class RequirementCreate(RequirementBase):
     @field_validator('min_count')
@@ -129,23 +176,23 @@ class RequirementResponse(RequirementBase):
 
 # --- Scheduler ---
 class GenerateRequest(BaseModel):
-    start_date: date
-    end_date: date
+    start_date: date_type
+    end_date: date_type
 
 class ScheduleBatchItem(BaseModel):
-    date: date
+    date: date_type
     shift_def_id: int
     user_id: UUID
     role_id: int
 
 class BatchSaveRequest(BaseModel):
-    start_date: date
-    end_date: date
+    start_date: date_type
+    end_date: date_type
     items: List[ScheduleBatchItem]
 
 class ScheduleResponse(BaseModel):
     id: UUID
-    date: date
+    date: date_type
     shift_def_id: int
     user_id: UUID
     role_id: int
@@ -156,7 +203,7 @@ class ScheduleResponse(BaseModel):
 
 class EmployeeScheduleResponse(BaseModel):
     id: UUID
-    date: date
+    date: date_type
     shift_name: str
     role_name: str
     start_time: str
@@ -168,8 +215,10 @@ class ConfigBase(BaseModel):
     opening_hours: str
     address: Optional[str] = None
 
-class ConfigUpdate(ConfigBase):
-    pass
+class ConfigUpdate(BaseModel):
+    name: Optional[str] = None
+    opening_hours: Optional[str] = None
+    address: Optional[str] = None
 
 class ConfigResponse(ConfigBase):
     id: int
@@ -185,7 +234,28 @@ class PasswordReset(BaseModel):
     new_password: str
 
 class ManualAssignment(BaseModel):
-    date: date
+    date: date_type
     shift_def_id: int
     user_id: UUID
     role_id: int
+
+# --- Attendance ---
+class AttendanceBase(BaseModel):
+    user_id: UUID
+    date: date_type
+    check_in: time
+    check_out: time
+    was_scheduled: bool = True
+    status: AttendanceStatus = AttendanceStatus.CONFIRMED
+    schedule_id: Optional[UUID] = None
+
+class AttendanceCreate(AttendanceBase):
+    pass
+
+class AttendanceResponse(AttendanceBase):
+    id: UUID
+    created_at: datetime
+    user_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True

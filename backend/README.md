@@ -51,6 +51,24 @@ Wymagane: Python 3.11+, PostgreSQL (opcjonalnie, domyślnie SQLite).
    pip install -r requirements.txt
    ```
 
+## Database Initialization
+
+The application automatically initializes the database (creates tables) on startup if they do not exist. This applies to both SQLite (local development) and PostgreSQL (test/production environments), ensuring that the application can run in environments where Alembic migrations might not be executed automatically (e.g., Jenkins test stage).
+
+## Testing
+
+To run backend tests:
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run tests
+pytest tests/ -v
+```
+
+Note: Integration tests in `tests/test_api.py` require a running backend server or valid database connection. The `conftest.py` is configured to use an in-memory SQLite database for isolated testing.
+
 2. Uruchom migracje:
    ```bash
    alembic upgrade head
@@ -58,8 +76,15 @@ Wymagane: Python 3.11+, PostgreSQL (opcjonalnie, domyślnie SQLite).
 
 3. Uruchom serwer (z katalogu głównego projektu):
    ```bash
-   uvicorn backend.app.main:app --reload
+   uvicorn backend.app.main:app --reload --port 8080
    ```
+
+### Algorytm Grafiku (Solver)
+Ulepszony w lutym 2026:
+- **Dwie zmiany dziennie**: Pracownik może dostać 2 zmiany tego samego dnia (tzw. split shift).
+- **Zasady nakładania**: Dozwolone nakładanie się zmian do **30 minut** (na przekazanie zmiany). Powyżej 30 min blokowane.
+- **Kary**: Algorytm preferuje 1 zmianę dziennie (kara punktowa za każdą kolejną), chyba że brakuje personelu.
+- **Limity celów**: Respektuje `target_hours_per_month` i `target_shifts_per_month` dla każdego pracownika.
 
 ### Docker
 
@@ -84,6 +109,37 @@ Uruchamianie testów (z katalogu nadrzędnego `backend/`):
 ```bash
 export PYTHONPATH=$PWD
 pytest backend/tests/ -v
+```
+
+## Nowe endpointy (2026-02-10)
+
+### GET /manager/attendance
+Pobiera listę **wszystkich** obecności (nie tylko PENDING) z filtrowaniem po datach i opcjonalnie po statusie.
+
+**Parametry query:**
+- `start_date` (date, wymagany) — początek zakresu dat
+- `end_date` (date, wymagany) — koniec zakresu dat
+- `status` (string, opcjonalny) — filtr statusu: `PENDING`, `CONFIRMED`, `REJECTED`
+
+**Przykład:**
+```bash
+GET /manager/attendance?start_date=2026-02-01&end_date=2026-02-28&status=PENDING
+```
+
+### GET /manager/employee-hours
+Zwraca podsumowanie godzin pracy każdego pracownika w danym miesiącu, wraz z informacją czy złożył dyspozycję.
+
+**Parametry query:**
+- `month` (int, 1-12, wymagany) — miesiąc
+- `year` (int, wymagany) — rok
+
+**Zwraca:**
+- `user_id`, `user_name`, `total_hours`, `shift_count`, `has_availability`
+- Lista posortowana malejąco po `total_hours`
+
+**Przykład:**
+```bash
+GET /manager/employee-hours?month=2&year=2026
 ```
 
 ## API Docs

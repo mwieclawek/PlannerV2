@@ -25,6 +25,8 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
   List<ShiftDefinition> _shifts = [];
   List<JobRole> _roles = [];
   List<TeamMember> _users = [];
+  List<Map<String, dynamic>> _employeeHours = [];
+  bool _isLoadingStats = false;
   int _localIdCounter = -1; // For generating temporary IDs
   bool _isFirstEdit = true; // To show info banner on first edit
 
@@ -104,7 +106,28 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     _loadSchedule();
   }
 
+  Future<void> _loadEmployeeHours() async {
+    setState(() => _isLoadingStats = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      // Load stats for the month of the selected week start
+      final stats = await api.getEmployeeHours(
+        _selectedWeekStart.month,
+        _selectedWeekStart.year,
+      );
+      setState(() {
+        _employeeHours = stats;
+        _isLoadingStats = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingStats = false);
+      }
+    }
+  }
+
   Future<void> _loadSchedule() async {
+    _loadEmployeeHours();
     try {
       final api = ref.read(apiServiceProvider);
       final schedules = await api.getManagerSchedule(_selectedWeekStart, _selectedWeekEnd);
@@ -366,6 +389,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         _originalEntries = List.from(_scheduleEntries);
       });
       _updateUnsavedChanges(false);
+      _loadEmployeeHours();
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -754,6 +778,104 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                 ],
               ),
             ),
+            ),
+
+          
+          if (_isLoadingStats)
+            const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
+          else if (_employeeHours.isNotEmpty)
+            _buildStatsPanel(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsPanel() {
+    return Card(
+      margin: const EdgeInsets.only(top: 24),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.bar_chart, color: Colors.indigo.shade700),
+                const SizedBox(width: 8),
+                Text(
+                  'Podsumowanie miesiąca (${DateFormat('MMMM', 'pl_PL').format(_selectedWeekStart)})',
+                  style: GoogleFonts.outfit(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.indigo.shade900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _employeeHours.length,
+              separatorBuilder: (ctx, i) => Divider(color: Colors.grey.shade200),
+              itemBuilder: (ctx, i) => _buildEmployeeStatItem(_employeeHours[i]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmployeeStatItem(Map<String, dynamic> stat) {
+    final hasAvailability = stat['has_submitted_availability'] as bool? ?? false;
+    final totalHours = (stat['total_hours'] as num?)?.toDouble() ?? 0.0;
+    final shiftsCount = stat['shift_count'] as int? ?? 0;
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: hasAvailability ? Colors.green.shade100 : Colors.grey.shade200,
+            child: Icon(
+              hasAvailability ? Icons.check : Icons.question_mark,
+              size: 16,
+              color: hasAvailability ? Colors.green.shade700 : Colors.grey.shade500,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  stat['user_name'] ?? 'Unknown',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  hasAvailability ? 'Dostępność złożona' : 'Brak dostępności',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: hasAvailability ? Colors.green.shade700 : Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${totalHours.toStringAsFixed(1)} h',
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              Text(
+                '$shiftsCount zmian',
+                style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ],
           ),
         ],
       ),

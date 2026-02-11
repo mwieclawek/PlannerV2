@@ -1,0 +1,30 @@
+﻿ssh : INFO  [alembic.runtime.migration] Contex
+t impl PostgresqlImpl.
+At line:1 char:1
++ ssh root@restoplan.pl "docker exec plannerv2
+-backend alembic stamp 00 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ( 
+   INFO  [alembic....PostgresqlImpl.:String)  
+   [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandEr 
+   ror
+ 
+INFO  [alembic.runtime.migration] Will assume 
+transactional DDL.
+INFO  [alembic.runtime.migration] Running stam
+p_revision  -> 001_initial
+INFO  [alembic.runtime.migration] Context impl
+ PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume 
+transactional DDL.
+INFO  [alembic.runtime.migration] Running upgr
+ade 001_initial -> 002_add_username, Add usern
+ame field, make email optional
+INFO  [alembic.runtime.migration] Running upgr
+ade 002_add_username -> 003_add_applicable_day
+s, Add applicable_days to shift_definition
+INFO  [alembic.runtime.migration] Running upgr
+ade 003_add_applicable_days -> 004_add_attenda
+nce, Add attendance table

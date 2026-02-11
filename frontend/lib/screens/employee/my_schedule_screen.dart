@@ -141,12 +141,22 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                       ),
                     ),
                   ] else ...[
-                    Text(
-                      'Twoje zmiany',
-                      style: GoogleFonts.outfit(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Twoje zmiany',
+                          style: GoogleFonts.outfit(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: _loadSchedule,
+                          icon: const Icon(Icons.refresh, size: 18),
+                          label: const Text('Odśwież'),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     
@@ -154,114 +164,151 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                     ...(_groupByDate(_scheduleEntries).entries.map((entry) {
                       final date = entry.key;
                       final shifts = entry.value;
+                      final isToday = _isToday(date);
+                      final isPast = _isPast(date);
                       
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.teal.shade700,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      DateFormat('EEE', 'pl_PL').format(date),
-                                      style: GoogleFonts.inter(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    DateFormat('d MMMM yyyy', 'pl_PL').format(date),
-                                    style: GoogleFonts.inter(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const Divider(height: 24),
-                              
-                              // Shifts for this day
-                              ...shifts.map((shift) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: Row(
+                      return Opacity(
+                        opacity: isPast ? 0.6 : 1.0,
+                        child: Card(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          elevation: isToday ? 4 : 1,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: isToday 
+                                ? BorderSide(color: Colors.teal.shade700, width: 2)
+                                : BorderSide.none,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.all(12),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
                                       decoration: BoxDecoration(
-                                        color: Colors.teal.shade50,
+                                        color: isToday ? Colors.orange.shade700 : Colors.teal.shade700,
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: Icon(
-                                        Icons.access_time,
-                                        color: Colors.teal.shade700,
-                                        size: 24,
+                                      child: Text(
+                                        isToday ? 'DZISIAJ' : DateFormat('EEE', 'pl_PL').format(date),
+                                        style: GoogleFonts.inter(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
                                       ),
                                     ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            shift.shiftName,
-                                            style: GoogleFonts.inter(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.schedule,
-                                                size: 14,
-                                                color: Colors.grey.shade600,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                '${shift.startTime} - ${shift.endTime}',
-                                                style: GoogleFonts.inter(
-                                                  fontSize: 14,
-                                                  color: Colors.grey.shade600,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 16),
-                                              Icon(
-                                                Icons.badge,
-                                                size: 14,
-                                                color: Colors.grey.shade600,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                shift.roleName,
-                                                style: GoogleFonts.inter(
-                                                  fontSize: 14,
-                                                  color: Colors.grey.shade600,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
+                                    if (isToday) const SizedBox(width: 8),
+                                    if (isToday)
+                                      Icon(Icons.star, size: 16, color: Colors.orange.shade700),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      DateFormat('d MMMM yyyy', 'pl_PL').format(date),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: isPast ? Colors.grey.shade700 : null,
                                       ),
                                     ),
                                   ],
                                 ),
-                              )),
-                            ],
+                                const Divider(height: 24),
+                                
+                                // Shifts for this day
+                                ...shifts.map((shift) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              color: isToday ? Colors.orange.shade50 : Colors.teal.shade50,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Icon(
+                                              Icons.access_time,
+                                              color: isToday ? Colors.orange.shade700 : Colors.teal.shade700,
+                                              size: 24,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  shift.shiftName,
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.schedule,
+                                                      size: 14,
+                                                      color: Colors.grey.shade600,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      '${shift.startTime} - ${shift.endTime}',
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 14,
+                                                        color: Colors.grey.shade600,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 16),
+                                                    Icon(
+                                                      Icons.badge,
+                                                      size: 14,
+                                                      color: Colors.grey.shade600,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      shift.roleName,
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 14,
+                                                        color: Colors.grey.shade600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (isToday) ...[
+                                        const SizedBox(height: 12),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: OutlinedButton.icon(
+                                            onPressed: () => _showRegisterPresenceDialog(shift),
+                                            icon: const Icon(Icons.how_to_reg),
+                                            label: const Text('Zarejestruj obecność'),
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: Colors.teal.shade700,
+                                              side: BorderSide(color: Colors.teal.shade700),
+                                              padding: const EdgeInsets.symmetric(vertical: 12),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                   ],
+                                  ),
+                                )),
+                              ],
+                            ),
                           ),
                         ),
                       );
@@ -318,5 +365,105 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     }
     
     return sortedMap;
+  }
+
+  bool _isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month && date.day == now.day;
+  }
+
+  bool _isPast(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return date.isBefore(today);
+  }
+
+  void _showRegisterPresenceDialog(EmployeeScheduleEntry shift) async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final defaults = await api.getAttendanceDefaults(shift.date);
+      setState(() => _isLoading = false);
+      
+      if (!mounted) return;
+      
+      final checkInController = TextEditingController(text: defaults['check_in'] ?? shift.startTime);
+      final checkOutController = TextEditingController(text: defaults['check_out'] ?? shift.endTime);
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Zarejestruj obecność'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Zmiana: ${shift.shiftName}'),
+              Text('Data: ${DateFormat('d MMMM yyyy', 'pl_PL').format(shift.date)}'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: checkInController,
+                decoration: const InputDecoration(
+                  labelText: 'Godzina rozpoczęcia',
+                  prefixIcon: Icon(Icons.login),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: checkOutController,
+                decoration: const InputDecoration(
+                  labelText: 'Godzina zakończenia',
+                  prefixIcon: Icon(Icons.logout),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Anuluj'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _submitAttendance(shift.date, checkInController.text, checkOutController.text);
+              },
+              child: const Text('Zapisz'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Błąd pobierania domyślnych wartości: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _submitAttendance(DateTime date, String checkIn, String checkOut) async {
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(apiServiceProvider).registerAttendance(date, checkIn, checkOut);
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ Obecność zarejestrowana'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Błąd rejestracji: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 }

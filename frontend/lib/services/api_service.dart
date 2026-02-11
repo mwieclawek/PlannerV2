@@ -8,7 +8,7 @@ class ApiService {
     if (kReleaseMode) {
       return '';
     }
-    return 'http://127.0.0.1:8000';
+    return 'http://127.0.0.1:8080';
   }
   final Dio _dio;
 
@@ -192,6 +192,22 @@ class ApiService {
     });
   }
 
+  Future<void> updateUser(String userId, {
+    String? fullName,
+    String? email,
+    String? roleSystem,
+    int? targetHoursPerMonth,
+    int? targetShiftsPerMonth,
+  }) async {
+    await _dio.put('/manager/users/$userId', data: {
+      if (fullName != null) 'full_name': fullName,
+      if (email != null) 'email': email,
+      if (roleSystem != null) 'role_system': roleSystem,
+      if (targetHoursPerMonth != null) 'target_hours_per_month': targetHoursPerMonth,
+      if (targetShiftsPerMonth != null) 'target_shifts_per_month': targetShiftsPerMonth,
+    });
+  }
+
   // Manual Schedule Editing
   Future<void> createAssignment({
     required DateTime date,
@@ -246,12 +262,12 @@ class ApiService {
   }
 
   // Update Shift
-  Future<void> updateShift(int shiftId, String name, String startTime, String endTime, {List<int>? applicableDays}) async {
+  Future<void> updateShift(int shiftId, String name, String startTime, String endTime, List<int> applicableDays) async {
     await _dio.put('/manager/shifts/$shiftId', data: {
       'name': name,
       'start_time': startTime,
       'end_time': endTime,
-      'applicable_days': applicableDays ?? [0, 1, 2, 3, 4, 5, 6],
+      'applicable_days': applicableDays,
     });
   }
 
@@ -293,6 +309,24 @@ class ApiService {
     return response.data;
   }
 
+  Future<void> registerManualAttendance({
+    required String userId,
+    required DateTime date,
+    required String checkIn,
+    required String checkOut,
+    bool wasScheduled = true,
+    String status = 'CONFIRMED',
+  }) async {
+    await _dio.post('/manager/attendance', data: {
+      'user_id': userId,
+      'date': date.toIso8601String().split('T')[0],
+      'check_in': checkIn,
+      'check_out': checkOut,
+      'was_scheduled': wasScheduled,
+      'status': status,
+    });
+  }
+
   Future<List<Map<String, dynamic>>> getMyAttendance(DateTime startDate, DateTime endDate) async {
     final response = await _dio.get('/employee/attendance/my', queryParameters: {
       'start_date': startDate.toIso8601String().split('T')[0],
@@ -314,4 +348,45 @@ class ApiService {
   Future<void> rejectAttendance(String attendanceId) async {
     await _dio.put('/manager/attendance/$attendanceId/reject');
   }
+
+  Future<List<Map<String, dynamic>>> getAllAttendance(
+    DateTime startDate,
+    DateTime endDate, {
+    String? status,
+  }) async {
+    final params = {
+      'start_date': startDate.toIso8601String().split('T')[0],
+      'end_date': endDate.toIso8601String().split('T')[0],
+      if (status != null) 'status': status,
+    };
+    final response = await _dio.get('/manager/attendance', queryParameters: params);
+    return (response.data as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<String?> getToken() async {
+    return await _storage.read(key: 'access_token');
+  }
+
+  String getAttendanceExportUrl(DateTime startDate, DateTime endDate, {String? status, String? token}) {
+    final baseUrl = ApiService.baseUrl;
+    final start = startDate.toIso8601String().split('T')[0];
+    final end = endDate.toIso8601String().split('T')[0];
+    String url = '$baseUrl/manager/attendance/export?start_date=$start&end_date=$end';
+    if (status != null) {
+      url += '&status=$status';
+    }
+    if (token != null) {
+      url += '&token=$token';
+    }
+    return url;
+  }
+
+  Future<List<Map<String, dynamic>>> getEmployeeHours(int month, int year) async {
+    final response = await _dio.get(
+      '/manager/employee-hours',
+      queryParameters: {'month': month, 'year': year},
+    );
+    return (response.data as List).cast<Map<String, dynamic>>();
+  }
+
 }
