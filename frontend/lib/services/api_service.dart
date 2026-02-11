@@ -364,7 +364,8 @@ class ApiService {
   }
 
   Future<String?> getToken() async {
-    return await _storage.read(key: 'access_token');
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('access_token');
   }
 
   String getAttendanceExportUrl(DateTime startDate, DateTime endDate, {String? status, String? token}) {
