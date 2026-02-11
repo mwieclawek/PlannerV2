@@ -104,6 +104,142 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab> {
     }
   }
 
+  void _showManualEntryDialog() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final users = await api.getUsers();
+      setState(() => _isLoading = false);
+      
+      if (!mounted) return;
+      
+      String? selectedUserId;
+      DateTime selectedDate = DateTime.now();
+      final checkInController = TextEditingController(text: "08:00");
+      final checkOutController = TextEditingController(text: "16:00");
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: const Text('Dodaj obecność ręcznie'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Pracownik',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: users.where((u) => u.isEmployee).map((u) => DropdownMenuItem(
+                        value: u.id,
+                        child: Text(u.fullName),
+                      )).toList(),
+                      onChanged: (val) => setDialogState(() => selectedUserId = val),
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.calendar_today),
+                      label: Text(DateFormat('d MMM yyyy', 'pl_PL').format(selectedDate)),
+                      onPressed: () async {
+                        final d = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (d != null) setDialogState(() => selectedDate = d);
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: checkInController,
+                      decoration: const InputDecoration(
+                        labelText: 'Wejście (HH:mm)',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.login),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: checkOutController,
+                      decoration: const InputDecoration(
+                        labelText: 'Wyjście (HH:mm)',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.logout),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Anuluj'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (selectedUserId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Wybierz pracownika')),
+                      );
+                      return;
+                    }
+                    Navigator.pop(context);
+                    _saveManualAttendance(
+                      selectedUserId!,
+                      selectedDate,
+                      checkInController.text,
+                      checkOutController.text,
+                    );
+                  },
+                  child: const Text('Zapisz jako potwierdzone'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Błąd: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveManualAttendance(String userId, DateTime date, String checkIn, String checkOut) async {
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(apiServiceProvider).registerManualAttendance(
+        userId: userId,
+        date: date,
+        checkIn: checkIn,
+        checkOut: checkOut,
+        wasScheduled: false,
+        status: 'CONFIRMED',
+      );
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✓ Obecność zarejestrowana'), backgroundColor: Colors.green),
+        );
+      }
+      _loadAttendance();
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Błąd zapisu: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -112,6 +248,11 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab> {
         backgroundColor: Colors.indigo.shade700,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: 'Dodaj ręcznie',
+            onPressed: _showManualEntryDialog,
+          ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
             tooltip: 'Eksportuj do PDF',

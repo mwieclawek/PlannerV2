@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -17,10 +16,11 @@ class _RequirementsTabState extends ConsumerState<RequirementsTab> {
   DateTime _selectedWeekStart = _getMonday(DateTime.now());
   bool _isRequirementsLoading = false;
   bool _isSaving = false;
+  bool _isWeeklyMode = false; // Toggle between weekly defaults and specific dates
   
-  List<Requirement> _requirements = [];
-  
-  // Map to store requirement counts: "date_shiftId_roleId" -> count
+  // Map to store requirement counts: 
+  // Specific: "YYYY-MM-DD_shiftId_roleId" -> count
+  // Weekly: "dow_shiftId_roleId" -> count
   final Map<String, int> _requirementCounts = {};
 
   static DateTime _getMonday(DateTime date) {
@@ -43,17 +43,26 @@ class _RequirementsTabState extends ConsumerState<RequirementsTab> {
     try {
       final api = ref.read(apiServiceProvider);
       
-      // Load existing requirements for the week
+      // Load requirements. 
+      // If weekly mode, we fetch a wide range or handle specially? 
+      // Actually, the backend returns both in the range if we ask.
+      // But for weekly mode, we might want to fetch all global reqs.
+      // For now, let's fetch the current week and extract global ones if needed,
+      // OR better: always fetch both?
+      
       final requirements = await api.getRequirements(_selectedWeekStart, _selectedWeekEnd);
       
       setState(() {
-        _requirements = requirements;
-        
-        // Populate the counts map
         _requirementCounts.clear();
         for (var req in requirements) {
-          final key = _makeKey(req.date, req.shiftDefId, req.roleId);
-          _requirementCounts[key] = req.minCount;
+          if (req.date != null) {
+            final key = _makeDateKey(req.date!, req.shiftDefId, req.roleId);
+            _requirementCounts[key] = req.minCount;
+          }
+          if (req.dayOfWeek != null) {
+            final key = _makeWeeklyKey(req.dayOfWeek!, req.shiftDefId, req.roleId);
+            _requirementCounts[key] = req.minCount;
+          }
         }
         
         _isRequirementsLoading = false;
@@ -68,17 +77,25 @@ class _RequirementsTabState extends ConsumerState<RequirementsTab> {
     }
   }
 
-  String _makeKey(DateTime date, int shiftId, int roleId) {
+  String _makeDateKey(DateTime date, int shiftId, int roleId) {
     return '${date.toIso8601String().split('T')[0]}_${shiftId}_$roleId';
   }
 
-  int _getCount(DateTime date, int shiftId, int roleId) {
-    final key = _makeKey(date, shiftId, roleId);
+  String _makeWeeklyKey(int dow, int shiftId, int roleId) {
+    return 'dow_${dow}_${shiftId}_$roleId';
+  }
+
+  int _getCount(DateTime? date, int? dow, int shiftId, int roleId) {
+    final key = date != null 
+        ? _makeDateKey(date, shiftId, roleId)
+        : _makeWeeklyKey(dow!, shiftId, roleId);
     return _requirementCounts[key] ?? 0;
   }
 
-  void _setCount(DateTime date, int shiftId, int roleId, int count) {
-    final key = _makeKey(date, shiftId, roleId);
+  void _setCount(DateTime? date, int? dow, int shiftId, int roleId, int count) {
+    final key = date != null 
+        ? _makeDateKey(date, shiftId, roleId)
+        : _makeWeeklyKey(dow!, shiftId, roleId);
     setState(() {
       if (count > 0) {
         _requirementCounts[key] = count;
@@ -94,19 +111,32 @@ class _RequirementsTabState extends ConsumerState<RequirementsTab> {
     try {
       final updates = <RequirementUpdate>[];
       
-      // Convert the counts map to RequirementUpdate objects
       _requirementCounts.forEach((key, count) {
         final parts = key.split('_');
-        final date = DateTime.parse(parts[0]);
-        final shiftId = int.parse(parts[1]);
-        final roleId = int.parse(parts[2]);
-        
-        updates.add(RequirementUpdate(
-          date: date,
-          shiftDefId: shiftId,
-          roleId: roleId,
-          minCount: count,
-        ));
+        if (key.startsWith('dow_')) {
+          // Weekly: "dow_X_shiftId_roleId"
+          final dow = int.parse(parts[1]);
+          final shiftId = int.parse(parts[2]);
+          final roleId = int.parse(parts[3]);
+          updates.add(RequirementUpdate(
+            dayOfWeek: dow,
+            shiftDefId: shiftId,
+            roleId: roleId,
+            minCount: count,
+          ));
+        } else {
+          // Specific: "YYYY-MM-DD_shiftId_roleId"
+          final date = DateTime.parse(parts[0]);
+          final shiftId = int.parse(parts[1]);
+          final roleId = int.parse(parts[2]);
+          
+          updates.add(RequirementUpdate(
+            date: date,
+            shiftDefId: shiftId,
+            roleId: roleId,
+            minCount: count,
+          ));
+        }
       });
       
       await ref.read(apiServiceProvider).setRequirements(updates);
@@ -218,32 +248,74 @@ class _RequirementsTabState extends ConsumerState<RequirementsTab> {
               ),
               const SizedBox(height: 16),
               
-              // Week Selector
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed: _previousWeek,
-                      ),
-                      Text(
-                        '${DateFormat('d MMM', 'pl_PL').format(_selectedWeekStart)} - ${DateFormat('d MMM yyyy', 'pl_PL').format(_selectedWeekEnd)}',
-                        style: GoogleFonts.inter(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed: _nextWeek,
-                      ),
-                    ],
-                  ),
+              // Mode Selector
+              Center(
+                child: SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment<bool>(
+                      value: false,
+                      label: Text('Konkretne Daty'),
+                      icon: Icon(Icons.calendar_month),
+                    ),
+                    ButtonSegment<bool>(
+                      value: true,
+                      label: Text('Stałe Tygodniowe'),
+                      icon: Icon(Icons.repeat),
+                    ),
+                  ],
+                  selected: {_isWeeklyMode},
+                  onSelectionChanged: (Set<bool> newSelection) {
+                    setState(() {
+                      _isWeeklyMode = newSelection.first;
+                    });
+                  },
                 ),
               ),
+              const SizedBox(height: 16),
+              
+              // Week Selector (only in Specific mode)
+              if (!_isWeeklyMode)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left),
+                          onPressed: _previousWeek,
+                        ),
+                        Text(
+                          '${DateFormat('d MMM', 'pl_PL').format(_selectedWeekStart)} - ${DateFormat('d MMM yyyy', 'pl_PL').format(_selectedWeekEnd)}',
+                          style: GoogleFonts.inter(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right),
+                          onPressed: _nextWeek,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              
+              if (_isWeeklyMode)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'Podstawowe wymagania powtarzane co tydzień',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: Colors.blue.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+
+              const SizedBox(height: 16),
               
               const SizedBox(height: 16),
               
@@ -269,27 +341,37 @@ class _RequirementsTabState extends ConsumerState<RequirementsTab> {
                                 ),
                               ),
                             ),
-                            ...weekDays.map((day) => SizedBox(
+                            ...(_isWeeklyMode 
+                                ? List.generate(7, (i) => i) 
+                                : weekDays).map((item) => SizedBox(
                               width: 100,
                               child: Center(
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      DateFormat('EEE', 'pl_PL').format(day),
+                                child: _isWeeklyMode
+                                  ? Text(
+                                      ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'][item as int],
                                       style: GoogleFonts.inter(
                                         fontWeight: FontWeight.bold,
-                                        fontSize: 12,
+                                        fontSize: 14,
                                       ),
+                                    )
+                                  : Column(
+                                      children: [
+                                        Text(
+                                          DateFormat('EEE', 'pl_PL').format(item as DateTime),
+                                          style: GoogleFonts.inter(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        Text(
+                                          DateFormat('d MMM', 'pl_PL').format(item),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 11,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    Text(
-                                      DateFormat('d MMM', 'pl_PL').format(day),
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
                               ),
                             )),
                           ],
@@ -343,10 +425,14 @@ class _RequirementsTabState extends ConsumerState<RequirementsTab> {
                                   ),
                                   
                                   // Counter for each day
-                                  ...weekDays.map((day) => SizedBox(
+                                  ...(_isWeeklyMode 
+                                      ? List.generate(7, (i) => i) 
+                                      : weekDays).map((item) => SizedBox(
                                     width: 100,
                                     child: Center(
-                                      child: _buildCounter(day, shift.id, role.id),
+                                      child: _isWeeklyMode
+                                        ? _buildCounter(null, item as int, shift.id, role.id)
+                                        : _buildCounter(item as DateTime, null, shift.id, role.id),
                                     ),
                                   )),
                                 ],
@@ -430,8 +516,8 @@ class _RequirementsTabState extends ConsumerState<RequirementsTab> {
     );
   }
 
-  Widget _buildCounter(DateTime date, int shiftId, int roleId) {
-    final count = _getCount(date, shiftId, roleId);
+  Widget _buildCounter(DateTime? date, int? dow, int shiftId, int roleId) {
+    final count = _getCount(date, dow, shiftId, roleId);
     
     return Container(
       decoration: BoxDecoration(
@@ -444,7 +530,7 @@ class _RequirementsTabState extends ConsumerState<RequirementsTab> {
           InkWell(
             onTap: () {
               if (count > 0) {
-                _setCount(date, shiftId, roleId, count - 1);
+                _setCount(date, dow, shiftId, roleId, count - 1);
               }
             },
             child: Container(
@@ -469,7 +555,7 @@ class _RequirementsTabState extends ConsumerState<RequirementsTab> {
           ),
           InkWell(
             onTap: () {
-              _setCount(date, shiftId, roleId, count + 1);
+              _setCount(date, dow, shiftId, roleId, count + 1);
             },
             child: Container(
               padding: const EdgeInsets.all(4),

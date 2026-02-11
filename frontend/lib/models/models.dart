@@ -1,10 +1,12 @@
 class User {
   final String id;
   final String username;
-  final String? email;  // Now optional
+  final String? email;
   final String fullName;
   final String roleSystem;
   final DateTime createdAt;
+  final int? targetHoursPerMonth;
+  final int? targetShiftsPerMonth;
 
   User({
     required this.id,
@@ -13,6 +15,8 @@ class User {
     required this.fullName,
     required this.roleSystem,
     required this.createdAt,
+    this.targetHoursPerMonth,
+    this.targetShiftsPerMonth,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -23,6 +27,8 @@ class User {
       fullName: json['full_name'],
       roleSystem: json['role_system'],
       createdAt: DateTime.parse(json['created_at']),
+      targetHoursPerMonth: json['target_hours_per_month'],
+      targetShiftsPerMonth: json['target_shifts_per_month'],
     );
   }
 
@@ -34,6 +40,8 @@ class User {
       'full_name': fullName,
       'role_system': roleSystem,
       'created_at': createdAt.toIso8601String(),
+      'target_hours_per_month': targetHoursPerMonth,
+      'target_shifts_per_month': targetShiftsPerMonth,
     };
   }
 
@@ -232,14 +240,16 @@ class Schedule {
 
 class Requirement {
   final String id;
-  final DateTime date;
+  final DateTime? date;
+  final int? dayOfWeek;
   final int shiftDefId;
   final int roleId;
   final int minCount;
 
   Requirement({
     required this.id,
-    required this.date,
+    this.date,
+    this.dayOfWeek,
     required this.shiftDefId,
     required this.roleId,
     required this.minCount,
@@ -248,7 +258,8 @@ class Requirement {
   factory Requirement.fromJson(Map<String, dynamic> json) {
     return Requirement(
       id: json['id'],
-      date: DateTime.parse(json['date']),
+      date: json['date'] != null ? DateTime.parse(json['date']) : null,
+      dayOfWeek: json['day_of_week'],
       shiftDefId: json['shift_def_id'],
       roleId: json['role_id'],
       minCount: json['min_count'],
@@ -257,13 +268,15 @@ class Requirement {
 }
 
 class RequirementUpdate {
-  final DateTime date;
+  final DateTime? date;
+  final int? dayOfWeek;
   final int shiftDefId;
   final int roleId;
   final int minCount;
 
   RequirementUpdate({
-    required this.date,
+    this.date,
+    this.dayOfWeek,
     required this.shiftDefId,
     required this.roleId,
     required this.minCount,
@@ -271,7 +284,8 @@ class RequirementUpdate {
 
   Map<String, dynamic> toJson() {
     return {
-      'date': date.toIso8601String().split('T')[0],
+      'date': date?.toIso8601String().split('T')[0],
+      'day_of_week': dayOfWeek,
       'shift_def_id': shiftDefId,
       'role_id': roleId,
       'min_count': minCount,
@@ -353,6 +367,8 @@ class TeamMember {
   final String fullName;
   final String roleSystem;
   final List<int> jobRoleIds;
+  final int? targetHoursPerMonth;
+  final int? targetShiftsPerMonth;
 
   TeamMember({
     required this.id,
@@ -361,6 +377,8 @@ class TeamMember {
     required this.fullName,
     required this.roleSystem,
     required this.jobRoleIds,
+    this.targetHoursPerMonth,
+    this.targetShiftsPerMonth,
   });
 
   factory TeamMember.fromJson(Map<String, dynamic> json) {
@@ -371,6 +389,8 @@ class TeamMember {
       fullName: json['full_name'],
       roleSystem: json['role_system'],
       jobRoleIds: (json['job_roles'] as List).map((e) => e as int).toList(),
+      targetHoursPerMonth: json['target_hours_per_month'],
+      targetShiftsPerMonth: json['target_shifts_per_month'],
     );
   }
 

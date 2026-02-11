@@ -126,6 +126,80 @@ class _TeamTabState extends ConsumerState<TeamTab> {
     }
   }
 
+  void _showPreferencesDialog(TeamMember user) {
+    final hoursController = TextEditingController(text: user.targetHoursPerMonth?.toString() ?? '');
+    final shiftsController = TextEditingController(text: user.targetShiftsPerMonth?.toString() ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Preferencje: ${user.fullName}'),
+        content: SizedBox(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+               TextField(
+                controller: hoursController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Docelowa liczba godzin / m-c',
+                  prefixIcon: const Icon(Icons.timer),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: shiftsController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Docelowa liczba zmian / m-c',
+                  prefixIcon: const Icon(Icons.calendar_view_day),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Anuluj')),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _savePreferences(
+                user.id, 
+                int.tryParse(hoursController.text), 
+                int.tryParse(shiftsController.text)
+              );
+            },
+            child: const Text('Zapisz'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _savePreferences(String userId, int? targetHours, int? targetShifts) async {
+    try {
+      final api = ref.read(apiServiceProvider);
+      await api.updateUser(userId, targetHoursPerMonth: targetHours, targetShiftsPerMonth: targetShifts);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Preferencje zapisane'), backgroundColor: Colors.green),
+        );
+      }
+      
+      await _loadData(); // Refresh to see updated targets if needed or just for consistency
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   void _showPasswordDialog(TeamMember user) {
     final newPasswordController = TextEditingController();
     final confirmPasswordController = TextEditingController();
@@ -291,6 +365,23 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('@${user.username}', style: TextStyle(color: Colors.grey.shade600)),
+                  if (user.targetHoursPerMonth != null || user.targetShiftsPerMonth != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.track_changes, size: 14, color: Colors.indigo.shade400),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Cel: ${user.targetHoursPerMonth ?? "?"}h / ${user.targetShiftsPerMonth ?? "?"} zmian',
+                          style: TextStyle(
+                            fontSize: 12, 
+                            color: Colors.indigo.shade700, 
+                            fontWeight: FontWeight.w500
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   if (userRoles.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Wrap(
@@ -320,6 +411,11 @@ class _TeamTabState extends ConsumerState<TeamTab> {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  IconButton(
+                    icon: const Icon(Icons.settings_outlined),
+                    tooltip: 'Preferencje',
+                    onPressed: () => _showPreferencesDialog(user),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.lock_reset),
                     tooltip: 'Zmień hasło',

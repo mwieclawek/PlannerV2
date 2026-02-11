@@ -11,7 +11,7 @@ from .models import User
 # Configuration
 SECRET_KEY = "CHANGE_THIS_IN_PRODUCTION_SECRET_KEY"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours for dev
 
 # Using pbkdf2_sha256 to avoid bcrypt environmental issues on Windows
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")

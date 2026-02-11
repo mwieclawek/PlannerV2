@@ -382,6 +382,7 @@ class _SetupTabState extends ConsumerState<SetupTab> {
           nameController.text,
           startController.text,
           endController.text,
+          shift.applicableDays,
         );
         ref.invalidate(shiftsProvider);
         if (mounted) {

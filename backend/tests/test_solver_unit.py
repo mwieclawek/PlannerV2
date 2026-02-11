@@ -3,7 +3,7 @@ Unit tests for SolverService (CP-SAT constraint programming solver)
 Tests optimization logic, constraints, and edge cases.
 """
 import pytest
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from sqlmodel import Session
 
 from backend.app.models import (
@@ -139,20 +139,20 @@ class TestSolverConstraints:
         # Should have warning about understaffing
         assert len(result.get("warnings", [])) > 0
     
-    def test_solve_one_shift_per_day(self, session: Session, job_role):
-        """Test that employee gets max 1 shift per day"""
+    def test_solve_allows_split_shifts(self, session: Session, job_role):
+        """Test that employee CAN get 2 shifts per day if they don't overlap too much"""
         from datetime import time
-        # Create two shifts
+        # Create two non-overlapping shifts
         shift1 = ShiftDefinition(name="Morning Test", start_time=time(6, 0), end_time=time(14, 0))
-        shift2 = ShiftDefinition(name="Evening Test", start_time=time(14, 0), end_time=time(22, 0))
+        shift2 = ShiftDefinition(name="Evening Test", start_time=time(15, 0), end_time=time(22, 0))
         session.add(shift1)
         session.add(shift2)
         session.commit()
         
         user = User(
-            username="oneshift_test",
+            username="splitshift_test",
             password_hash=get_password_hash("test"),
-            full_name="One Shift Test",
+            full_name="Split Shift Test",
             role_system=RoleSystem.EMPLOYEE
         )
         session.add(user)
@@ -174,9 +174,93 @@ class TestSolverConstraints:
         service = SolverService(session)
         result = service.solve(today, today, save=False)
         
-        # With only 1 employee, max 1 shift can be assigned
+        # With split shifts allowed, employee should get both
         user_assignments = [s for s in result.get("schedules", []) if str(s.user_id) == str(user.id)]
-        assert len(user_assignments) <= 1
+        assert len(user_assignments) == 2
+
+    def test_solve_overlap_30min_allowed(self, session: Session, job_role):
+        """Test that 30 min overlap is allowed"""
+        from datetime import time
+        # shift1 ends at 15:00, shift2 starts at 14:45 -> 15 min overlap
+        shift1 = ShiftDefinition(name="Shift A", start_time=time(7, 0), end_time=time(15, 0))
+        shift2 = ShiftDefinition(name="Shift B", start_time=time(14, 45), end_time=time(22, 0))
+        session.add(shift1)
+        session.add(shift2)
+        
+        user = User(username="overlap_ok", password_hash=get_password_hash("t"), full_name="X", role_system=RoleSystem.EMPLOYEE)
+        session.add(user)
+        session.add(UserJobRoleLink(user_id=user.id, role_id=job_role.id))
+        session.commit()
+        
+        today = date.today()
+        session.add(StaffingRequirement(date=today, shift_def_id=shift1.id, role_id=job_role.id, min_count=1))
+        session.add(StaffingRequirement(date=today, shift_def_id=shift2.id, role_id=job_role.id, min_count=1))
+        session.commit()
+        
+        service = SolverService(session)
+        result = service.solve(today, today, save=False)
+        
+        # Should be allowed (15m overlap <= 30m)
+        assert len([s for s in result.get("schedules", []) if str(s.user_id) == str(user.id)]) == 2
+
+    def test_solve_overlap_huge_forbidden(self, session: Session, job_role):
+        """Test that > 30 min overlap is NOT allowed"""
+        from datetime import time
+        # shift1 ends at 15:00, shift2 starts at 14:00 -> 60 min overlap
+        shift1 = ShiftDefinition(name="Shift A", start_time=time(7, 0), end_time=time(15, 0))
+        shift2 = ShiftDefinition(name="Shift B", start_time=time(14, 0), end_time=time(22, 0))
+        session.add(shift1)
+        session.add(shift2)
+        
+        user = User(username="overlap_bad", password_hash=get_password_hash("t"), full_name="X", role_system=RoleSystem.EMPLOYEE)
+        session.add(user)
+        session.add(UserJobRoleLink(user_id=user.id, role_id=job_role.id))
+        session.commit()
+        
+        today = date.today()
+        session.add(StaffingRequirement(date=today, shift_def_id=shift1.id, role_id=job_role.id, min_count=1))
+        session.add(StaffingRequirement(date=today, shift_def_id=shift2.id, role_id=job_role.id, min_count=1))
+        session.commit()
+        
+        service = SolverService(session)
+        result = service.solve(today, today, save=False)
+        
+        # Should NOT be allowed (60m overlap > 30m)
+        assert len([s for s in result.get("schedules", []) if str(s.user_id) == str(user.id)]) <= 1
+
+    def test_solve_respects_target_hours(self, session: Session, job_role):
+        """Test that solver respects target_hours_per_month"""
+        from datetime import time
+        # shift is 8 hours
+        shift1 = ShiftDefinition(name="8H Shift", start_time=time(8, 0), end_time=time(16, 0))
+        session.add(shift1)
+        
+        # User has limit of 10 hours for the month
+        user = User(
+            username="target_h", 
+            password_hash=get_password_hash("t"), 
+            full_name="H", 
+            role_system=RoleSystem.EMPLOYEE,
+            target_hours_per_month=10
+        )
+        session.add(user)
+        session.add(UserJobRoleLink(user_id=user.id, role_id=job_role.id))
+        session.commit()
+        
+        today = date.today()
+        tomorrow = today + timedelta(days=1)
+        
+        # Require 1 person for both days (8+8 = 16 hours)
+        session.add(StaffingRequirement(date=today, shift_def_id=shift1.id, role_id=job_role.id, min_count=1))
+        session.add(StaffingRequirement(date=tomorrow, shift_def_id=shift1.id, role_id=job_role.id, min_count=1))
+        session.commit()
+        
+        service = SolverService(session)
+        result = service.solve(today, tomorrow, save=False)
+        
+        # Should only assign 1 day (8 hours), as 2 days (16 hours) exceeds 10.
+        assert result["count"] == 1 
+
     
     def test_solve_role_matching(self, session: Session, shift_definition):
         """Test that employees are only assigned to roles they have"""

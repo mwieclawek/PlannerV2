@@ -1,7 +1,8 @@
-from datetime import time, date, datetime
+from datetime import time, date, datetime, date as date_type
 from typing import Optional, List
 from uuid import UUID, uuid4
 from sqlmodel import Field, SQLModel, Relationship
+from sqlalchemy import Column, Date, Integer
 from enum import Enum
 
 class RoleSystem(str, Enum):
@@ -34,6 +35,8 @@ class User(SQLModel, table=True):
     full_name: str
     role_system: RoleSystem = Field(default=RoleSystem.EMPLOYEE)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    target_hours_per_month: Optional[int] = Field(default=None, sa_column=Column(Integer, nullable=True))
+    target_shifts_per_month: Optional[int] = Field(default=None, sa_column=Column(Integer, nullable=True))
 
     job_roles: List[JobRole] = Relationship(back_populates="users", link_model=UserJobRoleLink)
     availabilities: List["Availability"] = Relationship(back_populates="user")
@@ -57,10 +60,11 @@ class Availability(SQLModel, table=True):
 
 class StaffingRequirement(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    date: date
     shift_def_id: int = Field(foreign_key="shiftdefinition.id")
     role_id: int = Field(foreign_key="jobrole.id")
     min_count: int
+    date: Optional[date_type] = Field(default=None, sa_column=Column(Date, nullable=True))
+    day_of_week: Optional[int] = Field(default=None, sa_column=Column(Integer, nullable=True))  # 0=Monday, 6=Sunday
 
 class Schedule(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)

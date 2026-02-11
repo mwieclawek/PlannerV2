@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from typing import List, Dict, Tuple
 from ortools.sat.python import cp_model
 from sqlmodel import Session, select
@@ -28,14 +28,30 @@ class SolverService:
         for a in availabilities:
             avail_map[(a.user_id, a.date, a.shift_def_id)] = a.status
 
-        requirements = self.session.exec(select(StaffingRequirement).where(
-            StaffingRequirement.date >= start_date, StaffingRequirement.date <= end_date
+        # Fetch specific requirements
+        specific_reqs = self.session.exec(select(StaffingRequirement).where(
+            StaffingRequirement.date >= start_date, 
+            StaffingRequirement.date <= end_date
         )).all()
-        
-        # Map requirements: (date, shift_id, role_id) -> min_count
+
+        # Fetch global requirements (where day_of_week is NOT NULL)
+        global_reqs = self.session.exec(select(StaffingRequirement).where(
+            StaffingRequirement.day_of_week != None
+        )).all()
+
         req_map = {}
-        for r in requirements:
-            req_map[(r.date, r.shift_def_id, r.role_id)] = r.min_count
+        
+        # Populate with global first
+        for d in days:
+            dow = d.weekday()
+            for r in global_reqs:
+                if r.day_of_week == dow:
+                    req_map[(d, r.shift_def_id, r.role_id)] = r.min_count
+        
+        # Override with specific
+        for r in specific_reqs:
+            if r.date: # Should be true given query, but safe check
+                req_map[(r.date, r.shift_def_id, r.role_id)] = r.min_count
 
         # 2. Build Model
         model = cp_model.CpModel()
@@ -68,62 +84,178 @@ class SolverService:
         
         # Constraints
         
-        # C1. Max 1 shift per day per employee
+        # Constraints
+        
+        # Helper: Calculate shift durations and overlaps
+        shift_durations = {}
+        shift_overlaps = [] # List of tuples (s1_id, s2_id)
+        
+        for s1 in shifts:
+            start1 = datetime.combine(date.today(), s1.start_time)
+            end1 = datetime.combine(date.today(), s1.end_time)
+            if end1 <= start1: end1 += timedelta(days=1)
+            duration = (end1 - start1).total_seconds() / 3600
+            shift_durations[s1.id] = duration
+            
+            for s2 in shifts:
+                if s1.id >= s2.id: continue # unique pairs, avoid self-compare (handled separately)
+                
+                start2 = datetime.combine(date.today(), s2.start_time)
+                end2 = datetime.combine(date.today(), s2.end_time)
+                if end2 <= start2: end2 += timedelta(days=1)
+                
+                # Check overlap: Max(start1, start2) < Min(end1, end2)
+                latest_start = max(start1, start2)
+                earliest_end = min(end1, end2)
+                
+                if latest_start < earliest_end:
+                    overlap_duration = (earliest_end - latest_start).total_seconds() / 60 # minutes
+                    # Allow overlap if <= 30 minutes (e.g. handover)
+                    if overlap_duration > 30:
+                        shift_overlaps.append((s1.id, s2.id))
+
+        # C1. No overlapping shifts per employee per day & Max 1 role per shift
         for e in employees:
             for d in days:
-                daily_vars = []
+                # 1. Max 1 role per unique shift (s.id)
                 for s in shifts:
+                    vars_for_shift = []
                     for r in roles:
                         if (e.id, d, s.id, r.id) in work:
-                            daily_vars.append(work[(e.id, d, s.id, r.id)])
-                if daily_vars:
-                    model.Add(sum(daily_vars) <= 1)
-        
+                            vars_for_shift.append(work[(e.id, d, s.id, r.id)])
+                    if vars_for_shift:
+                        model.Add(sum(vars_for_shift) <= 1)
+                
+                # 2. No overlapping different shifts
+                for s1_id, s2_id in shift_overlaps:
+                    vars_s1 = []
+                    vars_s2 = []
+                    for r in roles:
+                        if (e.id, d, s1_id, r.id) in work: vars_s1.append(work[(e.id, d, s1_id, r.id)])
+                        if (e.id, d, s2_id, r.id) in work: vars_s2.append(work[(e.id, d, s2_id, r.id)])
+                    
+                    if vars_s1 and vars_s2:
+                        model.Add(sum(vars_s1) + sum(vars_s2) <= 1)
+
         # C2. Availability Constraints
         for key, w_var in work.items():
             e_id, d, s_id, r_id = key
             status = avail_map.get((e_id, d, s_id), AvailabilityStatus.AVAILABLE) 
-            # Default is AVAILABLE if not set (or could be UNKNOWN)
             
             if status == AvailabilityStatus.UNAVAILABLE:
                 model.Add(w_var == 0)
 
-        # C3. Staffing Requirements (Modified to prevent overstaffing)
-        # Iterate over ALL shifts/roles to ensure 0 requirements result in 0 assignments
+        # C3. Staffing Requirements
         for d in days:
             for s in shifts:
                 for r in roles:
                     min_req = req_map.get((d, s.id, r.id), 0)
-                    
                     relevant_workers = []
                     for e in employees:
                         if (e.id, d, s.id, r.id) in work:
                             relevant_workers.append(work[(e.id, d, s.id, r.id)])
-                    
                     if relevant_workers:
-                        # Constraint: Sum of workers <= min_req (Acts as capacity)
-                        # Since we maximize 'happiness', the solver will try to fill up to min_req
+                        # Allow slightly less if infeasible? No, hard constraint for now.
+                        # But to prevent "infeasible" due to lack of staff, usually we might use soft constraint.
+                        # For now, keep as hard constraint <= min_req ??? 
+                        # Wait, original code was sum <= min_req? That sounds wrong. 
+                        # Usually min_req means "at least".
+                        # Original: "model.Add(sum(relevant_workers) <= min_req)" 
+                        # The user feedback implied they rely on this. 
+                        # Actually, looking at previous code, it was trying to fill UP TO requirement.
+                        # "constraint: sum ... <= min_req". This acts as a CAP.
+                        # Typically "Requirement" = "We NEED this many".
+                        # If I change it to >= it might break if not enough staff.
+                        # Let's keep it as CAP for now (matches "Target"), 
+                        # BUT usually a "Requirement" is a lower bound. 
+                        # Let's switch to >= but maybe with a slack variable if we wanted to be fancy.
+                        # Given the prompt doesn't explicitly ask to fix "requirements logic", 
+                        # I will assume the previous "Max Cap" logic was intended or I should stick to it unless asked.
+                        # Wait, "min_count" implies minimum. 
+                        # Let's look at the UI/Usage context. "Requirements" usually means "I need 2 waiters".
+                        # If I only have 1, I want 1. If I have 3, I want 2.
+                        # So `sum == min_req` is ideal. `sum <= min_req` allows 0. `sum >= min_req` forces it.
+                        # The previous code had `sum <= min_req`. This forces under-staffing or exact staffing.
+                        # Let's keep it `sum <= min_req` to avoid breaking "feasible" status, 
+                        # effectively treating it as "Slots Available".
                         model.Add(sum(relevant_workers) <= min_req)
 
-        # Objective: Maximize preferences
-        # PREFERRED = +1, NEUTRAL = 0 (or cost minimization: PREF=0, NEUTRAL=10, AVAIL=20)
-        # Let's maximize score
+        # C4. Monthly Targets (Hours / Shifts)
+        # We are solving for a range [start_date, end_date]. 
+        # If this range is shorter than a month, we only enforce proportional or absolute?
+        # User asked: "Assuming if not defined, no limit".
+        # We will enforce limit for the *generated period* based on the monthly target.
+        # Ideally we'd know usage so far in month, but we don't.
+        # We will assume the target applies to this generation if it covers the whole month (simplification).
+        # Or better: Just apply the limit as a Hard Cap for the period.
+        
+        for e in employees:
+            employee_vars = []
+            employee_hours_coeffs = []
+            
+            for d in days:
+                for s in shifts:
+                    for r in roles:
+                        if (e.id, d, s.id, r.id) in work:
+                            var = work[(e.id, d, s.id, r.id)]
+                            employee_vars.append(var)
+                            employee_hours_coeffs.append(int(shift_durations[s.id] * 10)) # Scaled by 10 for int 
+
+            # Shift Count Limit
+            if e.target_shifts_per_month is not None:
+                model.Add(sum(employee_vars) <= e.target_shifts_per_month)
+                
+            # Hours Limit
+            if e.target_hours_per_month is not None:
+                # scaled hours <= target * 10
+                model.Add(cp_model.LinearExpr.WeightedSum(employee_vars, employee_hours_coeffs) <= e.target_hours_per_month * 10)
+
+
+        # Objective: Maximize preferences & Penalize Overworking
         objective_terms = []
+        
+        # 1. Preferences & Slot Filling Reward
         for key, w_var in work.items():
             e_id, d, s_id, r_id = key
             status = avail_map.get((e_id, d, s_id), AvailabilityStatus.AVAILABLE)
+            
+            # High reward for simply filling a requirement
+            objective_terms.append(w_var * 100) 
             
             if status == AvailabilityStatus.PREFERRED:
                 objective_terms.append(w_var * 10)
             elif status == AvailabilityStatus.NEUTRAL:
                 objective_terms.append(w_var * 5)
             elif status == AvailabilityStatus.AVAILABLE:
-                objective_terms.append(w_var * 1)
+                objective_terms.append(w_var * 1) # Base score for working
         
+        # 2. Penalty for split shifts (working > 1 shift per day)
+        # We subtract Penalty * Excess from objective
+        # Let Penalty = 50. It's less than 100, so filling a slot is prioritized over avoiding split shifts.
+        for e in employees:
+            for d in days:
+                daily_vars = []
+                for s in shifts:
+                    for r in roles:
+                         if (e.id, d, s.id, r.id) in work:
+                            daily_vars.append(work[(e.id, d, s.id, r.id)])
+                
+                if daily_vars:
+                    shifts_worked = sum(daily_vars)
+                    is_working = model.NewBoolVar(f"working_{e.id}_{d}")
+                    model.Add(shifts_worked >= 1).OnlyEnforceIf(is_working)
+                    model.Add(shifts_worked == 0).OnlyEnforceIf(is_working.Not())
+                    
+                    penalty_weight = 50
+                    objective_terms.append(shifts_worked * (-penalty_weight))
+                    objective_terms.append(is_working * penalty_weight)
+
         model.Maximize(sum(objective_terms))
 
         # 3. Solve
         solver = cp_model.CpSolver()
+        # Set a time limit in case of complexity
+        solver.parameters.max_time_in_seconds = 10.0
         status = solver.Solve(model)
 
         generated_schedules = []

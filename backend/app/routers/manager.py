@@ -9,14 +9,15 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from sqlmodel import Session, select
 from ..database import get_session
-from ..models import User, JobRole, ShiftDefinition, StaffingRequirement, RoleSystem, RestaurantConfig
+from ..models import User, JobRole, ShiftDefinition, StaffingRequirement, RoleSystem, RestaurantConfig, Attendance, AttendanceStatus
 from ..auth_utils import get_current_user, verify_user_token
 from ..schemas import (
     JobRoleCreate, JobRoleResponse, 
     ShiftDefCreate, ShiftDefResponse,
     RequirementCreate, RequirementResponse,
     ConfigUpdate, ConfigResponse,
-    UserRolesUpdate, PasswordReset, UserResponse
+    UserRolesUpdate, PasswordReset, UserResponse,
+    UserUpdate, AttendanceCreate, AttendanceResponse
 )
 from ..services.manager_service import ManagerService
 
@@ -141,6 +142,15 @@ def reset_user_password(
     session.commit()
     
     return {"status": "password_reset_success"}
+
+@router.put("/users/{user_id}", response_model=UserResponse)
+def update_user(
+    user_id: UUID, 
+    update: UserUpdate, 
+    service: ManagerService = Depends(get_manager_service), 
+    _: User = Depends(get_manager_user)
+):
+    return service.update_user(user_id, update)
 
 @router.get("/users", response_model=List[UserResponse])
 def get_users(session: Session = Depends(get_session), _: User = Depends(get_manager_user)):
@@ -295,6 +305,19 @@ async def export_attendance_pdf(
             
     attendances = session.exec(query).all()
     
+    # Calculate hours
+    hours_map = {}
+    for att in attendances:
+        if att.status == AttendanceStatus.CONFIRMED:
+            start_dt = datetime.combine(att.date, att.check_in)
+            end_dt = datetime.combine(att.date, att.check_out)
+            if end_dt <= start_dt:
+                 end_dt += timedelta(days=1)
+            duration = (end_dt - start_dt).total_seconds() / 3600
+            
+            user_name = att.user.full_name
+            hours_map[user_name] = hours_map.get(user_name, 0) + duration
+
     # Generate PDF
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
@@ -328,6 +351,12 @@ async def export_attendance_pdf(
         if y < 50:
             p.showPage()
             y = height - 50
+            p.setFont("Helvetica-Bold", 10) # Re-print header? Simplified: just continue
+            p.drawString(50, y, "Employee")
+            p.drawString(200, y, "Date")
+            p.drawString(300, y, "Time")
+            p.drawString(400, y, "Status")
+            y -= 20
             p.setFont("Helvetica", 10)
             
         p.drawString(50, y, att.user.full_name)
@@ -336,6 +365,36 @@ async def export_attendance_pdf(
         p.drawString(400, y, att.status.value)
         y -= 15
         
+    # Summary Table
+    if y < 100:
+        p.showPage()
+        y = height - 50
+    
+    y -= 30
+    p.line(50, y+10, 500, y+10) # Separator
+    p.setFont("Helvetica-Bold", 12)
+    p.drawString(50, y, "Hours Summary")
+    y -= 20
+    p.setFont("Helvetica-Bold", 10)
+    p.drawString(50, y, "Employee")
+    p.drawString(200, y, "Total Hours")
+    y -= 20
+    p.setFont("Helvetica", 10)
+    
+    for name, hours in hours_map.items():
+        if y < 50:
+             p.showPage()
+             y = height - 50
+             p.setFont("Helvetica-Bold", 10)
+             p.drawString(50, y, "Employee")
+             p.drawString(200, y, "Total Hours")
+             y -= 20
+             p.setFont("Helvetica", 10)
+
+        p.drawString(50, y, name)
+        p.drawString(200, y, f"{hours:.1f}")
+        y -= 15
+
     p.save()
     buffer.seek(0)
     
@@ -378,6 +437,24 @@ def get_all_attendance(
         "was_scheduled": a.was_scheduled,
         "status": a.status.value
     } for a in attendances]
+
+@router.post("/attendance", response_model=AttendanceResponse)
+def create_attendance(
+    attendance_in: AttendanceCreate,
+    session: Session = Depends(get_session),
+    _: User = Depends(get_manager_user)
+):
+    """Manually register attendance for an employee"""
+    attendance = Attendance(**attendance_in.dict())
+    session.add(attendance)
+    session.commit()
+    session.refresh(attendance)
+    
+    # Ensure user relation is loaded
+    response_data = AttendanceResponse.from_orm(attendance)
+    if attendance.user:
+        response_data.user_name = attendance.user.full_name
+    return response_data
 
 @router.get("/employee-hours")
 def get_employee_hours(

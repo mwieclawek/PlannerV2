@@ -4,7 +4,7 @@ from datetime import datetime, date
 from sqlmodel import Session, select
 from fastapi import HTTPException
 from ..models import JobRole, ShiftDefinition, StaffingRequirement, RestaurantConfig, User, UserJobRoleLink
-from ..schemas import JobRoleCreate, ShiftDefCreate, RequirementCreate, ConfigUpdate
+from ..schemas import JobRoleCreate, ShiftDefCreate, RequirementCreate, ConfigUpdate, UserUpdate
 
 class ManagerService:
     def __init__(self, session: Session):
@@ -110,11 +110,20 @@ class ManagerService:
     def set_requirements(self, reqs: List[RequirementCreate]) -> List[StaffingRequirement]:
         results = []
         for r in reqs:
-            existing = self.session.exec(select(StaffingRequirement).where(
-                StaffingRequirement.date == r.date,
+            query = select(StaffingRequirement).where(
                 StaffingRequirement.shift_def_id == r.shift_def_id,
                 StaffingRequirement.role_id == r.role_id
-            )).first()
+            )
+            
+            if r.date:
+                query = query.where(StaffingRequirement.date == r.date)
+            elif r.day_of_week is not None:
+                query = query.where(StaffingRequirement.day_of_week == r.day_of_week)
+            else:
+                 # Should be caught by schema validation, but safe fallback or error
+                 continue
+
+            existing = self.session.exec(query).first()
             
             if existing:
                 existing.min_count = r.min_count
@@ -123,6 +132,7 @@ class ManagerService:
             else:
                 new_req = StaffingRequirement(
                     date=r.date,
+                    day_of_week=r.day_of_week,
                     shift_def_id=r.shift_def_id,
                     role_id=r.role_id,
                     min_count=r.min_count
@@ -136,10 +146,16 @@ class ManagerService:
         return results
 
     def get_requirements(self, start_date: date, end_date: date) -> List[StaffingRequirement]:
-        return self.session.exec(select(StaffingRequirement).where(
+        specific = self.session.exec(select(StaffingRequirement).where(
             StaffingRequirement.date >= start_date,
             StaffingRequirement.date <= end_date
         )).all()
+        
+        global_reqs = self.session.exec(select(StaffingRequirement).where(
+            StaffingRequirement.day_of_week != None
+        )).all()
+        
+        return list(specific) + list(global_reqs)
 
     # --- Config ---
     def get_config(self) -> RestaurantConfig:
@@ -151,18 +167,33 @@ class ManagerService:
     def update_config(self, update: ConfigUpdate) -> RestaurantConfig:
         config = self.session.get(RestaurantConfig, 1)
         if not config:
-            config = RestaurantConfig(id=1, **update.dict())
+            data = update.dict(exclude_unset=True)
+            if "name" not in data:
+                 data["name"] = "My Restaurant"
+            config = RestaurantConfig(id=1, **data)
             self.session.add(config)
         else:
-            config.name = update.name
-            config.opening_hours = update.opening_hours
-            config.address = update.address
+            data = update.dict(exclude_unset=True)
+            for key, value in data.items():
+                setattr(config, key, value)
             self.session.add(config)
         self.session.commit()
         self.session.refresh(config)
         return config
 
     # --- User Role Management ---
+    def update_user(self, user_id: UUID, update: UserUpdate) -> User:
+        user = self.session.get(User, user_id)
+        if not user:
+             raise HTTPException(status_code=404, detail="User not found")
+        data = update.dict(exclude_unset=True)
+        for key, value in data.items():
+            setattr(user, key, value)
+        self.session.add(user)
+        self.session.commit()
+        self.session.refresh(user)
+        return user
+
     def update_user_roles(self, user_id: UUID, role_ids: List[int]):
         user = self.session.get(User, user_id)
         if not user:

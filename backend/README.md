@@ -58,8 +58,15 @@ Wymagane: Python 3.11+, PostgreSQL (opcjonalnie, domyślnie SQLite).
 
 3. Uruchom serwer (z katalogu głównego projektu):
    ```bash
-   uvicorn backend.app.main:app --reload
+   uvicorn backend.app.main:app --reload --port 8080
    ```
+
+### Algorytm Grafiku (Solver)
+Ulepszony w lutym 2026:
+- **Dwie zmiany dziennie**: Pracownik może dostać 2 zmiany tego samego dnia (tzw. split shift).
+- **Zasady nakładania**: Dozwolone nakładanie się zmian do **30 minut** (na przekazanie zmiany). Powyżej 30 min blokowane.
+- **Kary**: Algorytm preferuje 1 zmianę dziennie (kara punktowa za każdą kolejną), chyba że brakuje personelu.
+- **Limity celów**: Respektuje `target_hours_per_month` i `target_shifts_per_month` dla każdego pracownika.
 
 ### Docker
 
