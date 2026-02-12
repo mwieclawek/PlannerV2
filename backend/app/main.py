@@ -18,26 +18,10 @@ async def lifespan(app: FastAPI):
     logger.info(f"Initializing database structure (URL starts with: {DATABASE_URL[:10]}...)...")
     init_db()
     
-    # Check for initial user (Seeding)
-    from sqlmodel import Session, select
-    from .models import User, RoleSystem
-    from .auth_utils import get_password_hash
-
-    with Session(engine) as session:
-        user = session.exec(select(User).where(User.username == "manager")).first()
-        if not user:
-            logger.info("Creating default manager user 'manager'...")
-            manager_user = User(
-                username="manager",
-                password_hash=get_password_hash("manager123"),
-                full_name="Default Manager",
-                role_system=RoleSystem.MANAGER
-            )
-            session.add(manager_user)
-            session.commit()
-            logger.info("Default manager created: manager / manager123")
-        else:
-            logger.info("Manager user already exists.")
+    logger.info("Application startup complete. Database ready.")
+    yield
+    # Shutdown
+    logger.info("Application shutdown.")
 
     logger.info("Application startup complete. Database ready.")
     yield
