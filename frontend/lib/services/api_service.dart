@@ -16,18 +16,31 @@ class ApiService {
   ApiService() : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final prefs = await SharedPreferences.getInstance();
-        final token = prefs.getString('access_token');
-        if (token != null) {
-          options.headers['Authorization'] = 'Bearer $token';
+        // Skip auth for login/register
+        if (options.path.contains('/auth/token') || options.path.contains('/auth/register')) {
+          return handler.next(options);
+        }
+
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final token = prefs.getString('access_token');
+          if (token != null) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
+        } catch (e) {
+          // If SharedPreferences fails, just proceed without token
+          debugPrint('Error getting token: $e');
         }
         return handler.next(options);
       },
       onError: (error, handler) async {
         if (error.response?.statusCode == 401) {
-          // Token expired or invalid
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.remove('access_token');
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.remove('access_token');
+          } catch (e) {
+             debugPrint('Error removing token: $e');
+          }
         }
         return handler.next(error);
       },
