@@ -18,6 +18,27 @@ async def lifespan(app: FastAPI):
     logger.info(f"Initializing database structure (URL starts with: {DATABASE_URL[:10]}...)...")
     init_db()
     
+    # Check for initial user (Seeding)
+    from sqlmodel import Session, select
+    from .models import User, RoleSystem
+    from .auth_utils import get_password_hash
+
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.username == "manager")).first()
+        if not user:
+            logger.info("Creating default manager user 'manager'...")
+            manager_user = User(
+                username="manager",
+                password_hash=get_password_hash("manager123"),
+                full_name="Default Manager",
+                role_system=RoleSystem.MANAGER
+            )
+            session.add(manager_user)
+            session.commit()
+            logger.info("Default manager created: manager / manager123")
+        else:
+            logger.info("Manager user already exists.")
+
     logger.info("Application startup complete. Database ready.")
     yield
     # Shutdown
@@ -28,14 +49,7 @@ app = FastAPI(title="Planner V2", lifespan=lifespan)
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://localhost:5000",
-        "http://127.0.0.1:5000",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
