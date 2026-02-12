@@ -49,3 +49,6 @@ test-results/
 test_output*.txt
 coverage.xml
 *.xml
+
+# Agents
+code-changes
