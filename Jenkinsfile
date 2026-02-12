@@ -61,6 +61,7 @@ pipeline {
             steps {
                 unstash 'source'
                 dir('frontend') {
+                    sh 'flutter clean'
                     sh 'flutter pub get'
                     sh 'flutter build web --release'
                 }
