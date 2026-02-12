@@ -51,4 +51,4 @@ coverage.xml
 *.xml
 
 # Agents
-code-changes
+code-changes.md
