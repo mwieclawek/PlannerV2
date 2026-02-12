@@ -17,7 +17,7 @@ from ..schemas import (
     RequirementCreate, RequirementResponse,
     ConfigUpdate, ConfigResponse,
     UserRolesUpdate, PasswordReset, UserResponse,
-    UserUpdate, AttendanceCreate, AttendanceResponse
+    UserUpdate, AttendanceCreate, AttendanceResponse, UserCreate
 )
 from ..services.manager_service import ManagerService
 
@@ -169,6 +169,14 @@ def get_users(session: Session = Depends(get_session), _: User = Depends(get_man
             "job_roles": [r.id for r in u.job_roles]
         })
     return result
+
+@router.post("/users", response_model=UserResponse)
+def create_user(
+    user_in: UserCreate, 
+    service: ManagerService = Depends(get_manager_service), 
+    _: User = Depends(get_manager_user)
+):
+    return service.create_user(user_in)
 
 @router.get("/config", response_model=ConfigResponse)
 def get_config(service: ManagerService = Depends(get_manager_service), _: User = Depends(get_current_user)):

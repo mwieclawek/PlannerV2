@@ -142,6 +142,26 @@ Zwraca podsumowanie godzin pracy każdego pracownika w danym miesiącu, wraz z i
 GET /manager/employee-hours?month=2&year=2026
 ```
 
+### POST /manager/users
+Tworzy nowego użytkownika (pracownika) przez managera.
+
+**Body:**
+```json
+{
+  "username": "janusz",
+  "password": "haslo123",
+  "full_name": "Janusz Biznesu",
+  "role_system": "employee",
+  "email": "janusz@op.pl",
+  "target_hours_per_month": 160,
+  "target_shifts_per_month": 20
+}
+```
+
+**Wymagania:**
+- `username`: unikalny, min. 3 znaki, brak spacji
+- `role_system`: `employee` lub `manager` (dla managera wymagany `manager_pin` w body przy rejestracji self-serve, tu tworzy manager więc bez pin)
+
 ## API Docs
 
 Po uruchomieniu serwera dokumentacja jest dostępna pod:

@@ -221,6 +221,26 @@ class ApiService {
     });
   }
 
+  Future<void> createUser({
+    required String username,
+    required String password,
+    required String fullName,
+    required String roleSystem,
+    String? email,
+    int? targetHoursPerMonth,
+    int? targetShiftsPerMonth,
+  }) async {
+    await _dio.post('/manager/users', data: {
+      'username': username,
+      'password': password,
+      'full_name': fullName,
+      'role_system': roleSystem,
+      if (email != null && email.isNotEmpty) 'email': email,
+      if (targetHoursPerMonth != null) 'target_hours_per_month': targetHoursPerMonth,
+      if (targetShiftsPerMonth != null) 'target_shifts_per_month': targetShiftsPerMonth,
+    });
+  }
+
   // Manual Schedule Editing
   Future<void> createAssignment({
     required DateTime date,

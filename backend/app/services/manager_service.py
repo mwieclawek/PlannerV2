@@ -4,11 +4,41 @@ from datetime import datetime, date
 from sqlmodel import Session, select
 from fastapi import HTTPException
 from ..models import JobRole, ShiftDefinition, StaffingRequirement, RestaurantConfig, User, UserJobRoleLink
-from ..schemas import JobRoleCreate, ShiftDefCreate, RequirementCreate, ConfigUpdate, UserUpdate
+from ..schemas import JobRoleCreate, ShiftDefCreate, RequirementCreate, ConfigUpdate, UserUpdate, UserCreate
 
 class ManagerService:
     def __init__(self, session: Session):
         self.session = session
+
+    # --- User Management ---
+    def create_user(self, user_in: "UserCreate") -> User:
+        # Check if username exists
+        existing_user = self.session.exec(select(User).where(User.username == user_in.username)).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Username already exists")
+            
+        # Check if email exists (if provided)
+        if user_in.email:
+             existing_email = self.session.exec(select(User).where(User.email == user_in.email)).first()
+             if existing_email:
+                 raise HTTPException(status_code=400, detail="Email already registered")
+
+        from ..auth_utils import get_password_hash
+        hashed_password = get_password_hash(user_in.password)
+        
+        user = User(
+            username=user_in.username,
+            email=user_in.email,
+            password_hash=hashed_password,
+            full_name=user_in.full_name,
+            role_system=user_in.role_system,
+            target_hours_per_month=user_in.target_hours_per_month,
+            target_shifts_per_month=user_in.target_shifts_per_month
+        )
+        self.session.add(user)
+        self.session.commit()
+        self.session.refresh(user)
+        return user
 
     # --- Roles ---
     def create_role(self, role_in: JobRoleCreate) -> JobRole:

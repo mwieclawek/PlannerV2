@@ -299,12 +299,12 @@ class _TeamTabState extends ConsumerState<TeamTab> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    Widget content;
 
-    if (_error != null) {
-      return Center(
+    if (_isLoading) {
+      content = const Center(child: CircularProgressIndicator());
+    } else if (_error != null) {
+      content = Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -317,10 +317,8 @@ class _TeamTabState extends ConsumerState<TeamTab> {
           ],
         ),
       );
-    }
-
-    if (_users == null || _users!.isEmpty) {
-      return Center(
+    } else if (_users == null || _users!.isEmpty) {
+      content = Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -336,102 +334,244 @@ class _TeamTabState extends ConsumerState<TeamTab> {
           ],
         ),
       );
+    } else {
+      content = RefreshIndicator(
+        onRefresh: _loadData,
+        child: ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: _users!.length,
+          itemBuilder: (context, index) {
+            final user = _users![index];
+            final userRoles = _roles?.where((r) => user.jobRoleIds.contains(r.id)).toList() ?? [];
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.indigo.shade100,
+                  child: Text(
+                    user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?',
+                    style: TextStyle(color: Colors.indigo.shade700),
+                  ),
+                ),
+                title: Text(
+                  user.fullName,
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('@${user.username}', style: TextStyle(color: Colors.grey.shade600)),
+                    if (user.targetHoursPerMonth != null || user.targetShiftsPerMonth != null) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.track_changes, size: 14, color: Colors.indigo.shade400),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Cel: ${user.targetHoursPerMonth ?? "?"}h / ${user.targetShiftsPerMonth ?? "?"} zmian',
+                            style: TextStyle(
+                              fontSize: 12, 
+                              color: Colors.indigo.shade700, 
+                              fontWeight: FontWeight.w500
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    if (userRoles.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: userRoles.map((role) => Chip(
+                          label: Text(
+                            role.name,
+                            style: const TextStyle(fontSize: 12, color: Colors.white),
+                          ),
+                          backgroundColor: _parseHexColor(role.colorHex),
+                          padding: EdgeInsets.zero,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        )).toList(),
+                      ),
+                    ] else
+                      Text(
+                        'Brak przypisanych ról',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                  ],
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.settings_outlined),
+                      tooltip: 'Preferencje',
+                      onPressed: () => _showPreferencesDialog(user),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.lock_reset),
+                      tooltip: 'Zmień hasło',
+                      onPressed: () => _showPasswordDialog(user),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      tooltip: 'Edytuj role',
+                      onPressed: () => _showRoleDialog(user),
+                    ),
+                  ],
+                ),
+                onTap: () => _showRoleDialog(user),
+              ),
+            );
+          },
+        ),
+      );
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _users!.length,
-        itemBuilder: (context, index) {
-          final user = _users![index];
-          final userRoles = _roles?.where((r) => user.jobRoleIds.contains(r.id)).toList() ?? [];
+    return Scaffold(
+      body: content,
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddUserDialog,
+        child: const Icon(Icons.person_add),
+      ),
+    );
+  }
 
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Colors.indigo.shade100,
-                child: Text(
-                  user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?',
-                  style: TextStyle(color: Colors.indigo.shade700),
-                ),
-              ),
-              title: Text(
-                user.fullName,
-                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('@${user.username}', style: TextStyle(color: Colors.grey.shade600)),
-                  if (user.targetHoursPerMonth != null || user.targetShiftsPerMonth != null) ...[
-                    const SizedBox(height: 4),
+  void _showAddUserDialog() {
+    final formKey = GlobalKey<FormState>();
+    final usernameController = TextEditingController();
+    final passwordController = TextEditingController();
+    final fullNameController = TextEditingController();
+    final emailController = TextEditingController();
+    final hoursController = TextEditingController();
+    final shiftsController = TextEditingController();
+    String roleSystem = 'EMPLOYEE';
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Dodaj pracownika'),
+          content: SizedBox(
+            width: 400,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                     TextFormField(
+                      controller: usernameController,
+                      decoration: const InputDecoration(labelText: 'Login *'),
+                      validator: (v) => v != null && v.length >= 3 ? null : 'Min. 3 znaki',
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: passwordController,
+                      decoration: const InputDecoration(labelText: 'Hasło *'),
+                      obscureText: true,
+                      validator: (v) => v != null && v.length >= 6 ? null : 'Min. 6 znaków',
+                    ),
+                     const SizedBox(height: 16),
+                     TextFormField(
+                      controller: fullNameController,
+                      decoration: const InputDecoration(labelText: 'Pełna nazwa *'),
+                      validator: (v) => v != null && v.isNotEmpty ? null : 'Wymagane',
+                    ),
+                     const SizedBox(height: 16),
+                     TextFormField(
+                      controller: emailController,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: roleSystem,
+                      decoration: const InputDecoration(labelText: 'Rola systemowa'),
+                      items: const [
+                        DropdownMenuItem(value: 'EMPLOYEE', child: Text('Pracownik')),
+                        DropdownMenuItem(value: 'MANAGER', child: Text('Manager')),
+                      ],
+                      onChanged: (v) => setDialogState(() => roleSystem = v!),
+                    ),
+                    const SizedBox(height: 16),
                     Row(
                       children: [
-                        Icon(Icons.track_changes, size: 14, color: Colors.indigo.shade400),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Cel: ${user.targetHoursPerMonth ?? "?"}h / ${user.targetShiftsPerMonth ?? "?"} zmian',
-                          style: TextStyle(
-                            fontSize: 12, 
-                            color: Colors.indigo.shade700, 
-                            fontWeight: FontWeight.w500
+                        Expanded(
+                          child: TextFormField(
+                            controller: hoursController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Cel Godzin'),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            controller: shiftsController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'Cel Zmian'),
                           ),
                         ),
                       ],
                     ),
-                  ],
-                  if (userRoles.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: userRoles.map((role) => Chip(
-                        label: Text(
-                          role.name,
-                          style: const TextStyle(fontSize: 12, color: Colors.white),
-                        ),
-                        backgroundColor: _parseHexColor(role.colorHex),
-                        padding: EdgeInsets.zero,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      )).toList(),
-                    ),
-                  ] else
-                    Text(
-                      'Brak przypisanych ról',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                        color: Colors.grey.shade500,
+                    if (isLoading)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 16.0),
+                        child: Center(child: CircularProgressIndicator()),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.settings_outlined),
-                    tooltip: 'Preferencje',
-                    onPressed: () => _showPreferencesDialog(user),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.lock_reset),
-                    tooltip: 'Zmień hasło',
-                    onPressed: () => _showPasswordDialog(user),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.edit),
-                    tooltip: 'Edytuj role',
-                    onPressed: () => _showRoleDialog(user),
-                  ),
-                ],
-              ),
-              onTap: () => _showRoleDialog(user),
             ),
-          );
-        },
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: const Text('Anuluj'),
+            ),
+            FilledButton(
+              onPressed: isLoading ? null : () async {
+                if (!formKey.currentState!.validate()) return;
+                
+                setDialogState(() => isLoading = true);
+                
+                try {
+                  final api = ref.read(apiServiceProvider);
+                  await api.createUser(
+                    username: usernameController.text,
+                    password: passwordController.text,
+                    fullName: fullNameController.text,
+                    roleSystem: roleSystem,
+                    email: emailController.text.isNotEmpty ? emailController.text : null,
+                    targetHoursPerMonth: int.tryParse(hoursController.text),
+                    targetShiftsPerMonth: int.tryParse(shiftsController.text),
+                  );
+                  
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Dodano pracownika'), backgroundColor: Colors.green),
+                    );
+                    _loadData();
+                  }
+                } catch (e) {
+                   if (context.mounted) {
+                      setDialogState(() => isLoading = false);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red),
+                      );
+                   }
+                }
+              },
+              child: const Text('Dodaj'),
+            ),
+          ],
+        ),
       ),
     );
   }
