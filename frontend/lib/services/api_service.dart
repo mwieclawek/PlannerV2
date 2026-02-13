@@ -1,19 +1,14 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 
 class ApiService {
-  static String get baseUrl {
-    if (kReleaseMode) {
-      return '';
-    }
-    return 'http://127.0.0.1:8000';
-  }
+  final String baseUrl;
   final Dio _dio;
 
-
-  ApiService() : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
+  ApiService(this.baseUrl) : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         // Skip auth for login/register
@@ -402,7 +397,7 @@ class ApiService {
   }
 
   String getAttendanceExportUrl(DateTime startDate, DateTime endDate, {String? status, String? token}) {
-    final baseUrl = ApiService.baseUrl;
+    // baseUrl is now an instance field
     final start = startDate.toIso8601String().split('T')[0];
     final end = endDate.toIso8601String().split('T')[0];
     String url = '$baseUrl/manager/attendance/export?start_date=$start&end_date=$end';

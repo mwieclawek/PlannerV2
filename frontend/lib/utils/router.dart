@@ -5,6 +5,8 @@ import '../providers/providers.dart';
 import '../screens/login_screen.dart';
 import '../screens/employee/employee_dashboard.dart';
 import '../screens/manager/manager_dashboard.dart';
+import '../screens/server_setup_screen.dart';
+import '../providers/config_provider.dart';
 
 /// Listenable that notifies when auth state changes
 class AuthNotifierListenable extends ChangeNotifier {
@@ -28,6 +30,17 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/login',
     refreshListenable: authListenable,
     redirect: (context, state) {
+      final configUrl = ref.read(configProvider);
+      final isSetupRoute = state.matchedLocation == '/setup';
+
+      if (configUrl == null) {
+        return isSetupRoute ? null : '/setup';
+      }
+
+      if (isSetupRoute) {
+        return '/login';
+      }
+
       final authState = ref.read(authProvider);
       final isLoading = authState.isLoading;
       final user = authState.value;
@@ -55,6 +68,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/setup',
+        builder: (context, state) => const ServerSetupScreen(),
+      ),
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
