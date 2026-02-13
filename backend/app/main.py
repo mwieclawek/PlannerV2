@@ -23,11 +23,6 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Application shutdown.")
 
-    logger.info("Application startup complete. Database ready.")
-    yield
-    # Shutdown
-    logger.info("Application shutdown.")
-
 app = FastAPI(title="Planner V2", lifespan=lifespan)
 
 # CORS Configuration

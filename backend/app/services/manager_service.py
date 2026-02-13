@@ -3,7 +3,7 @@ from uuid import UUID
 from datetime import datetime, date
 from sqlmodel import Session, select
 from fastapi import HTTPException
-from ..models import JobRole, ShiftDefinition, StaffingRequirement, RestaurantConfig, User, UserJobRoleLink
+from ..models import JobRole, ShiftDefinition, StaffingRequirement, RestaurantConfig, User, UserJobRoleLink, RoleSystem
 from ..schemas import JobRoleCreate, ShiftDefCreate, RequirementCreate, ConfigUpdate, UserUpdate, UserCreate
 
 class ManagerService:
@@ -263,8 +263,18 @@ class ManagerService:
                 .order_by(Schedule.date)
             ).first()
             
-            user_data = user.dict()
-            user_data["job_roles"] = [r.id for r in user.job_roles] # Manually handle relation for dict
+            # Manual construction to ensure clean serialization and avoid circular dependency issues
+            user_data = {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "full_name": user.full_name,
+                "created_at": user.created_at,
+                "role_system": user.role_system,
+                "target_hours_per_month": user.target_hours_per_month,
+                "target_shifts_per_month": user.target_shifts_per_month,
+                "job_roles": [r.id for r in user.job_roles]
+            }
             
             if next_shift:
                 shift_def = self.session.get(ShiftDefinition, next_shift.shift_def_id)

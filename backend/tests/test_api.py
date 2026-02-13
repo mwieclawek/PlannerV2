@@ -228,6 +228,13 @@ class TestSolverLogic:
             "min_count": 1
         }])
         
+        # 1.5 Set Availability (Required now)
+        client.post("/employee/availability", headers={"Authorization": f"Bearer {setup_data['emp_token']}"}, json=[{
+            "date": str(tomorrow),
+            "shift_def_id": shift_id,
+            "status": "AVAILABLE"
+        }])
+
         # 2. Generate
         res = client.post("/scheduler/generate", headers=auth_headers, json={
             "start_date": str(tomorrow),
