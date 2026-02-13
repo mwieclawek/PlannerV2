@@ -369,6 +369,7 @@ class TeamMember {
   final List<int> jobRoleIds;
   final int? targetHoursPerMonth;
   final int? targetShiftsPerMonth;
+  final NextShiftInfo? nextShift;
 
   TeamMember({
     required this.id,
@@ -379,6 +380,7 @@ class TeamMember {
     required this.jobRoleIds,
     this.targetHoursPerMonth,
     this.targetShiftsPerMonth,
+    this.nextShift,
   });
 
   factory TeamMember.fromJson(Map<String, dynamic> json) {
@@ -391,6 +393,7 @@ class TeamMember {
       jobRoleIds: (json['job_roles'] as List).map((e) => e as int).toList(),
       targetHoursPerMonth: json['target_hours_per_month'],
       targetShiftsPerMonth: json['target_shifts_per_month'],
+      nextShift: json['next_shift'] != null ? NextShiftInfo.fromJson(json['next_shift']) : null,
     );
   }
 
@@ -476,3 +479,79 @@ class TeamAvailability {
   }
 }
 
+
+class NextShiftInfo {
+  final DateTime date;
+  final String startTime;
+  final String endTime;
+  final String shiftName;
+  final String roleName;
+
+  NextShiftInfo({
+    required this.date,
+    required this.startTime,
+    required this.endTime,
+    required this.shiftName,
+    required this.roleName,
+  });
+
+  factory NextShiftInfo.fromJson(Map<String, dynamic> json) {
+    return NextShiftInfo(
+      date: DateTime.parse(json['date']),
+      startTime: json['start_time'],
+      endTime: json['end_time'],
+      shiftName: json['shift_name'],
+      roleName: json['role_name'],
+    );
+  }
+}
+
+class UserStats {
+  final int totalShiftsCompleted;
+  final double totalHoursWorked;
+  final List<Map<String, dynamic>> monthlyShifts;
+
+  UserStats({
+    required this.totalShiftsCompleted,
+    required this.totalHoursWorked,
+    required this.monthlyShifts,
+  });
+
+  factory UserStats.fromJson(Map<String, dynamic> json) {
+    return UserStats(
+      totalShiftsCompleted: json['total_shifts_completed'],
+      totalHoursWorked: (json['total_hours_worked'] as num).toDouble(),
+      monthlyShifts: (json['monthly_shifts'] as List).cast<Map<String, dynamic>>(),
+    );
+  }
+}
+
+class DashboardHome {
+  final List<ScheduleEntry> workingToday;
+  final List<Map<String, dynamic>> missingConfirmations; 
+  // keeping missingConfirmations as generic map or create a specific class if needed, 
+  // but backend sends AttendanceResponse structure effectively.
+  // Let's reuse AttendanceResponse-like structure or just Map if simple.
+  // Backend sends List<AttendanceResponse>. Let's see AttendanceResponse in backend... 
+  // it has id, user_id, date, etc.
+  // In frontend we don't have exactly AttendanceResponse class yet, 
+  // we have methods returning Map.
+  // Let's create a simple wrapper or just use List<Map<String, dynamic>> for now 
+  // to avoid over-engineering if we don't need strict typing yet.
+  // Actually, let's look at `getAllAttendance` -> returns List<Map>.
+  // So List<Map<String, dynamic>> is consistent with existing patterns.
+
+  DashboardHome({
+    required this.workingToday,
+    required this.missingConfirmations,
+  });
+
+  factory DashboardHome.fromJson(Map<String, dynamic> json) {
+    return DashboardHome(
+      workingToday: (json['working_today'] as List)
+          .map((e) => ScheduleEntry.fromJson(e))
+          .toList(),
+      missingConfirmations: (json['missing_confirmations'] as List).cast<Map<String, dynamic>>(),
+    );
+  }
+}

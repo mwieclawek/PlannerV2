@@ -140,7 +140,7 @@ class SolverService:
         # C2. Availability Constraints
         for key, w_var in work.items():
             e_id, d, s_id, r_id = key
-            status = avail_map.get((e_id, d, s_id), AvailabilityStatus.AVAILABLE) 
+            status = avail_map.get((e_id, d, s_id), AvailabilityStatus.UNAVAILABLE) 
             
             if status == AvailabilityStatus.UNAVAILABLE:
                 model.Add(w_var == 0)
@@ -217,7 +217,7 @@ class SolverService:
         # 1. Preferences & Slot Filling Reward
         for key, w_var in work.items():
             e_id, d, s_id, r_id = key
-            status = avail_map.get((e_id, d, s_id), AvailabilityStatus.AVAILABLE)
+            status = avail_map.get((e_id, d, s_id), AvailabilityStatus.UNAVAILABLE)
             
             # High reward for simply filling a requirement
             objective_terms.append(w_var * 100) 

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import 'employee_detail_dialog.dart';
 
 class TeamTab extends ConsumerStatefulWidget {
   const TeamTab({super.key});
@@ -362,23 +363,33 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('@${user.username}', style: TextStyle(color: Colors.grey.shade600)),
-                    if (user.targetHoursPerMonth != null || user.targetShiftsPerMonth != null) ...[
+                    
+                    // Next Shift Display
+                    if (user.nextShift != null) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(Icons.track_changes, size: 14, color: Colors.indigo.shade400),
+                          Icon(Icons.calendar_today, size: 14, color: Colors.indigo.shade400),
                           const SizedBox(width: 4),
                           Text(
-                            'Cel: ${user.targetHoursPerMonth ?? "?"}h / ${user.targetShiftsPerMonth ?? "?"} zmian',
-                            style: TextStyle(
-                              fontSize: 12, 
-                              color: Colors.indigo.shade700, 
-                              fontWeight: FontWeight.w500
+                            'Następna: ${user.nextShift!.shiftName} (${user.nextShift!.roleName})',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.indigo.shade700,
                             ),
                           ),
                         ],
                       ),
+                      Text(
+                        '${user.nextShift!.date.day}.${user.nextShift!.date.month}  ${user.nextShift!.startTime} - ${user.nextShift!.endTime}',
+                        style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade700),
+                      ),
+                    ] else ...[
+                       const SizedBox(height: 4),
+                       Text('Brak nadchodzących zmian', style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontStyle: FontStyle.italic)),
                     ],
+
                     if (userRoles.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Wrap(
@@ -394,38 +405,21 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         )).toList(),
                       ),
-                    ] else
-                      Text(
-                        'Brak przypisanych ról',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
+                    ],
                   ],
                 ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.settings_outlined),
-                      tooltip: 'Preferencje',
-                      onPressed: () => _showPreferencesDialog(user),
+                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => EmployeeDetailDialog(
+                      user: user,
+                      onEdit: () => _showPreferencesDialog(user), // Or unified edit
+                      onEditRoles: () => _showRoleDialog(user),
+                      onResetPassword: () => _showPasswordDialog(user),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.lock_reset),
-                      tooltip: 'Zmień hasło',
-                      onPressed: () => _showPasswordDialog(user),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.edit),
-                      tooltip: 'Edytuj role',
-                      onPressed: () => _showRoleDialog(user),
-                    ),
-                  ],
-                ),
-                onTap: () => _showRoleDialog(user),
+                  );
+                },
               ),
             );
           },

@@ -39,10 +39,29 @@ class UserUpdate(BaseModel):
     target_hours_per_month: Optional[int] = None
     target_shifts_per_month: Optional[int] = None
 
+    class Config:
+        from_attributes = True
+
+# --- New Features Schemas ---
+
+class NextShiftInfo(BaseModel):
+    date: date_type
+    start_time: str # HH:MM
+    end_time: str   # HH:MM
+    shift_name: str
+    role_name: str
+
+class UserStats(BaseModel):
+    total_shifts_completed: int
+    total_hours_worked: float
+    # Monthly breakdown for the last 6 months
+    monthly_shifts: List[dict] # [{"month": "2023-01", "count": 10}, ...]
+
 class UserResponse(UserBase):
     id: UUID
     created_at: datetime
     job_roles: List[int] = []
+    next_shift: Optional[NextShiftInfo] = None
 
     @model_validator(mode='before')
     @classmethod
@@ -60,6 +79,9 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+
+
 
 # --- Roles ---
 class JobRoleBase(BaseModel):
@@ -259,3 +281,8 @@ class AttendanceResponse(AttendanceBase):
 
     class Config:
         from_attributes = True
+
+class DashboardHomeResponse(BaseModel):
+    working_today: List[ScheduleResponse]
+    missing_confirmations: List[AttendanceResponse]
+

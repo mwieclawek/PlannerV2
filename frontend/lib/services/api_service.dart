@@ -423,4 +423,15 @@ class ApiService {
     return (response.data as List).cast<Map<String, dynamic>>();
   }
 
+  // New features
+  Future<UserStats> getUserStats(String userId) async {
+    final response = await _dio.get('/manager/users/$userId/stats');
+    return UserStats.fromJson(response.data);
+  }
+
+  Future<DashboardHome> getDashboardHome() async {
+    final response = await _dio.get('/manager/dashboard/home');
+    return DashboardHome.fromJson(response.data);
+  }
+
 }

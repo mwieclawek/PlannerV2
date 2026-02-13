@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../providers/providers.dart';
 import 'setup_tab.dart';
 import 'scheduler_tab.dart';
-import 'requirements_tab.dart';
+import 'home_tab.dart';
 import 'team_tab.dart';
 import 'availability_view_tab.dart';
 import 'attendance_approval_tab.dart';
@@ -47,8 +47,8 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
           return IndexedStack(
             index: _selectedIndex,
             children: const [
+              HomeTab(),
               SetupTab(),
-              RequirementsTab(),
               SchedulerTab(),
               AvailabilityViewTab(),
               AttendanceApprovalTab(),
@@ -91,12 +91,12 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.settings),
-            label: 'Konfiguracja',
+            icon: Icon(Icons.home),
+            label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.assignment),
-            label: 'Wymagania',
+            icon: Icon(Icons.settings),
+            label: 'Konfiguracja',
           ),
           NavigationDestination(
             icon: Icon(Icons.calendar_month),

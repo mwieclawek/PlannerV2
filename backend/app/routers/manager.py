@@ -17,7 +17,8 @@ from ..schemas import (
     RequirementCreate, RequirementResponse,
     ConfigUpdate, ConfigResponse,
     UserRolesUpdate, PasswordReset, UserResponse,
-    UserUpdate, AttendanceCreate, AttendanceResponse, UserCreate
+    UserUpdate, AttendanceCreate, AttendanceResponse, UserCreate,
+    UserStats, DashboardHomeResponse
 )
 from ..services.manager_service import ManagerService
 
@@ -153,22 +154,23 @@ def update_user(
     return service.update_user(user_id, update)
 
 @router.get("/users", response_model=List[UserResponse])
-def get_users(session: Session = Depends(get_session), _: User = Depends(get_manager_user)):
-    users = session.exec(select(User)).all()
-    # SQLModel automatically handles the conversion to response_model
-    # including relationship mapping if configured
-    result = []
-    for u in users:
-        result.append({
-            "id": u.id,
-            "username": u.username,
-            "email": u.email,
-            "full_name": u.full_name,
-            "role_system": u.role_system,
-            "created_at": u.created_at,
-            "job_roles": [r.id for r in u.job_roles]
-        })
-    return result
+def get_users(service: ManagerService = Depends(get_manager_service), _: User = Depends(get_manager_user)):
+    return service.get_users_with_shifts()
+
+@router.get("/users/{user_id}/stats", response_model=UserStats)
+def get_user_stats(
+    user_id: UUID, 
+    service: ManagerService = Depends(get_manager_service), 
+    _: User = Depends(get_manager_user)
+):
+    return service.get_user_stats(user_id)
+
+@router.get("/dashboard/home", response_model=DashboardHomeResponse)
+def get_dashboard_home(
+    service: ManagerService = Depends(get_manager_service), 
+    _: User = Depends(get_manager_user)
+):
+    return service.get_dashboard_home()
 
 @router.post("/users", response_model=UserResponse)
 def create_user(
