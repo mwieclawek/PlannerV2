@@ -1,11 +1,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/providers.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 
-class EmployeeDetailDialog extends StatefulWidget {
+class EmployeeDetailDialog extends ConsumerStatefulWidget {
   final TeamMember user;
   final VoidCallback onEdit;
   final VoidCallback onEditRoles;
@@ -20,16 +21,16 @@ class EmployeeDetailDialog extends StatefulWidget {
   });
 
   @override
-  State<EmployeeDetailDialog> createState() => _EmployeeDetailDialogState();
+  ConsumerState<EmployeeDetailDialog> createState() => _EmployeeDetailDialogState();
 }
 
-class _EmployeeDetailDialogState extends State<EmployeeDetailDialog> {
+class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
   late Future<UserStats> _statsFuture;
 
   @override
   void initState() {
     super.initState();
-    _statsFuture = Provider.of<ApiService>(context, listen: false).getUserStats(widget.user.id);
+    _statsFuture = ref.read(apiServiceProvider).getUserStats(widget.user.id);
   }
 
   @override

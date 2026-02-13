@@ -366,6 +366,7 @@ class ManagerService:
             "monthly_shifts": monthly_stats
         }
 
+    def get_dashboard_home(self) -> dict:
         today = date.today()
         yesterday = today - timedelta(days=1)
         
@@ -395,60 +396,26 @@ class ManagerService:
                 })
                 
         # 2. Missing confirmations from yesterday
-        # Users who had a schedule yesterday but NO confirmed attendance record
-        yesterday_schedules = self.session.exec(
-            select(Schedule).where(Schedule.date == yesterday)
-        ).all()
-        
-        missing = []
-        for sch in yesterday_schedules:
-            # Check if attendance exists
-            attendance = self.session.exec(
-                select(Attendance)
-                .where(Attendance.user_id == sch.user_id)
-                .where(Attendance.date == yesterday)
-            ).first()
-            
-            if not attendance:
-                # Create a "dummy" attendance object or just return info needed for AttendanceResponse
-                # We need to return AttendanceResponse structure.
-                # Since there is no attendance record, we can't return one.
-                # But the UI might expect it.
-                # The requirement says: "users who didn't confirm presence".
-                # If they didn't confirm, maybe they are absent or just forgot.
-                # If we return a "Pending" status attendance that IS NOT IN DB, it might be confusing.
-                # BETTER: Check for "PENDING" attendances in DB explicitly? 
-                # "Pracownicy którzy nie potwierdzili obecności ... mimo że mieli zmiany"
-                # This implies (Had Schedule) AND (No Attendance OR Attendance is Pending/Rejected?? usually Pending).
-                
-                # Let's check if there is a PENDING attendance item.
-                pass
-            
-        # Actually strict reading: "Workers who did not confirm presence... although they had shifts".
-        # This usually means "Absent without leave" or "Forgot to click".
-        # If the system auto-creates PENDING attendance, we search for that.
-        # If not, we search for Schedule without Attendance.
-        
-        # Let's assume we return a list of "Attendance-like" objects or just PENDING ones.
-        # Let's grab all PENDING attendances for yesterday first.
+        # Get actual PENDING records from yesterday
         pending_attendances = self.session.exec(
              select(Attendance)
              .where(Attendance.date == yesterday)
              .where(Attendance.status == AttendanceStatus.PENDING)
         ).all()
-        # And maybe create fake ones for those who have no record at all?
-        
-        # For simplicity, let's just return actual PENDING records from yesterday.
-        # If the user wants "No record", that's a different issue (Absent).
-        # I'll stick to Pending records for now as that's safer.
-        
-        # Wait, if they have NO record, they don't show up in "Pending Attendance" tab usually?
-        # Let's include NO RECORD users as "PENDING" (virtual) or just stick to DB pending.
-        # I will stick to DB Pending to be safe for now, as "Confirmation" implies an action on an existing object.
         
         missing_responses = []
         for att in pending_attendances:
-             missing_responses.append(att)
+             missing_responses.append({
+                 "id": att.id,
+                 "user_id": att.user_id,
+                 "user_name": att.user.full_name if att.user else "Nieznany",
+                 "date": att.date,
+                 "check_in": att.check_in,
+                 "check_out": att.check_out,
+                 "was_scheduled": att.was_scheduled,
+                 "status": att.status,
+                 "created_at": att.created_at
+             })
              
         return {
             "working_today": working_today,
