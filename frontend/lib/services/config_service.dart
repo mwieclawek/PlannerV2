@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ConfigService {
@@ -14,7 +15,19 @@ class ConfigService {
     _prefs = await SharedPreferences.getInstance();
   }
 
-  String? get baseUrl => _prefs.getString(keyBaseUrl);
+  String? get baseUrl {
+    final stored = _prefs.getString(keyBaseUrl);
+    if (stored != null) return stored;
+    
+    // On Web, default to current origin in release/deployed mode
+    if (kIsWeb) {
+      final origin = Uri.base.origin;
+      // If we are on localhost, we might want to keep it or handle it specifically.
+      // But origin is safe for both local and prod.
+      return origin; 
+    }
+    return null;
+  }
 
   Future<void> setBaseUrl(String url) async {
     await _prefs.setString(keyBaseUrl, url);

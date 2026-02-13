@@ -32,26 +32,24 @@ pipeline {
                 '''
                 sh 'python -m py_compile backend/app/main.py'
                 sh 'mkdir -p test-results'
-                // Uruchomienie testowe w tle - tutaj ścieżka była dobra (backend.app.main)
+                // Uruchomienie testowe w tle
                 sh '''
                     export PYTHONPATH=$PWD
                     nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
                     sleep 10
                 '''
-                // || true pozwala przejść dalej mimo błędów testów (do celów debugowania deploymentu)
                 sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
             }
             post {
                 always {
                     junit allowEmptyResults: true, testResults: 'test-results/*.xml'
-                    // Dodano || true do pkill, bo w alpine/slim czasem go nie ma lub proces już nie żyje
                     sh 'pkill -f uvicorn || true'
                 }
             }
         }
         
-        // --- 3. BUDOWANIE FRONTENDU ---
-        stage('Frontend Build') {
+        // --- 3. BUDOWANIE FRONTENDU (WEB) ---
+        stage('Frontend Build (Web)') {
             agent {
                 docker {
                     image 'ghcr.io/cirruslabs/flutter:stable'
@@ -69,7 +67,63 @@ pipeline {
             }
         }
 
-        // --- 4. DEPLOY NA DEV (Branch main) ---
+        // --- 4. BUDOWANIE ANDROIDA (DEBUG - Branch Main) ---
+        stage('Android Build (Debug)') {
+            when {
+                branch 'main'
+            }
+            agent {
+                docker {
+                    image 'ghcr.io/cirruslabs/flutter:stable'
+                    args '-u root'
+                }
+            }
+            steps {
+                unstash 'source'
+                dir('frontend') {
+                    sh 'flutter pub get'
+                    // Tutaj możesz dodać --dart-define jeżeli potrzebujesz
+                    sh 'flutter build apk --debug'
+                }
+            }
+            post {
+                success {
+                    // Archiwizujemy APK żebyś mógł go pobrać z Jenkinsa
+                    archiveArtifacts artifacts: 'frontend/build/app/outputs/flutter-apk/app-debug.apk', fingerprint: true
+                    echo "📱 Android Debug APK dostępny w artefaktach!"
+                }
+            }
+        }
+
+        // --- 5. BUDOWANIE ANDROIDA (RELEASE - Tagi v*) ---
+        stage('Android Build (Release)') {
+            when {
+                tag "v*"
+            }
+            agent {
+                docker {
+                    image 'ghcr.io/cirruslabs/flutter:stable'
+                    args '-u root'
+                }
+            }
+            steps {
+                unstash 'source'
+                dir('frontend') {
+                    sh 'flutter pub get'
+                    // Pamiętaj: domyślny build release bez konfiguracji kluczy 
+                    // będzie podpisany kluczem debugowym (zadziała na telefonie, nie zadziała w Google Play)
+                    sh 'flutter build apk --release'
+                }
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: 'frontend/build/app/outputs/flutter-apk/app-release.apk', fingerprint: true
+                    echo "🚀 Android Release APK gotowy do pobrania!"
+                }
+            }
+        }
+
+        // --- 6. DEPLOY NA DEV (Branch main) ---
         stage('Deploy to DEV') {
             when {
                 branch 'main'
@@ -107,7 +161,6 @@ pipeline {
                     echo "🐍 Backend DEV..."
                     sh 'docker build -t plannerv2-backend:dev ./backend'
                     
-                    // Używamy domyślnego entrypoint.sh z Dockerfile (alembic upgrade head + uvicorn)
                     sh '''
                         docker run -d --name plannerv2-backend-dev --network plannerv2-network \
                         -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db \
@@ -115,7 +168,6 @@ pipeline {
                     '''
                     sh 'sleep 10'
                     
-                    // Healthcheck Backend
                     sh '''
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev)" = "false" ]; then
                             echo "❌ Backend DEV padł! Logi:"
@@ -128,10 +180,8 @@ pipeline {
                     sh 'git checkout nginx/nginx.conf || true' 
                     sh "sed -i 's/plannerv2-backend/plannerv2-backend-dev/g' nginx/nginx.conf"
                     
-                    // 1. Start Nginx
                     sh 'docker run -d --name plannerv2-nginx-dev --network plannerv2-network -p 8091:80 --restart unless-stopped nginx:alpine'
                     
-                    // 2. Czekamy na sieć (PING)
                     sh '''
                         echo "⏳ Sprawdzam widoczność Backendu..."
                         DNS_OK=false
@@ -154,7 +204,6 @@ pipeline {
                         fi
                     '''
 
-                    // 3. Podmiana configu i reload
                     sh '''
                         docker exec plannerv2-nginx-dev mkdir -p /var/www/plannerv2/web
                         docker cp frontend/build/web/. plannerv2-nginx-dev:/var/www/plannerv2/web/
@@ -169,7 +218,7 @@ pipeline {
             }
         }
         
-        // --- 5. DEPLOY NA PROD (Tylko Tagi v*) ---
+        // --- 7. DEPLOY NA PROD (Tylko Tagi v*) ---
         stage('Deploy to PRODUCTION') {
             when {
                 tag "v*"
@@ -204,7 +253,6 @@ pipeline {
                     
                     sh 'docker build -t plannerv2-backend:latest ./backend'
                     
-                    // Używamy domyślnego entrypoint.sh z Dockerfile (alembic upgrade head + uvicorn)
                     sh '''
                         docker run -d --name plannerv2-backend --network plannerv2-network \
                         -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db \
