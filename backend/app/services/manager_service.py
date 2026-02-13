@@ -1,9 +1,9 @@
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from sqlmodel import Session, select
 from fastapi import HTTPException
-from ..models import JobRole, ShiftDefinition, StaffingRequirement, RestaurantConfig, User, UserJobRoleLink, RoleSystem
+from ..models import JobRole, ShiftDefinition, StaffingRequirement, RestaurantConfig, User, UserJobRoleLink, RoleSystem, AttendanceStatus, Schedule, Attendance
 from ..schemas import JobRoleCreate, ShiftDefCreate, RequirementCreate, ConfigUpdate, UserUpdate, UserCreate
 
 class ManagerService:
@@ -294,9 +294,8 @@ class ManagerService:
         return result
 
     def get_user_stats(self, user_id: UUID) -> dict:
-        from ..models import Schedule, Attendance
         from sqlalchemy import func
-        from datetime import timedelta
+
         
         # 1. Total shifts completed (from Attendance)
         total_shifts = self.session.exec(
@@ -367,8 +366,6 @@ class ManagerService:
             "monthly_shifts": monthly_stats
         }
 
-    def get_dashboard_home(self) -> dict:
-        from ..models import Schedule, Attendance
         today = date.today()
         yesterday = today - timedelta(days=1)
         
