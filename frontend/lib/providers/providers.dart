@@ -2,8 +2,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/api_service.dart';
 import '../models/models.dart';
 
+import 'config_provider.dart';
+
 // API Service Provider
-final apiServiceProvider = Provider<ApiService>((ref) => ApiService());
+final apiServiceProvider = Provider<ApiService>((ref) {
+  final baseUrl = ref.watch(configProvider);
+  if (baseUrl == null) {
+    throw Exception('Base URL not configured');
+  }
+  return ApiService(baseUrl);
+});
 
 // Current User Provider
 final currentUserProvider = FutureProvider<User?>((ref) async {

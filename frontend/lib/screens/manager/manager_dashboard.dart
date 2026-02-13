@@ -9,6 +9,8 @@ import 'team_tab.dart';
 import 'availability_view_tab.dart';
 import 'attendance_approval_tab.dart';
 
+import '../../widgets/qr_config_dialog.dart';
+
 class ManagerDashboard extends ConsumerStatefulWidget {
   const ManagerDashboard({super.key});
 
@@ -32,6 +34,17 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
         backgroundColor: Colors.indigo.shade700,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_2),
+            tooltip: 'Udostępnij konfigurację',
+            onPressed: () {
+              debugPrint('QR button clicked!');
+              showDialog(
+                context: context,
+                builder: (context) => const QrConfigDialog(),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {

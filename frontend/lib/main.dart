@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'utils/router.dart';
 
+import 'services/config_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await ConfigService().init();
   await initializeDateFormatting('pl_PL', null);
   runApp(const ProviderScope(child: MyApp()));
 }
