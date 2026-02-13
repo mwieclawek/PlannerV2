@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 
+class ApiService {
   final String baseUrl;
   final Dio _dio;
 
