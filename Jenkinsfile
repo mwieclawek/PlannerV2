@@ -67,63 +67,7 @@ pipeline {
             }
         }
 
-        // --- 4. BUDOWANIE ANDROIDA (DEBUG - Branch Main) ---
-        stage('Android Build (Debug)') {
-            when {
-                branch 'main'
-            }
-            agent {
-                docker {
-                    image 'ghcr.io/cirruslabs/flutter:stable'
-                    args '-u root'
-                }
-            }
-            steps {
-                unstash 'source'
-                dir('frontend') {
-                    sh 'flutter pub get'
-                    // Tutaj możesz dodać --dart-define jeżeli potrzebujesz
-                    sh 'flutter build apk --debug'
-                }
-            }
-            post {
-                success {
-                    // Archiwizujemy APK żebyś mógł go pobrać z Jenkinsa
-                    archiveArtifacts artifacts: 'frontend/build/app/outputs/flutter-apk/app-debug.apk', fingerprint: true
-                    echo "📱 Android Debug APK dostępny w artefaktach!"
-                }
-            }
-        }
-
-        // --- 5. BUDOWANIE ANDROIDA (RELEASE - Tagi v*) ---
-        stage('Android Build (Release)') {
-            when {
-                tag "v*"
-            }
-            agent {
-                docker {
-                    image 'ghcr.io/cirruslabs/flutter:stable'
-                    args '-u root'
-                }
-            }
-            steps {
-                unstash 'source'
-                dir('frontend') {
-                    sh 'flutter pub get'
-                    // Pamiętaj: domyślny build release bez konfiguracji kluczy 
-                    // będzie podpisany kluczem debugowym (zadziała na telefonie, nie zadziała w Google Play)
-                    sh 'flutter build apk --release'
-                }
-            }
-            post {
-                success {
-                    archiveArtifacts artifacts: 'frontend/build/app/outputs/flutter-apk/app-release.apk', fingerprint: true
-                    echo "🚀 Android Release APK gotowy do pobrania!"
-                }
-            }
-        }
-
-        // --- 6. DEPLOY NA DEV (Branch main) ---
+        // --- 4. DEPLOY NA DEV (Branch main) ---
         stage('Deploy to DEV') {
             when {
                 branch 'main'
@@ -218,7 +162,7 @@ pipeline {
             }
         }
         
-        // --- 7. DEPLOY NA PROD (Tylko Tagi v*) ---
+        // --- 5. DEPLOY NA PROD (Tylko Tagi v*) ---
         stage('Deploy to PRODUCTION') {
             when {
                 tag "v*"
