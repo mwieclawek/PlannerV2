@@ -16,6 +16,19 @@ class SchedulerService:
             Schedule.date <= batch.end_date
         )
         existing = self.session.exec(statements).all()
+        
+        # Handle linked Attendance records (set schedule_id to None) to avoid FK violation
+        existing_ids = [e.id for e in existing]
+        if existing_ids:
+            from ..models import Attendance
+            linked_attendances = self.session.exec(
+                select(Attendance).where(Attendance.schedule_id.in_(existing_ids))
+            ).all()
+            for att in linked_attendances:
+                att.schedule_id = None
+                self.session.add(att)
+            self.session.commit() # Commit updates to Attendance first
+            
         for e in existing:
             self.session.delete(e)
         

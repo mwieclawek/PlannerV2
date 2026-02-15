@@ -137,7 +137,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
       case AvailabilityStatus.unavailable:
         return Colors.red.shade400;
       case AvailabilityStatus.available:
-        return Colors.grey.shade300;
+        return Colors.red.shade100; // Changed from grey to light red to indicate "unwilling" by default
     }
   }
 
@@ -150,7 +150,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
       case AvailabilityStatus.unavailable:
         return Icons.block;
       case AvailabilityStatus.available:
-        return Icons.help_outline;
+        return Icons.close; // Changed icon
     }
   }
 
@@ -163,7 +163,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
       case AvailabilityStatus.unavailable:
         return 'Nie mogę';
       case AvailabilityStatus.available:
-        return 'Brak';
+        return 'Brak (Nie)'; // Changed label
     }
   }
 

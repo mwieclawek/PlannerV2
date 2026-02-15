@@ -61,3 +61,20 @@ def read_users_me(current_user: User = Depends(get_current_user)):
         "job_roles": [role.id for role in current_user.job_roles] if current_user.job_roles else []
     }
 
+@router.put("/change-password")
+def change_password(
+    password_data: "UserPasswordChange", # String forward ref or imported
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    from ..schemas import UserPasswordChange # Import here to avoid circulars if any
+    
+    if not verify_password(password_data.old_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Incorrect old password")
+        
+    current_user.password_hash = get_password_hash(password_data.new_password)
+    session.add(current_user)
+    session.commit()
+    
+    return {"status": "password_changed"}
+

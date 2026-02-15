@@ -89,6 +89,13 @@ class ApiService {
     await prefs.remove('access_token');
   }
 
+  Future<void> changePassword(String oldPassword, String newPassword) async {
+    await _dio.put('/auth/change-password', data: {
+      'old_password': oldPassword,
+      'new_password': newPassword,
+    });
+  }
+
   // Roles
   Future<List<JobRole>> getRoles() async {
     final response = await _dio.get('/manager/roles');

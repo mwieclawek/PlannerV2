@@ -255,6 +255,10 @@ class UserRolesUpdate(BaseModel):
 class PasswordReset(BaseModel):
     new_password: str
 
+class UserPasswordChange(BaseModel):
+    old_password: str
+    new_password: str
+
 class ManualAssignment(BaseModel):
     date: date_type
     shift_def_id: int

@@ -37,6 +37,87 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
     });
   }
 
+  void _showChangePasswordDialog() {
+    final oldPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Zmiana hasła'),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: oldPasswordController,
+                  decoration: const InputDecoration(labelText: 'Stare hasło'),
+                  obscureText: true,
+                  validator: (v) => v?.isEmpty == true ? 'Wymagane' : null,
+                ),
+                TextFormField(
+                  controller: newPasswordController,
+                  decoration: const InputDecoration(labelText: 'Nowe hasło'),
+                  obscureText: true,
+                  validator: (v) => (v?.length ?? 0) < 6 ? 'Min. 6 znaków' : null,
+                ),
+                TextFormField(
+                  controller: confirmPasswordController,
+                  decoration: const InputDecoration(labelText: 'Powtórz nowe hasło'),
+                  obscureText: true,
+                  validator: (v) => v != newPasswordController.text ? 'Hasła nie pasują' : null,
+                ),
+                if (isLoading)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 16),
+                    child: CircularProgressIndicator(),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: const Text('Anuluj'),
+            ),
+            FilledButton(
+              onPressed: isLoading ? null : () async {
+                if (formKey.currentState!.validate()) {
+                  setDialogState(() => isLoading = true);
+                  try {
+                    await ref.read(apiServiceProvider).changePassword(
+                      oldPasswordController.text,
+                      newPasswordController.text,
+                    );
+                    if (mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Hasło zostało zmienione'), backgroundColor: Colors.green),
+                      );
+                    }
+                  } catch (e) {
+                    setDialogState(() => isLoading = false);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red),
+                      );
+                    }
+                  }
+                }
+              },
+              child: const Text('Zmień'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final userAsync = ref.watch(authProvider);
@@ -51,11 +132,40 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
         backgroundColor: _selectedIndex == 0 ? Colors.teal.shade700 : _selectedIndex == 1 ? Colors.blue.shade700 : Colors.purple.shade700,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await ref.read(authProvider.notifier).logout();
+          PopupMenuButton<String>(
+            onSelected: (value) async {
+              if (value == 'logout') {
+                await ref.read(authProvider.notifier).logout();
+              } else if (value == 'password') {
+                _showChangePasswordDialog();
+              }
             },
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(
+                value: 'password',
+                child: Row(
+                  children: [
+                    Icon(Icons.lock, color: Colors.grey),
+                    SizedBox(width: 8),
+                    Text('Zmień hasło'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem<String>(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, color: Colors.grey),
+                    SizedBox(width: 8),
+                    Text('Wyloguj'),
+                  ],
+                ),
+              ),
+            ],
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Icon(Icons.person),
+            ),
           ),
         ],
       ),
