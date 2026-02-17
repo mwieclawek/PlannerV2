@@ -391,7 +391,8 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         _originalEntries = List.from(_scheduleEntries);
       });
       _updateUnsavedChanges(false);
-      _loadEmployeeHours();
+      _updateUnsavedChanges(false);
+      await _loadSchedule(); // Auto-refresh to ensure data consistency
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

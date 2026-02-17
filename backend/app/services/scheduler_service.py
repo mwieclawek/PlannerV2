@@ -57,6 +57,16 @@ class SchedulerService:
         
         response = []
         # Optimization: fetch all roles/shifts/users once if needed, but for weekly scale this is fine
+        
+        # Fetch active giveaways to mark them
+        from ..models import ShiftGiveaway, GiveawayStatus
+        giveaways = self.session.exec(
+            select(ShiftGiveaway.schedule_id).where(
+                ShiftGiveaway.status == GiveawayStatus.OPEN
+            )
+        ).all()
+        giveaway_ids = set(str(g) for g in giveaways)
+
         for s in schedules:
             shift = self.session.get(ShiftDefinition, s.shift_def_id)
             response.append({
@@ -70,7 +80,8 @@ class SchedulerService:
                 "role_name": self.session.get(JobRole, s.role_id).name if s.role_id else "?",
                 "shift_name": shift.name if shift else "?",
                 "start_time": shift.start_time if shift else None,
-                "end_time": shift.end_time if shift else None
+                "end_time": shift.end_time if shift else None,
+                "is_on_giveaway": str(s.id) in giveaway_ids
             })
         return response
 

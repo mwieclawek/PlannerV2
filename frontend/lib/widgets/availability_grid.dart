@@ -260,6 +260,12 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
                 ),
                 const SizedBox(height: 12),
                 ...widget.shifts.map((shift) {
+                  // Check if applicable
+                  final dayIndex = date.weekday - 1;
+                  if (!shift.applicableDays.contains(dayIndex)) {
+                     return const SizedBox.shrink(); // Hide if not applicable
+                  }
+
                   final status = _getStatus(date, shift.id);
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
@@ -277,12 +283,24 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
                             Icon(_getStatusIcon(status), color: Colors.white),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Text(
-                                shift.name,
-                                style: GoogleFonts.inter(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    shift.name,
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${shift.startTime} - ${shift.endTime}',
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white.withOpacity(0.8),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             Text(
@@ -333,7 +351,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
               ...widget.shifts.map((shift) {
                 return TableRow(
                   children: [
-                    _buildShiftNameCell(shift.name),
+                    _buildShiftNameCell(shift),
                     ...List.generate(7, (i) {
                       final date = widget.weekStart.add(Duration(days: i));
                       final status = _getStatus(date, shift.id);
@@ -363,18 +381,48 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
     );
   }
 
-  Widget _buildShiftNameCell(String name) {
+  Widget _buildShiftNameCell(ShiftDefinition shift) {
     return Container(
       padding: const EdgeInsets.all(12),
       color: Colors.grey.shade100,
-      child: Text(
-        name,
-        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            shift.name,
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '(${shift.startTime} - ${shift.endTime})',
+            style: GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade600),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildStatusCell(DateTime date, int shiftId, AvailabilityStatus status) {
+    // Check if shift is applicable for this day
+    final shift = widget.shifts.firstWhere((s) => s.id == shiftId);
+    // DateTime.weekday is 1..7 (Mon..Sun), applicableDays is 0..6 (Mon..Sun)
+    final dayIndex = date.weekday - 1;
+    
+    if (!shift.applicableDays.contains(dayIndex)) {
+       return Container(
+        height: 60,
+        color: Colors.grey.shade200,
+        child: Center(
+          child: Icon(
+            Icons.block,
+            color: Colors.grey.shade400,
+            size: 20,
+          ),
+        ),
+      );
+    }
+
     return InkWell(
       onTap: () => _toggleStatus(date, shiftId),
       child: Container(

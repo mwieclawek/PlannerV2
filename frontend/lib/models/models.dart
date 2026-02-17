@@ -309,6 +309,7 @@ class ScheduleEntry {
   final String shiftName;
   final String startTime;
   final String endTime;
+  final bool isOnGiveaway;
 
   ScheduleEntry({
     required this.id,
@@ -322,6 +323,7 @@ class ScheduleEntry {
     required this.shiftName,
     required this.startTime,
     required this.endTime,
+    this.isOnGiveaway = false,
   });
 
   factory ScheduleEntry.fromJson(Map<String, dynamic> json) {
@@ -337,6 +339,7 @@ class ScheduleEntry {
       shiftName: json['shift_name'],
       startTime: json['start_time'] ?? '09:00', // Fallback if missing
       endTime: json['end_time'] ?? '17:00',
+      isOnGiveaway: json['is_on_giveaway'] ?? false,
     );
   }
 }

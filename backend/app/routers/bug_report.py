@@ -13,7 +13,7 @@ from ..models import User
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["bug-report"])
+router = APIRouter(prefix="/api", tags=["bug-report"])
 
 GITHUB_OWNER = "mwieclawek"
 GITHUB_REPO = "PlannerV2"

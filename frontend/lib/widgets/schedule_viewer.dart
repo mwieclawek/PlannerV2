@@ -299,48 +299,71 @@ class ScheduleViewer extends StatelessWidget {
                                                   : null,
                                               child: Padding(
                                                 padding: const EdgeInsets.only(bottom: 4),
-                                                child: Row(
-                                                  children: [
-                                                    Icon(
-                                                      Icons.person,
-                                                      size: 14,
-                                                      color: Colors.indigo.shade700,
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          Text(
-                                                            schedule.userName,
-                                                            style: GoogleFonts.inter(
-                                                              fontSize: 12,
-                                                              fontWeight: FontWeight.w600,
-                                                            ),
-                                                            overflow: TextOverflow.ellipsis,
-                                                          ),
-                                                          const SizedBox(height: 2),
-                                                          Container(
-                                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                            decoration: BoxDecoration(
-                                                              color: _getRoleColor(schedule.roleId),
-                                                              borderRadius: BorderRadius.circular(4),
-                                                            ),
-                                                            child: Text(
-                                                              schedule.roleName,
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(
+                                                        Icons.person,
+                                                        size: 14,
+                                                        color: Colors.indigo.shade700,
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Text(
+                                                              schedule.userName,
                                                               style: GoogleFonts.inter(
-                                                                fontSize: 9,
-                                                                color: Colors.white,
-                                                                fontWeight: FontWeight.w500,
+                                                                fontSize: 12,
+                                                                fontWeight: FontWeight.w600,
                                                               ),
                                                               overflow: TextOverflow.ellipsis,
                                                             ),
-                                                          ),
-                                                        ],
+                                                            const SizedBox(height: 2),
+                                                            Row(
+                                                              children: [
+                                                                Container(
+                                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                                  decoration: BoxDecoration(
+                                                                    color: _getRoleColor(schedule.roleId),
+                                                                    borderRadius: BorderRadius.circular(4),
+                                                                  ),
+                                                                  child: Text(
+                                                                    schedule.roleName,
+                                                                    style: GoogleFonts.inter(
+                                                                      fontSize: 9,
+                                                                      color: Colors.white,
+                                                                      fontWeight: FontWeight.w500,
+                                                                    ),
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                  ),
+                                                                ),
+                                                                if (schedule.isOnGiveaway) ...[
+                                                                  const SizedBox(width: 4),
+                                                                  Container(
+                                                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                                                    decoration: BoxDecoration(
+                                                                      color: Colors.purple.shade100,
+                                                                      borderRadius: BorderRadius.circular(4),
+                                                                      border: Border.all(color: Colors.purple.shade300),
+                                                                    ),
+                                                                    child: Text(
+                                                                      'Giełda',
+                                                                      style: GoogleFonts.inter(
+                                                                        fontSize: 8,
+                                                                        color: Colors.purple.shade800,
+                                                                        fontWeight: FontWeight.bold,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ],
+                                                            ),
+                                                          ],
+                                                        ),
                                                       ),
-                                                    ),
-                                                  ],
-                                                ),
+                                                    ],
+                                                  ),
                                               ),
                                             );
                                           }),

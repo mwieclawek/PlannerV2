@@ -468,7 +468,7 @@ class ApiService {
     required String description,
     String steps = '',
   }) async {
-    final response = await _dio.post('/bug-report', data: {
+    final response = await _dio.post('/api/bug-report', data: {
       'title': title,
       'description': description,
       'steps_to_reproduce': steps,

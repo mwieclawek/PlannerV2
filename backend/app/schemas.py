@@ -226,6 +226,7 @@ class ScheduleResponse(BaseModel):
     shift_name: str
     start_time: time
     end_time: time
+    is_on_giveaway: bool = False
 
 class EmployeeScheduleResponse(BaseModel):
     id: UUID
