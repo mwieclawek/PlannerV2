@@ -13,3 +13,4 @@ pytest-asyncio
 httpx
 alembic
 reportlab
+python-dotenv
