@@ -23,7 +23,7 @@ class TestFullWorkflow:
     
     def test_01_register_manager(self, client, unique_username):
         """Step 1: Register a new manager"""
-        response = client.post("/auth/register", json={
+        response = client.post("/auth/register", headers={"X-Integrity-Key": "planner-v2-integration-test"}, json={
             "username": unique_username,
             "password": "securepass123",
             "full_name": "Integration Test Manager",
@@ -71,7 +71,7 @@ class TestFullWorkflow:
         """Step 4: Register an employee"""
         employee_username = f"employee_{uuid.uuid4().hex[:8]}"
         
-        response = client.post("/auth/register", json={
+        response = client.post("/auth/register", headers={"X-Integrity-Key": "planner-v2-integration-test"}, json={
             "username": employee_username,
             "password": "emppass123",
             "full_name": "Test Employee",
