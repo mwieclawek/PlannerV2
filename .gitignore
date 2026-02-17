@@ -26,7 +26,7 @@ build/
 .vscode/
 .idea/
 *.swp
-*.swo
+.swo
 *~
 
 # OS
@@ -55,15 +55,37 @@ coverage.xml
 .agent/
 code-changes.md
 
-# Debug / utility scripts (local only)
+# Debug / utility scripts (root)
 add_today_shift.py
 check_dashboard.py
 check_dashboard_simple.py
 check_db_schedules.py
 check_shifts.py
 
-# Output / log text files in root
+# Output / log text files (root)
 alembic_status.txt
 migration_output.txt
 prod_logs.txt
 upgrade_output.txt
+
+# Backend debug scripts and outputs
+backend/check_schema.py
+backend/check_table_info.py
+backend/check_user_table.py
+backend/drop_table.py
+backend/list_users.py
+backend/reset_pass.py
+backend/seed.py
+backend/verify_dashboard.py
+backend/verify_dashboard_v2.py
+backend/backend_test_output.txt
+backend/debug_test.txt
+backend/error_log.txt
+backend/schema_dump.txt
+backend/table_info.txt
+backend/user_info.txt
+backend/pytest.ini
+
+# Frontend analysis
+frontend/analysis.txt
+
