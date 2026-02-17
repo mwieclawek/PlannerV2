@@ -31,7 +31,7 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
       appBar: AppBar(
         title: Text(
           'Panel Managera',
-          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+          style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,

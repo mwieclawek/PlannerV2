@@ -244,7 +244,7 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Obecności', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+        title: Text('Obecności', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         actions: [
