@@ -72,7 +72,8 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
     
     AvailabilityStatus newStatus;
     switch (currentStatus) {
-      case AvailabilityStatus.available:
+      case AvailabilityStatus.available: // Default (treated as unavailable)
+      case AvailabilityStatus.unavailable: // Explicitly unavailable
         newStatus = AvailabilityStatus.preferred;
         break;
       case AvailabilityStatus.preferred:
@@ -80,9 +81,6 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
         break;
       case AvailabilityStatus.neutral:
         newStatus = AvailabilityStatus.unavailable;
-        break;
-      case AvailabilityStatus.unavailable:
-        newStatus = AvailabilityStatus.available;
         break;
     }
     
@@ -135,9 +133,8 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
       case AvailabilityStatus.neutral:
         return Colors.amber.shade400;
       case AvailabilityStatus.unavailable:
+      case AvailabilityStatus.available: // Default shows as unavailable
         return Colors.red.shade400;
-      case AvailabilityStatus.available:
-        return Colors.red.shade100; // Changed from grey to light red to indicate "unwilling" by default
     }
   }
 
@@ -148,9 +145,8 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
       case AvailabilityStatus.neutral:
         return Icons.remove_circle_outline;
       case AvailabilityStatus.unavailable:
-        return Icons.block;
       case AvailabilityStatus.available:
-        return Icons.close; // Changed icon
+        return Icons.block;
     }
   }
 
@@ -161,9 +157,8 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
       case AvailabilityStatus.neutral:
         return 'Mogę';
       case AvailabilityStatus.unavailable:
-        return 'Nie mogę';
       case AvailabilityStatus.available:
-        return 'Brak (Nie)'; // Changed label
+        return 'Nie mogę';
     }
   }
 
@@ -171,6 +166,13 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
     
+    // Legend items - excluding 'available' as it's visually same as 'unavailable'
+    final legendItems = [
+      AvailabilityStatus.preferred,
+      AvailabilityStatus.neutral,
+      AvailabilityStatus.unavailable,
+    ];
+
     return Column(
       children: [
         // Legend
@@ -180,7 +182,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
             spacing: 16,
             runSpacing: 8,
             alignment: WrapAlignment.center,
-            children: AvailabilityStatus.values.map((status) {
+            children: legendItems.map((status) {
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
