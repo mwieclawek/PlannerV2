@@ -1,160 +1,149 @@
-# Podręcznik Użytkownika - Planner V2
+# Podręcznik Użytkownika — Planner V2
 
-Witamy w systemie Planner V2 – kompleksowym narzędziu do zarządzania grafikami, czasem pracy i zespołem w gastronomii. Niniejszy przewodnik pomoże Ci w pełni wykorzystać możliwości aplikacji, niezależnie od Twojej roli.
+Witamy w systemie Planner V2 – narzędziu do zarządzania grafikami pracy i zespołem w gastronomii.
 
 ---
 
 ## Spis Treści
 
-1.  [Wstęp](#wstęp)
-2.  [Logowanie](#logowanie)
-3.  [Dla Managerów](#dla-managerów)
-    *   [Dashboard](#dashboard-managera)
-    *   [Konfiguracja Systemu](#konfiguracja-systemu)
-    *   [Zarządzanie Zespołem](#zarządzanie-zespołem)
-    *   [Grafik Pracy](#grafik-pracy)
-    *   [Oddawanie Zmian](#oddawanie-zmian-manager)
-    *   [Zarządzanie Obecnością](#zarządzanie-obecnością)
-    *   [Raporty](#raporty)
-4.  [Dla Pracowników](#dla-pracowników)
-    *   [Mój Grafik](#mój-grafik)
-    *   [Oddawanie Zmian](#oddawanie-zmian-pracownik)
-    *   [Dostępność](#dostępność)
-    *   [Rejestracja Obecności](#rejestracja-obecności)
-5.  [Pomoc i Zgłaszanie Błędów](#pomoc-i-zgłaszanie-błędów)
+1. [Logowanie](#1-logowanie)
+2. [Dla Managerów](#2-dla-managerów)
+3. [Dla Pracowników](#3-dla-pracowników)
+4. [Konfiguracja Serwera](#4-konfiguracja-serwera)
+5. [Pomoc i Zgłaszanie Błędów](#5-pomoc-i-zgłaszanie-błędów)
 
 ---
 
-## 1. Wstęp
+## 1. Logowanie
 
-Planner V2 to aplikacja webowa ułatwiająca planowanie zmian, zarządzanie dostępnością pracowników oraz monitorowanie czasu pracy. System dzieli użytkowników na dwie główne role:
-*   **Manager**: Pełna kontrola nad konfiguracją, grafikami, zespołem i raportami.
-*   **Pracownik**: Dostęp do własnego grafiku, zgłaszanie dyspozycyjności i rejestracja wejść/wyjść.
+Konta tworzy wyłącznie Manager — samodzielna rejestracja jest wyłączona.
 
-Standardowy adres aplikacji (wersja lokalna): `http://127.0.0.1:5000` (może się różnić w zależności od wdrożenia).
+1. Otwórz aplikację w przeglądarce.
+2. Podaj swój **Login** (username) oraz **Hasło**.
+3. Kliknij **"Zaloguj"**.
 
----
+> **Uwaga**: Jeśli zapomniałeś hasła, skontaktuj się z Managerem — może je zresetować.
 
-## 2. Logowanie
-
-Aby korzystać z systemu, musisz posiadać konto utworzone przez Managera. Rejestracja samodzielna jest wyłączona.
-
-### Logowanie
-1.  Otwórz aplikację w przeglądarce.
-2.  Na ekranie startowym podaj swój **Login** oraz **Hasło**.
-3.  Kliknij przycisk **"Zaloguj"**.
-
-> **Uwaga**: Jeśli zapomniałeś hasła, skontaktuj się ze swoim Managerem.
+> **Uwaga**: Jeśli widzisz komunikat „Account is deactivated", Twoje konto zostało dezaktywowane. Skontaktuj się z Managerem.
 
 ---
 
-## 3. Dla Managerów
+## 2. Dla Managerów
 
-Jako Manager masz dostęp do wszystkich funkcji administracyjnych. Panel nawigacyjny znajduje się u dołu ekranu (mobile) lub po lewej stronie (desktop).
+Panel nawigacyjny (dolny pasek) zawiera 6 zakładek:
+**Home** | **Grafik** | **Zespół** | **Ustawienia** | **Obecności** | **Zmiany**
 
-### Dashboard Managera
-Główny ekran po zalogowaniu. Znajdziesz tu szybki podgląd kluczowych informacji:
-*   **Dzisiejszy Grafik**: Kto pracuje teraz, kto ma zaplanowaną zmianę.
-*   **Oczekujące Wnioski**: Powiadomienia o niezatwierdzonych obecnościach.
-*   **Statystyki**: Podsumowanie godzin w bieżącym miesiącu.
+### 2.1 Home (Dashboard)
 
-### Konfiguracja Systemu
-W tej sekcji dostosujesz aplikację do potrzeb Twojego lokalu.
+Główny ekran — kalendarz z podglądem dziennego grafiku:
+- Kliknij dzień, aby zobaczyć kto pracuje i na jakiej zmianie.
+- Pasek górny: nazwa użytkownika, ikona pomocy (❔), wylogowanie.
+
+### 2.2 Konfiguracja Systemu (zakładka Ustawienia)
 
 #### Role (Stanowiska)
-Definiuj stanowiska pracy w Twoim zespole (np. Kelner, Barista, Kucharz).
-*   **Dodawanie**: Kliknij "+", wpisz nazwę roli i wybierz kolor (ułatwia rozróżnianie na grafiku).
-*   **Edycja/Usuwanie**: Użyj ikon ołówka lub kosza przy danej roli.
+- Kliknij **+** → wpisz nazwę roli i wybierz kolor.
+- Ikony ołówka (✏️) i kosza (🗑️) do edycji i usuwania.
 
 #### Zmiany (Shift Definitions)
-Określ standardowe godziny pracy.
-*   **Dodawanie**: Kliknij "+", podaj nazwę (np. "Rano", "Wieczór") oraz godziny rozpoczęcia i zakończenia (np. 08:00 - 16:00).
-*   **Ważne**: Godziny zmian nie powinny na siebie nachodzić w sposób konfliktowy dla jednej osoby.
+- Kliknij **+** → podaj nazwę (np. „Rano") i godziny (np. 08:00–16:00).
+- Godziny zmian nie powinny konfliktować się dla jednej osoby.
 
-#### Ustawienia Lokalu
-Zdefiniuj dane restauracji (nazwa, adres) oraz godziny otwarcia.
+#### Dane Lokalu
+- Nazwa restauracji, adres, godziny otwarcia.
 
-### Zarządzanie Zespołem
-Zakładka **Zespół** pozwala na administrowanie pracownikami.
-*   **Tworzenie Konta**: Kliknij przycisk dodawania (+), aby utworzyć konto dla nowego pracownika.
-*   **Szczegóły Pracownika**: Kliknij na pracownika, aby:
-    *   Przypisać mu role (stanowiska), na których może pracować.
-    *   Zresetować hasło (jeśli pracownik je zapomni).
-    *   **Aktywować/Dezaktywować**: Zablokuj dostęp pracownikom, którzy już nie pracują.
-    *   Edytować dane osobowe i cele godzinowe.
+### 2.3 Zarządzanie Zespołem (zakładka Zespół)
 
-### Grafik Pracy
-Sercem systemu jest moduł planowania.
-1.  **Widok**: Kalendarz z podziałem na dni lub Tygodniowy.
-2.  **Wymagania Kadrowe**: Określ, ile osób na danym stanowisku jest potrzebnych w konkretny dzień (np. "Sobota Rano: 2x Barista").
-3.  **Generowanie Automatyczne**:
-    *   Kliknij przycisk **"Generuj grafik"**.
-    *   System algorytmicznie dopasuje pracowników do wymagań, biorąc pod uwagę ich dostępność i role.
-    *   Wynik pojawi się jako **Szkic (Draft)** – pracownicy go jeszcze nie widzą.
-4.  **Edycja Ręczna**:
-    *   Możesz ręcznie przesuwać, dodawać lub usuwać osoby ze zmian w trybie szkicu.
-    *   Kliknij na komórkę zmiany, aby dodać/usunąć pracownika.
-5.  **Publikacja**:
-    *   Gdy grafik jest gotowy, kliknij **"Opublikuj"**.
-    *   Dopiero wtedy pracownicy zobaczą swoje zmiany w aplikacji.
+- **Tworzenie konta**: kliknij **+** → podaj login, hasło, imię i nazwisko.
+- **Kliknij na pracownika** → dialog szczegółów:
+  - **Przypisz role** — zaznacz stanowiska, na których może pracować.
+  - **Edytuj dane** — imię, email, cele godzinowe/zmianowe.
+  - **Reset hasła** — gdy pracownik zapomni hasła.
+  - **Aktywacja/Dezaktywacja** — wyłącz dostęp bez usuwania konta.
 
-### Oddawanie Zmian (Manager)
-W zakładce **Zmiany** (ikona strzałek) widzisz prośby pracowników o oddanie zmiany.
-*   Rozwiń kartę, aby zobaczyć szczegóły.
-*   System podpowie sugerowane zastępstwa, sortując pracowników według dostępności (Zielony = dostępny).
-*   Kliknij **Przydziel**, aby zaakceptować zmianę osoby, lub **Anuluj oddanie**, aby odrzucić prośbę.
+### 2.4 Grafik Pracy (zakładka Grafik)
 
-### Zarządzanie Obecnością
-System pozwala na weryfikację rzeczywistego czasu pracy.
-*   **Zatwierdzanie**: Jeśli pracownik odbił się w systemie w godzinach innych niż zaplanowane, lub przyszedł w dzień wolny, wpis trafi do sekcji "Do zatwierdzenia". Możesz go zaakceptować lub odrzucić.
-*   **Historia**: Pełna lista wejść i wyjść z możliwością filtrowania po datach.
+1. **Nawigacja tygodniowa** — strzałki ← → do przełączania tygodni.
+2. **Wymagania kadrowe** — ustaw ile osób o danej roli potrzebujesz na każdą zmianę.
+3. **Generowanie automatyczne**:
+   - Kliknij **"Generuj grafik"**.
+   - System algorytmicznie dopasuje pracowników (uwzględnia dostępność, role, cele godzinowe).
+   - Wynik pojawi się jako **Szkic (Draft)** — nie jest jeszcze widoczny dla pracowników.
+4. **Edycja ręczna**:
+   - Kliknij na komórkę → dodaj lub usuń pracownika ze zmiany.
+   - Dodawaj/usuwaj pracowników w trybie szkicu.
+5. **Zapisz** — kliknij **"Zapisz zmiany"** (batch save do bazy danych).
+6. **Opublikuj** — kliknij **"Opublikuj"**. Dopiero wtedy pracownicy zobaczą grafik.
 
-### Raporty
-*   **Eksport PDF**: Możesz wygenerować listę obecności lub grafik do pliku PDF, gotowego do druku.
-*   **Podsumowanie Godzin**: Tabela z sumą godzin przepracowanych przez każdego pracownika w wybranym miesiącu (ułatwia rozliczenia wypłat).
+### 2.5 Obecności (zakładka Obecności)
+
+- **Filtry**: zakres dat, status (Oczekujące / Zatwierdzone / Odrzucone).
+- **Zatwierdzanie**: przycisk ✅ przy wpisie z nieplanowaną obecnością.
+- **Odrzucanie**: przycisk ❌.
+- **Ręczne dodawanie**: przycisk + do ręcznego wpisania obecności pracownika.
+- **Eksport PDF**: przycisk do wygenerowania listy obecności w PDF.
+
+### 2.6 Oddawanie Zmian (zakładka Zmiany)
+
+Gdy pracownik chce oddać zmianę:
+1. Prośba pojawia się na liście z detalami (kto, kiedy, jaka zmiana).
+2. System sugeruje zastępców — posortowanych wg dostępności (zielony = dostępny).
+3. Kliknij **"Przydziel"** → wybierz zastępcę.
+4. Lub kliknij **"Anuluj"** → odrzuć prośbę.
 
 ---
 
-## 4. Dla Pracowników
+## 3. Dla Pracowników
 
-Twój panel jest uproszczony i skupia się na Twojej pracy.
+Panel nawigacyjny (dolny pasek) zawiera 3 zakładki:
+**Grafik** | **Dostępność** | **Obecność**
 
-### Mój Grafik
-Po zalogowaniu widzisz swój kalendarz pracy.
-*   **Widok Tygodniowy**: Sprawdź, kiedy i w jakich godzinach pracujesz.
-*   **Szczegóły Zmiany**: Data, godzina i rola (stanowisko), na którym masz pracować.
+### 3.1 Mój Grafik
 
-### Oddawanie Zmian (Pracownik)
-Jeśli nie możesz przyjść na zaplanowaną zmianę:
-1.  Kliknij na zmianę w swoim grafiku.
-2.  Wybierz opcję **"Oddaj zmianę"**.
-3.  Twoja prośba trafi do Managera, który znajdzie zastępstwo. Dopóki Manager nie zatwierdzi zmiany, nadal jesteś przypisany do grafiku!
+- Kalendarz z opublikowanymi zmianami.
+- Szczegóły zmiany: data, godziny, rola (stanowisko).
+- **Oddawanie zmian**: kliknij na zmianę → **"Oddaj zmianę"**.
+  - Prośba trafi do Managera. Dopóki Manager nie zatwierdzi, nadal jesteś przypisany!
+  - Możesz anulować prośbę, dopóki nie została przydzielona.
 
-### Dostępność
-To kluczowa funkcja, dzięki której Manager wie, kiedy możesz pracować.
-1.  Przejdź do zakładki **Dostępność**.
-2.  Dla każdego dnia i zmiany w przyszłym tygodniu wybierz status:
-    *   ✅ **Preferuję**: Chętnie przyjdę do pracy.
-    *   ⚪ **Neutralnie**: Mogę pracować, jeśli trzeba (domyślne).
-    *   ❌ **Niedostępny**: Nie mogę pracować w tym czasie.
-3.  Pamiętaj, aby zapisywać zmiany! System bierze pod uwagę Twoje preferencje przy automatycznym układaniu grafiku.
+### 3.2 Dostępność
 
-### Rejestracja Obecności
-Używaj tej funkcji, gdy przychodzisz i wychodzisz z pracy.
-1.  Na ekranie głównym (Dashboard) znajdziesz sekcję "Rejestracja Czasu" (lub zakładkę Obecność).
-2.  **Start Pracy**: Kliknij przycisk wejścia (Check-In). Czas zostanie zarejestrowany.
-3.  **Koniec Pracy**: Po zakończeniu zmiany kliknij przycisk wyjścia (Check-Out).
-4.  Twoje godziny trafią do systemu i po zatwierdzeniu przez Managera zostaną wliczone do wypłaty.
+Kluczowa funkcja — informujesz Managera, kiedy możesz pracować:
+
+1. Przejdź do zakładki **Dostępność**.
+2. Widok: tygodniowy grid (dni × zmiany).
+3. Kliknij komórkę, aby przełączyć status:
+   - ✅ **Preferuję** — chętnie przyjdę do pracy.
+   - ⚪ **Neutralnie** — mogę pracować (domyślne).
+   - ❌ **Niedostępny** — nie mogę pracować.
+4. Kliknij **"Zapisz"** — system uwzględni preferencje przy generowaniu grafiku.
+
+### 3.3 Obecność
+
+Rejestruj swój czas pracy:
+
+1. Wybierz datę.
+2. Wpisz godzinę **wejścia** (check-in) i **wyjścia** (check-out).
+   - System podpowie domyślne godziny z Twojego grafiku.
+3. Kliknij **"Zapisz"**.
+4. Wpis trafi do systemu. Jeśli nie byłeś zaplanowany, Manager musi zatwierdzić obecność.
+
+---
+
+## 4. Konfiguracja Serwera
+
+Przy pierwszym uruchomieniu aplikacji (lub po zmianie serwera):
+
+1. Pojawi się ekran **Konfiguracja serwera**.
+2. **Skanuj QR** — manager może wygenerować kod QR z adresem serwera (ikona QR w ustawieniach).
+3. **Ręcznie** — wpisz adres URL backendu (np. `http://192.168.1.100:8000`).
 
 ---
 
 ## 5. Pomoc i Zgłaszanie Błędów
 
-W górnym pasku aplikacji znajdziesz ikonę znaku zapytania (❔).
+W górnym pasku aplikacji znajduje się ikona pomocy (❔):
 
-*   **Pomoc**: Otwiera panel z najważniejszymi informacjami o obsłudze aplikacji.
-*   **Zgłoś błąd**: Jeśli zauważysz błąd w działaniu programu, kliknij przycisk "Zgłoś błąd" w oknie pomocy.
-    *   Wypełnij formularz (Tytuł, Opis, Kroki do odtworzenia).
-    *   Zgłoszenie trafi bezpośrednio do zespołu technicznego.
-
----
+- **Pomoc**: najważniejsze informacje o obsłudze aplikacji.
+- **Zgłoś błąd**: formularz (tytuł, opis, kroki do odtworzenia).
+  - Zgłoszenie tworzy Issue na GitHub i trafia do zespołu technicznego.

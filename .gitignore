@@ -50,5 +50,20 @@ test_output*.txt
 coverage.xml
 *.xml
 
-# Agents
+# Agents / AI tooling
+.gemini/
+.agent/
 code-changes.md
+
+# Debug / utility scripts (local only)
+add_today_shift.py
+check_dashboard.py
+check_dashboard_simple.py
+check_db_schedules.py
+check_shifts.py
+
+# Output / log text files in root
+alembic_status.txt
+migration_output.txt
+prod_logs.txt
+upgrade_output.txt
