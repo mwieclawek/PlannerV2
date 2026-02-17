@@ -50,7 +50,7 @@ void main() {
 
   testWidgets('HomeTab displays loading indicator initially', (WidgetTester tester) async {
     // Arrange
-    when(mockApiService.getDashboardHome()).thenAnswer(
+    when(mockApiService.getDashboardHome(date: anyNamed('date'))).thenAnswer(
       (_) async => Future.delayed(const Duration(seconds: 1), () => DashboardHome(workingToday: [], missingConfirmations: [])),
     );
 
@@ -74,7 +74,7 @@ void main() {
       missingConfirmations: [],
     );
 
-    when(mockApiService.getDashboardHome()).thenAnswer((_) async => dashboardData);
+    when(mockApiService.getDashboardHome(date: anyNamed('date'))).thenAnswer((_) async => dashboardData);
 
     // Act
     await tester.pumpWidget(createWidgetUnderTest());

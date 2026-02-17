@@ -12,7 +12,7 @@ class FakeApiService implements ApiService {
   final List<JobRole> _roles = [];
 
   @override
-  Future<List<TeamMember>> getUsers() async => _users;
+  Future<List<TeamMember>> getUsers({bool includeInactive = false}) async => _users;
 
   @override
   Future<List<JobRole>> getRoles() async => _roles;

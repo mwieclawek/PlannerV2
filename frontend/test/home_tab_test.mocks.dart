@@ -287,9 +287,9 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
           as _i5.Future<bool>);
 
   @override
-  _i5.Future<List<_i2.TeamMember>> getUsers() =>
+  _i5.Future<List<_i2.TeamMember>> getUsers({bool includeInactive = false}) =>
       (super.noSuchMethod(
-            Invocation.method(#getUsers, []),
+            Invocation.method(#getUsers, [], {#includeInactive: includeInactive}),
             returnValue: _i5.Future<List<_i2.TeamMember>>.value(
               <_i2.TeamMember>[],
             ),
@@ -319,6 +319,7 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
     String? userId, {
     String? fullName,
     String? email,
+    bool? isActive,
     String? roleSystem,
     int? targetHoursPerMonth,
     int? targetShiftsPerMonth,
@@ -659,13 +660,13 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
           as _i5.Future<_i2.UserStats>);
 
   @override
-  _i5.Future<_i2.DashboardHome> getDashboardHome() =>
+  _i5.Future<_i2.DashboardHome> getDashboardHome({DateTime? date}) =>
       (super.noSuchMethod(
-            Invocation.method(#getDashboardHome, []),
+            Invocation.method(#getDashboardHome, [], {#date: date}),
             returnValue: _i5.Future<_i2.DashboardHome>.value(
               _FakeDashboardHome_4(
                 this,
-                Invocation.method(#getDashboardHome, []),
+                Invocation.method(#getDashboardHome, [], {#date: date}),
               ),
             ),
           )

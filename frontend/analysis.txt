@@ -1,0 +1,57 @@
+﻿Analyzing frontend...                                           
+
+warning - Unused import: 'package:flutter/material.dart' - integration_test\app_test.dart:4:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\main.dart:78:63 - deprecated_member_use
+warning - The stack trace variable 'stack' isn't used and can be removed - lib\providers\providers.dart:85:17 - unused_catch_stack
+warning - The stack trace variable 'stack' isn't used and can be removed - lib\providers\providers.dart:97:17 - unused_catch_stack
+warning - The stack trace variable 'stack' isn't used and can be removed - lib\providers\providers.dart:109:17 - unused_catch_stack
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\employee\attendance_tab.dart:368:56 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\employee\attendance_tab.dart:385:56 - deprecated_member_use
+warning - Unused import: '../../models/models.dart' - lib\screens\employee\employee_dashboard.dart:6:8 - unused_import
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\employee\employee_dashboard.dart:99:37 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\employee\employee_dashboard.dart:100:44 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\employee\employee_dashboard.dart:107:44 - use_build_context_synchronously
+  error - Expected an identifier - lib\screens\employee\my_schedule_screen.dart:309:39 - missing_identifier
+  error - Expected to find ')' - lib\screens\employee\my_schedule_screen.dart:309:39 - expected_token
+warning - The declaration '_showRegisterPresenceDialog' isn't referenced - lib\screens\employee\my_schedule_screen.dart:401:8 - unused_element
+warning - Unused import: '../../services/api_service.dart' - lib\screens\manager\employee_detail_dialog.dart:7:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\manager\employee_detail_dialog.dart:287:19 - deprecated_member_use
+warning - Unused import: 'package:google_fonts/google_fonts.dart' - lib\screens\manager\giveaway_tab.dart:3:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\manager\giveaway_tab.dart:179:73 - deprecated_member_use
+warning - Unused import: '../../services/api_service.dart' - lib\screens\manager\home_tab.dart:7:8 - unused_import
+warning - The value of the local variable 'colorScheme' isn't used - lib\screens\manager\home_tab.dart:310:11 - unused_local_variable
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\manager\home_tab.dart:351:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\manager\home_tab.dart:366:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\manager\home_tab.dart:386:41 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\manager\home_tab.dart:391:72 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\manager\home_tab.dart:428:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\manager\home_tab.dart:463:66 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\manager\home_tab.dart:465:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\manager\home_tab.dart:476:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\manager\home_tab.dart:589:59 - deprecated_member_use
+warning - The value of the local variable 'colorScheme' isn't used - lib\screens\manager\home_tab.dart:630:11 - unused_local_variable
+   info - Unnecessary use of string interpolation - lib\screens\manager\scheduler_tab.dart:326:17 - unnecessary_string_interpolations
+warning - Unused import: '../../services/api_service.dart' - lib\screens\manager\setup_tab.dart:7:8 - unused_import
+warning - The value of the field '_isRequirementsLoading' isn't used - lib\screens\manager\setup_tab.dart:467:8 - unused_field
+warning - The value of the field '_isSaving' isn't used - lib\screens\manager\setup_tab.dart:468:8 - unused_field
+   info - Statements in an if should be enclosed in a block - lib\screens\manager\setup_tab.dart:540:22 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\screens\manager\setup_tab.dart:541:12 - curly_braces_in_flow_control_structures
+warning - Unused import: 'dart:io' - lib\services\api_service.dart:1:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\app_logo.dart:39:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\app_logo.dart:44:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\availability_grid.dart:212:39 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\help_dialog.dart:24:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\help_dialog.dart:131:67 - deprecated_member_use
+   info - 'window' is deprecated and shouldn't be used. Use WidgetTester.platformDispatcher or WidgetTester.view instead. Deprecated to prepare for the upcoming multi-window support. This feature was deprecated after v3.9.0-0.1.pre - test\home_tab_test.dart:27:13 - deprecated_member_use
+   info - 'physicalSizeTestValue' is deprecated and shouldn't be used. Use WidgetTester.view.physicalSize instead. Deprecated to prepare for the upcoming multi-window support. This feature was deprecated after v3.9.0-0.1.pre - test\home_tab_test.dart:27:20 - deprecated_member_use
+   info - 'window' is deprecated and shouldn't be used. Use WidgetTester.platformDispatcher or WidgetTester.view instead. Deprecated to prepare for the upcoming multi-window support. This feature was deprecated after v3.9.0-0.1.pre - test\home_tab_test.dart:28:13 - deprecated_member_use
+   info - 'devicePixelRatioTestValue' is deprecated and shouldn't be used. Use WidgetTester.view.devicePixelRatio instead. Deprecated to prepare for the upcoming multi-window support. This feature was deprecated after v3.9.0-0.1.pre - test\home_tab_test.dart:28:20 - deprecated_member_use
+   info - 'window' is deprecated and shouldn't be used. Use WidgetTester.platformDispatcher or WidgetTester.view instead. Deprecated to prepare for the upcoming multi-window support. This feature was deprecated after v3.9.0-0.1.pre - test\home_tab_test.dart:33:13 - deprecated_member_use
+   info - 'clearPhysicalSizeTestValue' is deprecated and shouldn't be used. Use WidgetTester.view.resetPhysicalSize() instead. Deprecated to prepare for the upcoming multi-window support. This feature was deprecated after v3.9.0-0.1.pre - test\home_tab_test.dart:33:20 - deprecated_member_use
+   info - 'window' is deprecated and shouldn't be used. Use WidgetTester.platformDispatcher or WidgetTester.view instead. Deprecated to prepare for the upcoming multi-window support. This feature was deprecated after v3.9.0-0.1.pre - test\home_tab_test.dart:34:13 - deprecated_member_use
+   info - 'clearDevicePixelRatioTestValue' is deprecated and shouldn't be used. Use WidgetTester.view.resetDevicePixelRatio() instead. Deprecated to prepare for the upcoming multi-window support. This feature was deprecated after v3.9.0-0.1.pre - test\home_tab_test.dart:34:20 - deprecated_member_use
+  error - 'MockApiService.getUsers' ('Future<List<TeamMember>> Function()') isn't a valid override of 'ApiService.getUsers' ('Future<List<TeamMember>> Function({bool includeInactive})') - test\home_tab_test.mocks.dart:290:36 - invalid_override
+  error - 'MockApiService.updateUser' ('Future<void> Function(String?, {String? email, String? fullName, String? roleSystem, int? targetHoursPerMonth, int? targetShiftsPerMonth})') isn't a valid override of 'ApiService.updateUser' ('Future<void> Function(String, {String? email, String? fullName, bool? isActive, String? roleSystem, int? targetHoursPerMonth, int? targetShiftsPerMonth})') - test\home_tab_test.mocks.dart:318:20 - invalid_override
+  error - 'MockApiService.getDashboardHome' ('Future<DashboardHome> Function()') isn't a valid override of 'ApiService.getDashboardHome' ('Future<DashboardHome> Function({DateTime? date})') - test\home_tab_test.mocks.dart:662:33 - invalid_override
+  error - 'FakeApiService.getUsers' ('Future<List<TeamMember>> Function()') isn't a valid override of 'ApiService.getUsers' ('Future<List<TeamMember>> Function({bool includeInactive})') - test\team_tab_test.dart:15:28 - invalid_override
+

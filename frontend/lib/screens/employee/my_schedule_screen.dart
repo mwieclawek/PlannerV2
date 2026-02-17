@@ -290,6 +290,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                                             ),
                                           ),
                                         ],
+                                      ),
                                         if (!isPast) ...[
                                           const SizedBox(height: 8),
                                           SizedBox(
@@ -304,7 +305,6 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                                             ),
                                           ),
                                         ],
-                                      ),
                                       if (isToday) ...[
                                         const SizedBox(height: 12),
                                         SizedBox(
@@ -359,7 +359,8 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                 ],
               ),
             ),
-            );
+          ),
+        );
 
   }
 
