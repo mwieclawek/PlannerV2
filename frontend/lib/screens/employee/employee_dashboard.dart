@@ -105,7 +105,7 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                     setDialogState(() => isLoading = false);
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red),
+                        SnackBar(content: Text('Błąd: $e'), backgroundColor: Theme.of(context).colorScheme.error),
                       );
                     }
                   }
@@ -130,7 +130,7 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
           _selectedIndex == 0 ? 'Mój Grafik' : _selectedIndex == 1 ? 'Moja Dostępność' : 'Obecność',
           style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: _selectedIndex == 0 ? Colors.teal.shade700 : _selectedIndex == 1 ? Colors.blue.shade700 : Colors.purple.shade700,
+        backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -201,9 +201,9 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
+                  color: Theme.of(context).colorScheme.secondaryContainer,
                   border: Border(
-                    bottom: BorderSide(color: Colors.blue.shade200),
+                    bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                   ),
                 ),
                 child: Row(

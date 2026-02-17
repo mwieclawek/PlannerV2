@@ -426,9 +426,48 @@ class ManagerService:
                  "created_at": att.created_at
              })
              
+        # 3. Open Giveaways
+        # Reuse logic from get_open_giveaways but keep it efficient if needed
+        # Calling self.get_open_giveaways() might be slightly inefficient due to re-querying session, 
+        # but it keeps logic DRY. For now, let's call it.
+        # Alternatively, duplicate the simple select if get_open_giveaways does heavy suggestion logic.
+        # get_open_giveaways does suggestions. We probably don't need suggestions on the Dashboard Home widget, just the list.
+        # So let's do a lightweight fetch here.
+        
+        from ..models import ShiftGiveaway, GiveawayStatus
+        open_giveaways_db = self.session.exec(
+            select(ShiftGiveaway).where(ShiftGiveaway.status == GiveawayStatus.OPEN)
+        ).all()
+        
+        open_giveaways = []
+        for g in open_giveaways_db:
+             s = g.schedule
+             if not s: continue
+             
+             shift = self.session.get(ShiftDefinition, s.shift_def_id)
+             role = self.session.get(JobRole, s.role_id)
+             offerer = self.session.get(User, g.offered_by)
+             
+             open_giveaways.append({
+                "id": g.id,
+                "schedule_id": g.schedule_id,
+                "offered_by": g.offered_by,
+                "offered_by_name": offerer.full_name if offerer else "",
+                "status": g.status.value,
+                "created_at": g.created_at,
+                "taken_by": g.taken_by,
+                # Schedule details
+                "date": s.date,
+                "shift_name": shift.name if shift else None,
+                "role_name": role.name if role else None,
+                "start_time": shift.start_time.strftime("%H:%M") if shift else None,
+                "end_time": shift.end_time.strftime("%H:%M") if shift else None,
+             })
+
         return {
             "working_today": working_today,
-            "missing_confirmations": missing_responses
+            "missing_confirmations": missing_responses,
+            "open_giveaways": open_giveaways
         }
 
     # --- Shift Giveaway ---

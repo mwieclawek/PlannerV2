@@ -2,11 +2,11 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 from sqlmodel import SQLModel, Session, create_engine
 from sqlmodel.pool import StaticPool
-from backend.app.main import app
-from backend.app.database import get_session
+from app.main import app
+from app.database import get_session
 from typing import AsyncGenerator, Generator
 from datetime import timedelta
-from backend.app.auth_utils import create_access_token
+from app.auth_utils import create_access_token
 
 # Use in-memory SQLite for tests
 DATABASE_URL = "sqlite://"
@@ -47,8 +47,8 @@ def manager_token_fixture() -> str:
 
 @pytest.fixture(name="auth_headers")
 def auth_headers_fixture(session: Session) -> dict:
-    from backend.app.models import User, RoleSystem
-    from backend.app.auth_utils import get_password_hash
+    from app.models import User, RoleSystem
+    from app.auth_utils import get_password_hash
     
     # Create user
     user = User(
@@ -67,8 +67,8 @@ def auth_headers_fixture(session: Session) -> dict:
 
 @pytest.fixture(name="employee_headers")
 def employee_headers_fixture(session: Session) -> dict:
-    from backend.app.models import User, RoleSystem
-    from backend.app.auth_utils import get_password_hash
+    from app.models import User, RoleSystem
+    from app.auth_utils import get_password_hash
     
     # Create user
     user = User(
@@ -88,12 +88,9 @@ def employee_headers_fixture(session: Session) -> dict:
 @pytest.fixture(name="shift_definition")
 def shift_definition_fixture(session: Session):
     """Create a test shift definition"""
-    from backend.app.models import ShiftDefinition
+    from app.models import ShiftDefinition
     from sqlmodel import select
     
-    # Check if already exists (need to use time objects for comparison if stored as such, 
-    # but here we can rely on Pydantic/SQLAlchemy handling if consistently used)
-    # Ideally, clean DB between tests avoids this, but let's be safe.
     from datetime import time
     
     # Simple check or just create new one
@@ -110,16 +107,8 @@ def shift_definition_fixture(session: Session):
 @pytest.fixture(name="job_role")
 def job_role_fixture(session: Session):
     """Create a test job role"""
-    from backend.app.models import JobRole
+    from app.models import JobRole
     from sqlmodel import select
-    
-    # Check if already exists
-    existing = session.exec(
-        select(JobRole).where(JobRole.name == "Test Role")
-    ).first()
-    
-    if existing:
-        return existing
     
     role = JobRole(
         name="Test Role",
@@ -130,3 +119,12 @@ def job_role_fixture(session: Session):
     session.refresh(role)
     return role
 
+# --- Aliases for compatibility with other tests ---
+
+@pytest.fixture(name="manager_token_headers")
+def manager_token_headers_fixture(auth_headers):
+    return auth_headers
+
+@pytest.fixture(name="employee_token_headers")
+def employee_token_headers_fixture(employee_headers):
+    return employee_headers

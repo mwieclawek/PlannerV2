@@ -1,18 +1,19 @@
 import pytest
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from sqlmodel import Session, select
 from app.models import User, RoleSystem
 from app.auth_utils import get_password_hash
 
-def test_create_user_success(client: TestClient, manager_token_headers, session: Session):
-    response = client.post(
+@pytest.mark.asyncio
+async def test_create_user_success(client: AsyncClient, manager_token_headers, session: Session):
+    response = await client.post(
         "/manager/users",
         headers=manager_token_headers,
         json={
             "username": "newuser",
             "password": "password123",
             "full_name": "New User",
-            "role_system": "employee",
+            "role_system": "EMPLOYEE",
             "email": "newuser@example.com"
         }
     )
@@ -27,20 +28,22 @@ def test_create_user_success(client: TestClient, manager_token_headers, session:
     assert user is not None
     assert user.email == "newuser@example.com"
 
-def test_create_user_not_manager(client: TestClient, employee_token_headers):
-    response = client.post(
+@pytest.mark.asyncio
+async def test_create_user_not_manager(client: AsyncClient, employee_token_headers):
+    response = await client.post(
         "/manager/users",
         headers=employee_token_headers,
         json={
             "username": "hacker",
             "password": "password123",
             "full_name": "Hacker",
-            "role_system": "manager"
+            "role_system": "MANAGER"
         }
     )
     assert response.status_code == 403
 
-def test_create_user_duplicate_username(client: TestClient, manager_token_headers, session: Session):
+@pytest.mark.asyncio
+async def test_create_user_duplicate_username(client: AsyncClient, manager_token_headers, session: Session):
     # Create valid user first
     user = User(
         username="existing",
@@ -51,20 +54,21 @@ def test_create_user_duplicate_username(client: TestClient, manager_token_header
     session.add(user)
     session.commit()
     
-    response = client.post(
+    response = await client.post(
         "/manager/users",
         headers=manager_token_headers,
         json={
             "username": "existing",
             "password": "password123",
             "full_name": "Duplicate",
-            "role_system": "employee"
+            "role_system": "EMPLOYEE"
         }
     )
     assert response.status_code == 400
     assert "Username already exists" in response.json()["detail"]
 
-def test_create_user_duplicate_email(client: TestClient, manager_token_headers, session: Session):
+@pytest.mark.asyncio
+async def test_create_user_duplicate_email(client: AsyncClient, manager_token_headers, session: Session):
     # Create valid user first
     user = User(
         username="user1",
@@ -76,7 +80,7 @@ def test_create_user_duplicate_email(client: TestClient, manager_token_headers, 
     session.add(user)
     session.commit()
     
-    response = client.post(
+    response = await client.post(
         "/manager/users",
         headers=manager_token_headers,
         json={
@@ -84,7 +88,7 @@ def test_create_user_duplicate_email(client: TestClient, manager_token_headers, 
             "email": "email@example.com",
             "password": "password123",
             "full_name": "User 2",
-            "role_system": "employee"
+            "role_system": "EMPLOYEE"
         }
     )
     assert response.status_code == 400

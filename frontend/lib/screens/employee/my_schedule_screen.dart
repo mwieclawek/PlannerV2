@@ -178,7 +178,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                             side: isToday 
-                                ? BorderSide(color: Colors.teal.shade700, width: 2)
+                                ? BorderSide(color: Theme.of(context).colorScheme.primary, width: 2)
                                 : BorderSide.none,
                           ),
                           child: Padding(
@@ -194,7 +194,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                                         vertical: 6,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: isToday ? Colors.orange.shade700 : Colors.teal.shade700,
+                                        color: isToday ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.primary,
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Text(
@@ -208,7 +208,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                                     ),
                                     if (isToday) const SizedBox(width: 8),
                                     if (isToday)
-                                      Icon(Icons.star, size: 16, color: Colors.orange.shade700),
+                                      Icon(Icons.star, size: 16, color: Theme.of(context).colorScheme.secondary),
                                     const SizedBox(width: 12),
                                     Text(
                                       DateFormat('d MMMM yyyy', 'pl_PL').format(date),
@@ -233,12 +233,12 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                                           Container(
                                             padding: const EdgeInsets.all(12),
                                             decoration: BoxDecoration(
-                                              color: isToday ? Colors.orange.shade50 : Colors.teal.shade50,
+                                              color: isToday ? Theme.of(context).colorScheme.secondaryContainer : Theme.of(context).colorScheme.primaryContainer,
                                               borderRadius: BorderRadius.circular(8),
                                             ),
                                             child: Icon(
                                               Icons.access_time,
-                                              color: isToday ? Colors.orange.shade700 : Colors.teal.shade700,
+                                              color: isToday ? Theme.of(context).colorScheme.onSecondaryContainer : Theme.of(context).colorScheme.onPrimaryContainer,
                                               size: 24,
                                             ),
                                           ),
@@ -314,8 +314,8 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                                             icon: const Icon(Icons.how_to_reg),
                                             label: const Text('Zarejestruj obecność'),
                                             style: OutlinedButton.styleFrom(
-                                              foregroundColor: Colors.teal.shade700,
-                                              side: BorderSide(color: Colors.teal.shade700),
+                                              foregroundColor: Theme.of(context).colorScheme.primary,
+                                              side: BorderSide(color: Theme.of(context).colorScheme.primary),
                                               padding: const EdgeInsets.symmetric(vertical: 12),
                                             ),
                                           ),
@@ -336,19 +336,19 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                   
                   // Info Card
                   Card(
-                    color: Colors.blue.shade50,
+                    color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.5),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          Icon(Icons.info_outline, color: Colors.blue.shade700),
+                          Icon(Icons.info_outline, color: Theme.of(context).colorScheme.onSecondaryContainer),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'Wyświetlane są tylko opublikowane grafiki. Jeśli nie widzisz zmian, skontaktuj się z managerem.',
                               style: GoogleFonts.inter(
                                 fontSize: 13,
-                                color: Colors.blue.shade900,
+                                color: Theme.of(context).colorScheme.onSecondaryContainer,
                               ),
                             ),
                           ),
@@ -480,7 +480,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd rejestracji: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Błąd rejestracji: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     }
@@ -530,7 +530,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Błąd: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     }

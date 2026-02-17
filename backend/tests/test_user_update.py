@@ -6,10 +6,10 @@ import pytest
 from uuid import uuid4
 from sqlmodel import Session
 
-from backend.app.models import User, JobRole, UserJobRoleLink, RoleSystem
-from backend.app.schemas import UserResponse, UserUpdate
-from backend.app.services.manager_service import ManagerService
-from backend.app.auth_utils import get_password_hash
+from app.models import User, JobRole, UserJobRoleLink, RoleSystem
+from app.schemas import UserResponse, UserUpdate
+from app.services.manager_service import ManagerService
+from app.auth_utils import get_password_hash
 
 
 class TestUserResponseSerialization:

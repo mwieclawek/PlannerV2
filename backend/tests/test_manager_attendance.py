@@ -6,11 +6,11 @@ import pytest
 from datetime import date, time, timedelta
 from uuid import uuid4
 
-from backend.app.models import (
+from app.models import (
     User, RoleSystem, Attendance, AttendanceStatus,
     Schedule, ShiftDefinition, JobRole, Availability, AvailabilityStatus
 )
-from backend.app.auth_utils import get_password_hash, create_access_token
+from app.auth_utils import get_password_hash, create_access_token
 
 
 # ---- Fixtures ----

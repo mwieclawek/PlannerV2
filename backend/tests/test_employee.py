@@ -6,7 +6,7 @@ import pytest
 from httpx import AsyncClient
 from datetime import date, timedelta
 
-from backend.app.models import ShiftDefinition, Availability, Schedule, JobRole, AvailabilityStatus
+from app.models import ShiftDefinition, Availability, Schedule, JobRole, AvailabilityStatus
 
 
 class TestEmployeeAvailability:
@@ -32,7 +32,7 @@ class TestEmployeeAvailability:
         session, shift_definition
     ):
         """Test getting availability when data exists"""
-        from backend.app.models import User
+        from app.models import User
         from sqlmodel import select
         
         # Get user from token
@@ -157,7 +157,7 @@ class TestEmployeeSchedule:
         session, shift_definition, job_role
     ):
         """Test getting schedule when data exists"""
-        from backend.app.models import User
+        from app.models import User
         from sqlmodel import select
         
         user = session.exec(select(User).where(User.email == "employee@test.com")).first()

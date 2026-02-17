@@ -6,7 +6,7 @@ import pytest
 from datetime import timedelta
 from jose import jwt, JWTError
 
-from backend.app.auth_utils import (
+from app.auth_utils import (
     verify_password, 
     get_password_hash, 
     create_access_token,

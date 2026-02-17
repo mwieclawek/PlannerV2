@@ -60,7 +60,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${user.fullName} został $actionText'),
-            backgroundColor: newActive ? Colors.green : Colors.orange,
+            backgroundColor: newActive ? Colors.green : Theme.of(context).colorScheme.tertiary,
           ),
         );
       }
@@ -317,7 +317,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Błąd: $e'),
-            backgroundColor: Colors.red.shade600,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -380,10 +380,10 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                 leading: Stack(
                   children: [
                     CircleAvatar(
-                      backgroundColor: user.isActive ? Colors.indigo.shade100 : Colors.grey.shade300,
+                      backgroundColor: user.isActive ? Theme.of(context).colorScheme.primaryContainer : Colors.grey.shade300,
                       child: Text(
                         user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?',
-                        style: TextStyle(color: user.isActive ? Colors.indigo.shade700 : Colors.grey.shade600),
+                        style: TextStyle(color: user.isActive ? Theme.of(context).colorScheme.onPrimaryContainer : Colors.grey.shade600),
                       ),
                     ),
                     if (!user.isActive)
@@ -392,7 +392,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                         child: Container(
                           width: 12, height: 12,
                           decoration: BoxDecoration(
-                            color: Colors.red.shade400,
+                            color: Theme.of(context).colorScheme.error,
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 1.5),
                           ),
@@ -412,13 +412,13 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.red.shade50,
+                          color: Theme.of(context).colorScheme.errorContainer,
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: Colors.red.shade200),
+                          border: Border.all(color: Theme.of(context).colorScheme.error.withOpacity(0.5)),
                         ),
                         child: Text(
                           'NIEAKTYWNY',
-                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.red.shade600),
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.error),
                         ),
                       ),
                   ],
@@ -433,14 +433,14 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(Icons.calendar_today, size: 14, color: Colors.indigo.shade400),
+                          Icon(Icons.calendar_today, size: 14, color: Theme.of(context).colorScheme.primary),
                           const SizedBox(width: 4),
                           Text(
                             'Następna: ${user.nextShift!.shiftName} (${user.nextShift!.roleName})',
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: Colors.indigo.shade700,
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ],
@@ -506,7 +506,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                       child: ListTile(
                         leading: Icon(
                           user.isActive ? Icons.person_off : Icons.person,
-                          color: user.isActive ? Colors.orange : Colors.green,
+                          color: user.isActive ? Theme.of(context).colorScheme.tertiary : Colors.green,
                         ),
                         title: Text(user.isActive ? 'Dezaktywuj' : 'Aktywuj'),
                         contentPadding: EdgeInsets.zero,
@@ -686,7 +686,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                    if (context.mounted) {
                       setDialogState(() => isLoading = false);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red),
+                        SnackBar(content: Text('Błąd: $e'), backgroundColor: Theme.of(context).colorScheme.error),
                       );
                    }
                 }

@@ -114,7 +114,7 @@ class TestUserManagementEdgeCases:
         self, client: AsyncClient, auth_headers: dict, session
     ):
         """Test assigning a non-existent role to a user"""
-        from backend.app.models import User
+        from app.models import User
         from sqlmodel import select
         
         # Get any existing user
@@ -147,7 +147,7 @@ class TestUserManagementEdgeCases:
         self, client: AsyncClient, auth_headers: dict, session
     ):
         """Test resetting password with empty string"""
-        from backend.app.models import User
+        from app.models import User
         from sqlmodel import select
         
         user = session.exec(select(User)).first()

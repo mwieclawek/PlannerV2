@@ -36,9 +36,9 @@ class _SetupTabState extends State<SetupTab> with SingleTickerProviderStateMixin
           color: Colors.white,
           child: TabBar(
             controller: _tabController,
-            labelColor: Colors.indigo.shade700,
-            unselectedLabelColor: Colors.grey.shade600,
-            indicatorColor: Colors.indigo.shade700,
+            labelColor: Theme.of(context).colorScheme.primary,
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+            indicatorColor: Theme.of(context).colorScheme.primary,
             tabs: const [
               Tab(text: 'Restauracja', icon: Icon(Icons.store)),
               Tab(text: 'Role i Zmiany', icon: Icon(Icons.people_alt)),
@@ -136,7 +136,7 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red.shade600),
+          SnackBar(content: Text('Błąd: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     } finally {
@@ -222,8 +222,8 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
                                 : const Icon(Icons.save),
                             label: Text(_isSavingConfig ? 'Zapisywanie...' : 'Zapisz ustawienia'),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.indigo.shade700,
-                              foregroundColor: Colors.white,
+                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              foregroundColor: Theme.of(context).colorScheme.onPrimary,
                             ),
                           ),
                         ),

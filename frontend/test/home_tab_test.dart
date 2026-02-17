@@ -51,7 +51,7 @@ void main() {
   testWidgets('HomeTab displays loading indicator initially', (WidgetTester tester) async {
     // Arrange
     when(mockApiService.getDashboardHome(date: anyNamed('date'))).thenAnswer(
-      (_) async => Future.delayed(const Duration(seconds: 1), () => DashboardHome(workingToday: [], missingConfirmations: [])),
+      (_) async => Future.delayed(const Duration(seconds: 1), () => DashboardHome(workingToday: [], missingConfirmations: [], openGiveaways: [])),
     );
 
     // Act
@@ -59,6 +59,10 @@ void main() {
 
     // Assert
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    
+    // Drain the timer
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
   });
 
   testWidgets('HomeTab displays data when loaded', (WidgetTester tester) async {
@@ -72,6 +76,7 @@ void main() {
         )
       ],
       missingConfirmations: [],
+      openGiveaways: [],
     );
 
     when(mockApiService.getDashboardHome(date: anyNamed('date'))).thenAnswer((_) async => dashboardData);

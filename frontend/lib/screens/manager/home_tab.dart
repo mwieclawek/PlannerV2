@@ -145,6 +145,12 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                       const SizedBox(height: 12),
                       _buildDayTimeline(data.workingToday),
                       const SizedBox(height: 32),
+                      
+                      _buildSectionTitle('Otwarte oddania zmian', Icons.swap_horiz_rounded),
+                      const SizedBox(height: 12),
+                      _buildOpenGiveawaysList(data.openGiveaways),
+                      const SizedBox(height: 32),
+                                            
                       _buildSectionTitle('Zaległe potwierdzenia', Icons.warning_amber_rounded),
                       const SizedBox(height: 12),
                       _buildMissingConfirmationsList(data.missingConfirmations),
@@ -658,7 +664,10 @@ class _HomeTabState extends ConsumerState<HomeTab> {
         final dateStr = item['date'] ?? '';
 
         return Card(
-          elevation: 1,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.5))),
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
             leading: CircleAvatar(
@@ -668,12 +677,141 @@ class _HomeTabState extends ConsumerState<HomeTab> {
             title: Text(userName, style: const TextStyle(fontWeight: FontWeight.w600)),
             subtitle: Text('Brak potwierdzenia obecności z dnia $dateStr'),
             trailing: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: colorScheme.primary,
+                  side: BorderSide(color: colorScheme.primary.withOpacity(0.5))),
               onPressed: () {
+                // Navigate to attendance or show details
+                // Ideally this would navigate to a specific attendance resolution screen
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Przejdź do zakładki "Obecności", aby zarządzać')),
                 );
               },
               child: const Text('Sprawdź'),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ============== OPEN GIVEAWAYS ==============
+
+  Widget _buildOpenGiveawaysList(List<ShiftGiveaway> giveaways) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (giveaways.isEmpty) {
+      return Card(
+        color: colorScheme.surfaceContainerLow.withOpacity(0.5),
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Icon(Icons.check_circle_outline, color: colorScheme.primary.withOpacity(0.6)),
+              const SizedBox(width: 12),
+              Text(
+                'Brak otwartych próśb o oddanie zmiany',
+                style: TextStyle(color: colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: giveaways.length,
+      itemBuilder: (context, index) {
+        final giveaway = giveaways[index];
+        final dateStr = giveaway.date ?? 'Nieznana data';
+        final shiftInfo = '${giveaway.shiftName ?? 'Zmiana'} (${giveaway.startTime} - ${giveaway.endTime})';
+
+        return Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: colorScheme.outlineVariant)),
+          margin: const EdgeInsets.only(bottom: 8),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: Colors.blue.shade100,
+                      child: Icon(Icons.swap_horiz, color: Colors.blue.shade700, size: 18),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            giveaway.offeredByName,
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                          Text(
+                            'Chce oddać zmianę: $dateStr',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        giveaway.roleName ?? '',
+                        style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.primary),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Text(shiftInfo,
+                        style:
+                            TextStyle(fontSize: 13, color: colorScheme.onSurface))),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonal(
+                    onPressed: () {
+                         // Navigation to Schedule Tab or specific Giveaway handling dialog
+                         // For now, remind user where to go
+                         ScaffoldMessenger.of(context).showSnackBar(
+                           const SnackBar(content: Text('Zarządzanie oddaniami dostępne w Grafik -> Oczekujące')),
+                         );
+                    },
+                    child: const Text('Zarządzaj'),
+                  ),
+                ),
+              ],
             ),
           ),
         );

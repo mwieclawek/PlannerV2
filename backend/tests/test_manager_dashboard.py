@@ -1,11 +1,13 @@
 
-from fastapi.testclient import TestClient
+from httpx import AsyncClient
+import pytest
 from sqlmodel import Session, select
 from app.models import User, RoleSystem, ShiftDefinition, JobRole, Schedule, Attendance, AttendanceStatus
 from datetime import date, timedelta, time, datetime
 from app.auth_utils import create_access_token
 
-def test_get_users_with_next_shift(client: TestClient, session: Session, manager_token_headers):
+@pytest.mark.asyncio
+async def test_get_users_with_next_shift(client: AsyncClient, session: Session, manager_token_headers):
     # Setup: Create a shift and schedule for an employee
     shift = ShiftDefinition(name="Test Shift", start_time=time(9,0), end_time=time(17,0), applicable_days="0,1,2,3,4,5,6")
     session.add(shift)
@@ -36,7 +38,7 @@ def test_get_users_with_next_shift(client: TestClient, session: Session, manager
     session.add(schedule)
     session.commit()
     
-    response = client.get("/manager/users", headers=manager_token_headers)
+    response = await client.get("/manager/users", headers=manager_token_headers)
     assert response.status_code == 200
     users = response.json()
     
@@ -47,7 +49,8 @@ def test_get_users_with_next_shift(client: TestClient, session: Session, manager
     assert target_user["next_shift"]["role_name"] == "Test Role"
     assert target_user["next_shift"]["date"] == today.isoformat()
 
-def test_get_user_stats(client: TestClient, session: Session, manager_token_headers):
+@pytest.mark.asyncio
+async def test_get_user_stats(client: AsyncClient, session: Session, manager_token_headers):
     # Create employee
     employee = User(
         username="employee_stats", 
@@ -72,7 +75,7 @@ def test_get_user_stats(client: TestClient, session: Session, manager_token_head
         session.add(att)
     session.commit()
     
-    response = client.get(f"/manager/users/{employee.id}/stats", headers=manager_token_headers)
+    response = await client.get(f"/manager/users/{employee.id}/stats", headers=manager_token_headers)
     assert response.status_code == 200
     data = response.json()
     
@@ -83,7 +86,8 @@ def test_get_user_stats(client: TestClient, session: Session, manager_token_head
     # If today is 1st of month, previous days might be previous month.
     # But count should assume valid range.
 
-def test_dashboard_home(client: TestClient, session: Session, manager_token_headers):
+@pytest.mark.asyncio
+async def test_dashboard_home(client: AsyncClient, session: Session, manager_token_headers):
     # Setup
     shift = ShiftDefinition(name="Dash Shift", start_time=time(10,0), end_time=time(18,0), applicable_days="0,1,2,3,4,5,6")
     session.add(shift)
@@ -119,7 +123,7 @@ def test_dashboard_home(client: TestClient, session: Session, manager_token_head
     
     session.commit()
     
-    response = client.get("/manager/dashboard/home", headers=manager_token_headers)
+    response = await client.get("/manager/dashboard/home", headers=manager_token_headers)
     assert response.status_code == 200
     data = response.json()
     

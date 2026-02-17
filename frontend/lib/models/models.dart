@@ -541,22 +541,13 @@ class UserStats {
 
 class DashboardHome {
   final List<ScheduleEntry> workingToday;
-  final List<Map<String, dynamic>> missingConfirmations; 
-  // keeping missingConfirmations as generic map or create a specific class if needed, 
-  // but backend sends AttendanceResponse structure effectively.
-  // Let's reuse AttendanceResponse-like structure or just Map if simple.
-  // Backend sends List<AttendanceResponse>. Let's see AttendanceResponse in backend... 
-  // it has id, user_id, date, etc.
-  // In frontend we don't have exactly AttendanceResponse class yet, 
-  // we have methods returning Map.
-  // Let's create a simple wrapper or just use List<Map<String, dynamic>> for now 
-  // to avoid over-engineering if we don't need strict typing yet.
-  // Actually, let's look at `getAllAttendance` -> returns List<Map>.
-  // So List<Map<String, dynamic>> is consistent with existing patterns.
+  final List<Map<String, dynamic>> missingConfirmations;
+  final List<ShiftGiveaway> openGiveaways;
 
   DashboardHome({
     required this.workingToday,
     required this.missingConfirmations,
+    required this.openGiveaways,
   });
 
   factory DashboardHome.fromJson(Map<String, dynamic> json) {
@@ -565,6 +556,9 @@ class DashboardHome {
           .map((e) => ScheduleEntry.fromJson(e))
           .toList(),
       missingConfirmations: (json['missing_confirmations'] as List).cast<Map<String, dynamic>>(),
+      openGiveaways: (json['open_giveaways'] as List?)
+          ?.map((e) => ShiftGiveaway.fromJson(e))
+          .toList() ?? [],
     );
   }
 }

@@ -8,9 +8,9 @@ import httpx
 from datetime import date, timedelta, datetime
 import uuid
 from sqlmodel import Session, select
-from backend.app.database import engine
-from backend.app.models import User
-from backend.app.auth_utils import get_password_hash
+from app.database import engine
+from app.models import User
+from app.auth_utils import get_password_hash
 
 BASE_URL = "http://127.0.0.1:8000"
 

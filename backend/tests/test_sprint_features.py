@@ -1,6 +1,6 @@
 import pytest
-from backend.app.models import RestaurantConfig, User, RoleSystem
-from backend.app.auth_utils import create_access_token, get_password_hash
+from app.models import RestaurantConfig, User, RoleSystem
+from app.auth_utils import create_access_token, get_password_hash
 from uuid import uuid4
 
 @pytest.fixture(name="manager_token")

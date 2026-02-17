@@ -1,8 +1,8 @@
 import pytest
 from datetime import date
 from sqlmodel import Session, select
-from backend.app.models import User, ShiftDefinition, JobRole, StaffingRequirement, RoleSystem, UserJobRoleLink
-from backend.app.services.solver import SolverService
+from app.models import User, ShiftDefinition, JobRole, StaffingRequirement, RoleSystem, UserJobRoleLink
+from app.services.solver import SolverService
 
 @pytest.mark.asyncio
 async def test_no_disposition_means_unavailable(session: Session):

@@ -1,8 +1,8 @@
 import pytest
 from datetime import date, time
 from uuid import uuid4
-from backend.app.models import User, RoleSystem, Attendance, AttendanceStatus
-from backend.app.auth_utils import get_password_hash, create_access_token
+from app.models import User, RoleSystem, Attendance, AttendanceStatus
+from app.auth_utils import get_password_hash, create_access_token
 
 @pytest.fixture(name="manager_with_token")
 def manager_with_token_fixture(session):

@@ -6,13 +6,13 @@ import pytest
 from datetime import date, timedelta, datetime
 from sqlmodel import Session
 
-from backend.app.models import (
+from app.models import (
     User, JobRole, ShiftDefinition, Availability, 
     StaffingRequirement, Schedule, RoleSystem, AvailabilityStatus,
     UserJobRoleLink
 )
-from backend.app.services.solver import SolverService
-from backend.app.auth_utils import get_password_hash
+from app.services.solver import SolverService
+from app.auth_utils import get_password_hash
 
 
 class TestSolverBasic:
@@ -81,6 +81,15 @@ class TestSolverBasic:
             min_count=1
         )
         session.add(req)
+        session.commit()
+
+        # Add availability
+        session.add(Availability(
+            user_id=user.id,
+            date=today,
+            shift_def_id=shift_definition.id,
+            status=AvailabilityStatus.AVAILABLE
+        ))
         session.commit()
         
         service = SolverService(session)
@@ -170,12 +179,17 @@ class TestSolverConstraints:
         session.add(req1)
         session.add(req2)
         session.commit()
+
+        # Add availability for both shifts
+        session.add(Availability(user_id=user.id, date=today, shift_def_id=shift1.id, status=AvailabilityStatus.AVAILABLE))
+        session.add(Availability(user_id=user.id, date=today, shift_def_id=shift2.id, status=AvailabilityStatus.AVAILABLE))
+        session.commit()
         
         service = SolverService(session)
         result = service.solve(today, today, save=False)
         
         # With split shifts allowed, employee should get both
-        user_assignments = [s for s in result.get("schedules", []) if str(s.user_id) == str(user.id)]
+        user_assignments = [s for s in result.get("schedules", []) if str(s["user_id"]) == str(user.id)]
         assert len(user_assignments) == 2
 
     def test_solve_overlap_30min_allowed(self, session: Session, job_role):
@@ -196,12 +210,17 @@ class TestSolverConstraints:
         session.add(StaffingRequirement(date=today, shift_def_id=shift1.id, role_id=job_role.id, min_count=1))
         session.add(StaffingRequirement(date=today, shift_def_id=shift2.id, role_id=job_role.id, min_count=1))
         session.commit()
+
+        # Add availability
+        session.add(Availability(user_id=user.id, date=today, shift_def_id=shift1.id, status=AvailabilityStatus.AVAILABLE))
+        session.add(Availability(user_id=user.id, date=today, shift_def_id=shift2.id, status=AvailabilityStatus.AVAILABLE))
+        session.commit()
         
         service = SolverService(session)
         result = service.solve(today, today, save=False)
         
         # Should be allowed (15m overlap <= 30m)
-        assert len([s for s in result.get("schedules", []) if str(s.user_id) == str(user.id)]) == 2
+        assert len([s for s in result.get("schedules", []) if str(s["user_id"]) == str(user.id)]) == 2
 
     def test_solve_overlap_huge_forbidden(self, session: Session, job_role):
         """Test that > 30 min overlap is NOT allowed"""
@@ -226,7 +245,7 @@ class TestSolverConstraints:
         result = service.solve(today, today, save=False)
         
         # Should NOT be allowed (60m overlap > 30m)
-        assert len([s for s in result.get("schedules", []) if str(s.user_id) == str(user.id)]) <= 1
+        assert len([s for s in result.get("schedules", []) if str(s["user_id"]) == str(user.id)]) <= 1
 
     def test_solve_respects_target_hours(self, session: Session, job_role):
         """Test that solver respects target_hours_per_month"""
@@ -253,6 +272,11 @@ class TestSolverConstraints:
         # Require 1 person for both days (8+8 = 16 hours)
         session.add(StaffingRequirement(date=today, shift_def_id=shift1.id, role_id=job_role.id, min_count=1))
         session.add(StaffingRequirement(date=tomorrow, shift_def_id=shift1.id, role_id=job_role.id, min_count=1))
+        session.commit()
+
+        # Add availability
+        session.add(Availability(user_id=user.id, date=today, shift_def_id=shift1.id, status=AvailabilityStatus.AVAILABLE))
+        session.add(Availability(user_id=user.id, date=tomorrow, shift_def_id=shift1.id, status=AvailabilityStatus.AVAILABLE))
         session.commit()
         
         service = SolverService(session)
@@ -352,7 +376,8 @@ class TestSolverPreferences:
         if result["count"] == 1:
             assigned = result["schedules"][0]
             # Should prefer user1 (PREFERRED > NEUTRAL)
-            assert str(assigned.user_id) == str(user1.id)
+            # assigned is a dict when save=False
+            assert str(assigned["user_id"]) == str(user1.id)
 
 
 class TestSolverWarnings:
@@ -444,6 +469,11 @@ class TestSolverEdgeCases:
         req2 = StaffingRequirement(date=tomorrow, shift_def_id=shift_definition.id, role_id=job_role.id, min_count=1)
         session.add(req1)
         session.add(req2)
+        session.commit()
+
+        # Add availability
+        session.add(Availability(user_id=user.id, date=today, shift_def_id=shift_definition.id, status=AvailabilityStatus.AVAILABLE))
+        session.add(Availability(user_id=user.id, date=tomorrow, shift_def_id=shift_definition.id, status=AvailabilityStatus.AVAILABLE))
         session.commit()
         
         service = SolverService(session)

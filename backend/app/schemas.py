@@ -290,10 +290,6 @@ class AttendanceResponse(AttendanceBase):
     class Config:
         from_attributes = True
 
-class DashboardHomeResponse(BaseModel):
-    working_today: List[ScheduleResponse]
-    missing_confirmations: List[AttendanceResponse]
-
 # --- Shift Giveaway ---
 class ShiftGiveawayResponse(BaseModel):
     id: UUID
@@ -324,3 +320,8 @@ class ShiftGiveawayWithSuggestions(ShiftGiveawayResponse):
 
 class GiveawayReassignRequest(BaseModel):
     new_user_id: UUID
+
+class DashboardHomeResponse(BaseModel):
+    working_today: List[ScheduleResponse]
+    missing_confirmations: List[AttendanceResponse]
+    open_giveaways: List[ShiftGiveawayResponse]

@@ -88,7 +88,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Anuluj')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.tertiary),
             onPressed: () {
               Navigator.pop(ctx);
               onDiscard();
@@ -269,7 +269,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         builder: (ctx) => AlertDialog(
           title: Row(
             children: [
-              Icon(Icons.info_outline, color: Colors.blue.shade600),
+              Icon(Icons.info_outline, color: Theme.of(ctx).colorScheme.primary),
               const SizedBox(width: 8),
               const Text('Informacja'),
             ],
@@ -300,7 +300,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Przypisanie dodane (zapisz aby zachować)'),
-          backgroundColor: Colors.blue.shade600,
+          backgroundColor: Theme.of(context).colorScheme.primary,
           action: SnackBarAction(
             label: 'Zapisz',
             textColor: Colors.white,
@@ -338,12 +338,12 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
             child: const Text('Zamknij'),
           ),
           FilledButton.tonal(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade100),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.errorContainer),
             onPressed: () {
               Navigator.pop(context);
               _removeLocalAssignment(entry.id);
             },
-            child: Text('Usuń', style: TextStyle(color: Colors.red.shade700)),
+            child: Text('Usuń', style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ),
         ],
       ),
@@ -361,7 +361,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Przypisanie usunięte (zapisz aby zachować)'),
-          backgroundColor: Colors.orange.shade600,
+          backgroundColor: Theme.of(context).colorScheme.tertiary,
           action: SnackBarAction(
             label: 'Zapisz',
             textColor: Colors.white,
@@ -405,7 +405,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       setState(() => _isSaving = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd zapisu: $e'), backgroundColor: Colors.red.shade600),
+          SnackBar(content: Text('Błąd zapisu: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     }
@@ -422,7 +422,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Anuluj')),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.orange),
+              style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.tertiary),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Kontynuuj'),
             ),
@@ -518,9 +518,9 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text('⚠ Nie udało się wygenerować grafiku - sprawdź wymagania i dostępność'),
-              backgroundColor: Colors.orange,
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
         }
@@ -618,7 +618,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                         style: const TextStyle(fontSize: 16),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.indigo.shade700,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -648,7 +648,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                           style: const TextStyle(fontSize: 16),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade600,
+                          backgroundColor: Theme.of(context).colorScheme.secondary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -684,6 +684,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               ),
             ),
             const SizedBox(height: 12),
+            const SizedBox(height: 12),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -694,7 +695,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                       children: [
                         Icon(
                           Icons.warning,
-                          color: Colors.orange,
+                          color: Theme.of(context).colorScheme.error,
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -702,6 +703,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                           style: GoogleFonts.inter(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.error,
                           ),
                         ),
                       ],
@@ -715,9 +717,9 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
+                        color: Theme.of(context).colorScheme.errorContainer.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.orange.shade200),
+                        border: Border.all(color: Theme.of(context).colorScheme.errorContainer),
                         ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -726,6 +728,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                             'Możliwe przyczyny:',
                             style: GoogleFonts.inter(
                               fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onErrorContainer,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -733,7 +736,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                             '• Za mało pracowników z odpowiednimi rolami\n'
                             '• Zbyt wiele osób niedostępnych\n'
                             '• Wymagania przekraczają dostępność',
-                            style: GoogleFonts.inter(fontSize: 13),
+                            style: GoogleFonts.inter(fontSize: 13, color: Theme.of(context).colorScheme.onErrorContainer),
                           ),
                         ],
                       ),
@@ -768,7 +771,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           
           // Instructions
           Card(
-            color: Colors.blue.shade50,
+            color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.4),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -776,14 +779,14 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.info_outline, color: Colors.blue.shade700),
+                      Icon(Icons.info_outline, color: Theme.of(context).colorScheme.onSecondaryContainer),
                       const SizedBox(width: 8),
                       Text(
                         'Jak to działa?',
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.blue.shade900,
+                          color: Theme.of(context).colorScheme.onSecondaryContainer,
                         ),
                       ),
                     ],
@@ -796,7 +799,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                     '4. Kliknij "Generuj Grafik" - algorytm Google OR-Tools automatycznie przypisze pracowników',
                     style: GoogleFonts.inter(
                       fontSize: 14,
-                      color: Colors.blue.shade900,
+                      color: Theme.of(context).colorScheme.onSecondaryContainer,
                     ),
                   ),
                 ],

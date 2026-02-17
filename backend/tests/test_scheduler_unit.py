@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from datetime import date, timedelta
 from uuid import uuid4
 
-from backend.app.models import Schedule, ShiftDefinition, JobRole
+from app.models import Schedule, ShiftDefinition, JobRole
 
 
 class TestScheduleList:
@@ -33,7 +33,7 @@ class TestScheduleList:
         session, shift_definition, job_role
     ):
         """Test listing schedules with existing data"""
-        from backend.app.models import User
+        from app.models import User
         from sqlmodel import select
         
         user = session.exec(select(User)).first()
@@ -150,7 +150,7 @@ class TestSchedulePublish:
         session, shift_definition, job_role
     ):
         """Test publishing existing schedules"""
-        from backend.app.models import User
+        from app.models import User
         from sqlmodel import select
         
         user = session.exec(select(User)).first()
@@ -197,7 +197,7 @@ class TestManualAssignment:
         session, shift_definition, job_role
     ):
         """Test creating manual assignment"""
-        from backend.app.models import User
+        from app.models import User
         from sqlmodel import select
         
         user = session.exec(select(User)).first()
@@ -224,7 +224,7 @@ class TestManualAssignment:
         session, shift_definition, job_role
     ):
         """Test updating existing assignment for same user/date"""
-        from backend.app.models import User
+        from app.models import User
         from sqlmodel import select
         
         user = session.exec(select(User)).first()
@@ -263,7 +263,7 @@ class TestManualAssignment:
         session, shift_definition, job_role
     ):
         """Test removing an assignment"""
-        from backend.app.models import User
+        from app.models import User
         from sqlmodel import select
         
         user = session.exec(select(User)).first()
@@ -343,7 +343,7 @@ class TestBatchSave:
         session, shift_definition, job_role
     ):
         """Test saving batch with items"""
-        from backend.app.models import User
+        from app.models import User
         from sqlmodel import select
         
         user = session.exec(select(User)).first()
