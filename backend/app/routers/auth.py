@@ -1,3 +1,5 @@
+import os
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
@@ -17,7 +19,9 @@ def register(user_in: UserCreate, session: Session = Depends(get_session)):
     
     # PIN Validation for Managers
     if user_in.role_system == RoleSystem.MANAGER:
-        if user_in.manager_pin != "1234":
+        # Default to '1234' if not set, for backward compatibility
+        manager_pin = os.getenv("MANAGER_REGISTRATION_PIN", "1234")
+        if user_in.manager_pin != manager_pin:
             raise HTTPException(status_code=403, detail="Invalid Manager PIN")
 
     hashed_password = get_password_hash(user_in.password)

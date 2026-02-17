@@ -33,6 +33,15 @@
 - **Auto-kolor Ról**: Automatyczne generowanie kolorów role.
 - **Obecności**: Ewidencja czasu pracy, zatwierdzanie/odrzucanie, eksport do PDF.
 - **Scheduler**: Automatyczne generowanie grafiku z podglądem statystyk godzin.
+- **Calendar View**: Wizualny podgląd grafiku dziennego na ekranie domowym.
+
+### Testing
+```bash
+# Run unit & widget tests
+flutter test
+# Re-generate mocks if needed
+dart run build_runner build --delete-conflicting-outputs
+```
 
 ## Architecture
 

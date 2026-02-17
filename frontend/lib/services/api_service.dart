@@ -431,8 +431,12 @@ class ApiService {
     return UserStats.fromJson(response.data);
   }
 
-  Future<DashboardHome> getDashboardHome() async {
-    final response = await _dio.get('/manager/dashboard/home');
+  Future<DashboardHome> getDashboardHome({DateTime? date}) async {
+    final Map<String, dynamic> queryParameters = {};
+    if (date != null) {
+      queryParameters['date'] = date.toIso8601String().split('T')[0];
+    }
+    final response = await _dio.get('/manager/dashboard/home', queryParameters: queryParameters);
     return DashboardHome.fromJson(response.data);
   }
 

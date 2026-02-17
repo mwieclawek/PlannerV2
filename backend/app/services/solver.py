@@ -313,10 +313,35 @@ class SolverService:
                     self.session.add(item)
                 self.session.commit()
             
+            # Create maps for lookup
+            shift_map_obj = {s.id: s for s in shifts}
+            role_map_obj = {r.id: r for r in roles}
+            user_map_obj = {u.id: u for u in employees}
+
+            enriched_schedules = []
+            for sc in generated_schedules:
+                sh = shift_map_obj.get(sc.shift_def_id)
+                r = role_map_obj.get(sc.role_id)
+                u = user_map_obj.get(sc.user_id)
+                
+                enriched_schedules.append({
+                    "id": sc.id, 
+                    "date": sc.date,
+                    "shift_def_id": sc.shift_def_id,
+                    "user_id": sc.user_id,
+                    "role_id": sc.role_id,
+                    "is_published": sc.is_published,
+                    "user_name": u.full_name if u else "Unknown",
+                    "role_name": r.name if r else "Unknown",
+                    "shift_name": sh.name if sh else "Unknown",
+                    "start_time": sh.start_time if sh else None,
+                    "end_time": sh.end_time if sh else None,
+                })
+
             return {
                 "status": "success", 
                 "count": len(generated_schedules), 
-                "schedules": generated_schedules,
+                "schedules": enriched_schedules,
                 "warnings": warnings
             }
         else:

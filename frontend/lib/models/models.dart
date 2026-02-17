@@ -303,6 +303,8 @@ class ScheduleEntry {
   final String userName;
   final String roleName;
   final String shiftName;
+  final String startTime;
+  final String endTime;
 
   ScheduleEntry({
     required this.id,
@@ -314,6 +316,8 @@ class ScheduleEntry {
     required this.userName,
     required this.roleName,
     required this.shiftName,
+    required this.startTime,
+    required this.endTime,
   });
 
   factory ScheduleEntry.fromJson(Map<String, dynamic> json) {
@@ -327,6 +331,8 @@ class ScheduleEntry {
       userName: json['user_name'],
       roleName: json['role_name'],
       shiftName: json['shift_name'],
+      startTime: json['start_time'] ?? '09:00', // Fallback if missing
+      endTime: json['end_time'] ?? '17:00',
     );
   }
 }

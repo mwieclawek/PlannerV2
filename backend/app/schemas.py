@@ -222,6 +222,8 @@ class ScheduleResponse(BaseModel):
     user_name: str
     role_name: str
     shift_name: str
+    start_time: time
+    end_time: time
 
 class EmployeeScheduleResponse(BaseModel):
     id: UUID

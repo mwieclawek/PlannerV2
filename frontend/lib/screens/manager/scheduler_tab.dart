@@ -257,6 +257,8 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       userName: user.fullName,
       roleName: role.name,
       shiftName: shift.name,
+      startTime: shift.startTime,
+      endTime: shift.endTime,
     );
     
     // Show info banner on first edit
@@ -479,6 +481,8 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
             userName: user.fullName,
             roleName: role.name,
             shiftName: shift.name,
+            startTime: shift.startTime,
+            endTime: shift.endTime,
           ));
         }
 
@@ -524,8 +528,28 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     } catch (e) {
       setState(() => _isGenerating = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd: $e')),
+        // Enhanced error handling
+        String errorMessage = 'Wystąpił nieoczekiwany błąd.';
+        if (e.toString().contains('400')) {
+             errorMessage = 'Nie znaleziono rozwiązania dla podanych wymagań. Spróbuj dodać więcej pracowników lub zmniejszyć wymagania.';
+        } else if (e.toString().contains('timeout')) {
+             errorMessage = 'Przekroczono czas oczekiwania na solver.';
+        } else {
+             errorMessage = 'Błąd generowania: $e';
+        }
+
+        showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+                title: const Text('Błąd Generowania'),
+                content: Text(errorMessage),
+                actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('OK'),
+                    )
+                ],
+            ),
         );
       }
     }

@@ -59,6 +59,7 @@ dependencies:
   mobile_scanner: ^5.1.1
   permission_handler: ^11.3.1
   qr_flutter: ^4.1.0
+  calendar_view: ^1.4.0
 
 dev_dependencies:
   flutter_test:
@@ -72,6 +73,8 @@ dev_dependencies:
   flutter_lints: ^5.0.0
   integration_test:
     sdk: flutter
+  build_runner: ^2.11.1
+  mockito: ^5.6.3
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

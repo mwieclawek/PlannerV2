@@ -18,6 +18,10 @@ async def lifespan(app: FastAPI):
     logger.info(f"Initializing database structure (URL starts with: {DATABASE_URL[:10]}...)...")
     init_db()
     
+    # Security check for Manager PIN
+    if not os.getenv("MANAGER_REGISTRATION_PIN"):
+        logger.warning("SECURITY WARNING: MANAGER_REGISTRATION_PIN is not set. Using default '1234'. Set this environment variable in production!")
+
     logger.info("Application startup complete. Database ready.")
     yield
     # Shutdown

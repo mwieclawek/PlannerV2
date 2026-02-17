@@ -21,7 +21,7 @@ pipeline {
             agent {
                 docker {
                     image 'python:3.11-slim'
-                    args '-u root'
+                    args '-u root -v pip-cache:/root/.cache/pip'
                 }
             }
             steps {
@@ -53,7 +53,7 @@ pipeline {
             agent {
                 docker {
                     image 'ghcr.io/cirruslabs/flutter:stable'
-                    args '-u root'
+                    args '-u root -v pub-cache:/root/.pub-cache'
                 }
             }
             steps {

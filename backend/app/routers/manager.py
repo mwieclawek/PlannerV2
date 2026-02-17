@@ -167,10 +167,11 @@ def get_user_stats(
 
 @router.get("/dashboard/home", response_model=DashboardHomeResponse)
 def get_dashboard_home(
+    date: Optional[date] = Query(None, description="Target date for dashboard (default: today)"),
     service: ManagerService = Depends(get_manager_service), 
     _: User = Depends(get_manager_user)
 ):
-    return service.get_dashboard_home()
+    return service.get_dashboard_home(target_date=date)
 
 @router.post("/users", response_model=UserResponse)
 def create_user(

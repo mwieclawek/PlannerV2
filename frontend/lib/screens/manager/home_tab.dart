@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
+import 'package:calendar_view/calendar_view.dart';
 
 class HomeTab extends ConsumerStatefulWidget {
   const HomeTab({super.key});
@@ -25,7 +26,9 @@ class _HomeTabState extends ConsumerState<HomeTab> {
 
   void _refresh() {
     setState(() {
-      _dashboardFuture = ref.read(apiServiceProvider).getDashboardHome();
+      _dashboardFuture = ref.read(apiServiceProvider).getDashboardHome(
+        date: DateTime.now(),
+      );
     });
   }
 
@@ -110,6 +113,7 @@ class _HomeTabState extends ConsumerState<HomeTab> {
     );
   }
 
+
   Widget _buildWorkingTodayList(List<ScheduleEntry> entries) {
     if (entries.isEmpty) {
       return Card(
@@ -130,43 +134,136 @@ class _HomeTabState extends ConsumerState<HomeTab> {
       );
     }
 
-    // Sort by start time
-    entries.sort((a, b) => a.shiftName.compareTo(b.shiftName)); // Rough sort, better by time if available in entry details
+    // Convert entries to CalendarEventData
+    final events = entries.map((e) {
+      // Parse time strings "HH:MM" or "HH:MM:SS"
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      
+      final startParts = e.startTime.split(':');
+      final endParts = e.endTime.split(':');
+      
+      final start = DateTime(
+        now.year, now.month, now.day, 
+        int.parse(startParts[0]), int.parse(startParts[1])
+      );
+      
+      var end = DateTime(
+        now.year, now.month, now.day, 
+        int.parse(endParts[0]), int.parse(endParts[1])
+      );
+      
+      if (end.isBefore(start)) {
+        end = end.add(const Duration(days: 1));
+      }
 
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: entries.length,
-      itemBuilder: (context, index) {
-        final entry = entries[index];
-        return Card(
-          elevation: 1,
-          margin: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.indigo.shade100,
-              child: Text(
-                entry.userName.isNotEmpty ? entry.userName[0].toUpperCase() : '?',
-                style: TextStyle(color: Colors.indigo.shade700, fontWeight: FontWeight.bold),
+      print('DEBUG: Event processed: ${e.userName} ${start.toString()} - ${end.toString()}');
+
+      return CalendarEventData(
+        date: today,
+        startTime: start,
+        endTime: end,
+        title: e.userName,
+        description: "${e.shiftName} • ${e.roleName}",
+        color: Colors.indigo.shade100, // You might want role-specific colors here
+        event: e, // Store full object
+      );
+    }).toList();
+
+    print('DEBUG: Total events to convert: ${entries.length}');
+    print('DEBUG: Total events converted: ${events.length}');
+
+    // We can't use DayView directly inside a SingleChildScrollView safely if it scrolls itself.
+    // DayView usually takes full height.
+    // Option 1: Fixed height container
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    
+    return SizedBox(
+      height: 600, // Adjust as needed
+      child: DayView(
+        key: UniqueKey(), // Force rebuild when data changes
+        controller: EventController<ScheduleEntry>()..addAll(events),
+        minDay: todayStart,
+        maxDay: todayStart.add(const Duration(days: 1)),
+        initialDay: todayStart,
+        showVerticalLine: true,
+        showLiveTimeLineInAllDays: true,
+        heightPerMinute: 0.8, // Slightly more compact
+        eventTileBuilder: (date, events, boundary, start, end) {
+          if (events.isEmpty) return Container();
+          final event = events.first;
+          final entry = event.event as ScheduleEntry?;
+          
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border(
+                left: BorderSide(color: event.color ?? Colors.indigo, width: 4),
+                top: BorderSide(color: Colors.grey.shade200),
+                right: BorderSide(color: Colors.grey.shade200),
+                bottom: BorderSide(color: Colors.grey.shade200),
               ),
             ),
-            title: Text(entry.userName, style: const TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Text('${entry.shiftName} • ${entry.roleName}'),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.shade200),
-              ),
-              child: Text(
-                'W pracy', // Or show time range if available in entry
-                style: TextStyle(color: Colors.green.shade700, fontSize: 12, fontWeight: FontWeight.bold),
-              ),
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 10,
+                      backgroundColor: event.color?.withOpacity(0.2) ?? Colors.indigo.shade50,
+                      child: Text(
+                        event.title.isNotEmpty ? event.title[0].toUpperCase() : '?',
+                        style: TextStyle(
+                          fontSize: 10, 
+                          color: event.color ?? Colors.indigo,
+                          fontWeight: FontWeight.bold
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        event.title,
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                if (entry != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: event.color?.withOpacity(0.1) ?? Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      entry.roleName,
+                      style: TextStyle(
+                        fontSize: 10, 
+                        color: event.color?.withOpacity(0.8) ?? Colors.grey.shade700,
+                        fontWeight: FontWeight.w500
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                 const Spacer(),
+                 Text(
+                  "${start.hour}:${start.minute.toString().padLeft(2,'0')} - ${end.hour}:${end.minute.toString().padLeft(2,'0')}",
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                 ),
+              ],
             ),
-          ),
-        );
-      },
+          );
+        },
+        dayTitleBuilder: (date) => Container(), // Hide header
+      ),
     );
   }
 

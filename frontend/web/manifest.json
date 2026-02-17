@@ -1,11 +1,11 @@
 {
-    "name": "frontend",
-    "short_name": "frontend",
+    "name": "PlannerV2",
+    "short_name": "PlannerV2",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1A237E",
+    "theme_color": "#1A237E",
+    "description": "Inteligentny grafik pracy",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

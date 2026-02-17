@@ -5,11 +5,18 @@ import 'utils/router.dart';
 
 import 'services/config_service.dart';
 
+import 'package:calendar_view/calendar_view.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ConfigService().init();
   await initializeDateFormatting('pl_PL', null);
-  runApp(const ProviderScope(child: MyApp()));
+  runApp(
+    CalendarControllerProvider(
+      controller: EventController(),
+      child: const ProviderScope(child: MyApp()),
+    ),
+  );
 }
 
 class MyApp extends ConsumerWidget {

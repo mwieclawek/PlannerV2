@@ -58,6 +58,7 @@ class SchedulerService:
         response = []
         # Optimization: fetch all roles/shifts/users once if needed, but for weekly scale this is fine
         for s in schedules:
+            shift = self.session.get(ShiftDefinition, s.shift_def_id)
             response.append({
                 "id": s.id,
                 "date": s.date,
@@ -67,7 +68,9 @@ class SchedulerService:
                 "is_published": s.is_published,
                 "user_name": s.user.full_name if s.user else "Unknown",
                 "role_name": self.session.get(JobRole, s.role_id).name if s.role_id else "?",
-                "shift_name": self.session.get(ShiftDefinition, s.shift_def_id).name if s.shift_def_id else "?"
+                "shift_name": shift.name if shift else "?",
+                "start_time": shift.start_time if shift else None,
+                "end_time": shift.end_time if shift else None
             })
         return response
 

@@ -366,8 +366,8 @@ class ManagerService:
             "monthly_shifts": monthly_stats
         }
 
-    def get_dashboard_home(self) -> dict:
-        today = date.today()
+    def get_dashboard_home(self, target_date: Optional[date] = None) -> dict:
+        today = target_date if target_date else date.today()
         yesterday = today - timedelta(days=1)
         
         # 1. Working today
@@ -392,7 +392,9 @@ class ManagerService:
                     "is_published": sch.is_published,
                     "user_name": user.full_name,
                     "role_name": role.name,
-                    "shift_name": shift.name
+                    "shift_name": shift.name,
+                    "start_time": shift.start_time,
+                    "end_time": shift.end_time
                 })
                 
         # 2. Missing confirmations from yesterday
