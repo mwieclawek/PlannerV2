@@ -20,6 +20,7 @@ services:
       - db
     environment:
       - DATABASE_URL=postgresql://planner_user:planner_password@db:5432/planner_db
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     networks:
       - plannerv2-network
 

@@ -18,6 +18,7 @@ class UserBase(BaseModel):
     email: Optional[str] = None  # Optional for contact
     target_hours_per_month: Optional[int] = None
     target_shifts_per_month: Optional[int] = None
+    is_active: bool = True
 
 class UserCreate(UserBase):
     password: str
@@ -38,6 +39,7 @@ class UserUpdate(BaseModel):
     role_system: Optional[RoleSystem] = None
     target_hours_per_month: Optional[int] = None
     target_shifts_per_month: Optional[int] = None
+    is_active: Optional[bool] = None
 
     class Config:
         from_attributes = True
@@ -292,3 +294,33 @@ class DashboardHomeResponse(BaseModel):
     working_today: List[ScheduleResponse]
     missing_confirmations: List[AttendanceResponse]
 
+# --- Shift Giveaway ---
+class ShiftGiveawayResponse(BaseModel):
+    id: UUID
+    schedule_id: UUID
+    offered_by: UUID
+    offered_by_name: str = ""
+    status: str
+    created_at: datetime
+    taken_by: Optional[UUID] = None
+    taken_by_name: Optional[str] = None
+    # Schedule details
+    date: Optional[date_type] = None
+    shift_name: Optional[str] = None
+    role_name: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class GiveawaySuggestion(BaseModel):
+    user_id: UUID
+    full_name: str
+    availability_status: Optional[str] = None
+
+class ShiftGiveawayWithSuggestions(ShiftGiveawayResponse):
+    suggestions: List[GiveawaySuggestion] = []
+
+class GiveawayReassignRequest(BaseModel):
+    new_user_id: UUID

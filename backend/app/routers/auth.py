@@ -11,34 +11,13 @@ from ..schemas import Token, UserCreate, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-@router.post("/register", response_model=Token)
+@router.post("/register")
 def register(user_in: UserCreate, session: Session = Depends(get_session)):
-    user = session.exec(select(User).where(User.username == user_in.username)).first()
-    if user:
-        raise HTTPException(status_code=400, detail="Username already registered")
-    
-    # PIN Validation for Managers
-    if user_in.role_system == RoleSystem.MANAGER:
-        # Default to '1234' if not set, for backward compatibility
-        manager_pin = os.getenv("MANAGER_REGISTRATION_PIN", "1234")
-        if user_in.manager_pin != manager_pin:
-            raise HTTPException(status_code=403, detail="Invalid Manager PIN")
-
-    hashed_password = get_password_hash(user_in.password)
-    
-    user = User(
-        username=user_in.username,
-        email=user_in.email,
-        password_hash=hashed_password,
-        full_name=user_in.full_name,
-        role_system=user_in.role_system
+    """Registration is disabled. Accounts are created by managers only."""
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Rejestracja wyłączona. Konto tworzy manager."
     )
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    
-    access_token = create_access_token(data={"sub": user.username}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/token", response_model=Token)
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
@@ -48,6 +27,11 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), ses
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is deactivated. Contact your manager.",
         )
     access_token = create_access_token(data={"sub": user.username}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     return {"access_token": access_token, "token_type": "bearer"}

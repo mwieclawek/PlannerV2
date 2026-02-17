@@ -20,7 +20,7 @@ from sqlmodel import SQLModel
 from backend.app.models import (
     User, JobRole, ShiftDefinition, Availability,
     StaffingRequirement, Schedule, RestaurantConfig, UserJobRoleLink,
-    Attendance, AttendanceStatus
+    Attendance, AttendanceStatus, ShiftGiveaway, GiveawayStatus
 )
 
 # this is the Alembic Config object

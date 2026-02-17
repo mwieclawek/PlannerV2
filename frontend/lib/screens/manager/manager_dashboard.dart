@@ -8,8 +8,10 @@ import 'home_tab.dart';
 import 'team_tab.dart';
 import 'availability_view_tab.dart';
 import 'attendance_approval_tab.dart';
+import 'giveaway_tab.dart';
 
 import '../../widgets/qr_config_dialog.dart';
+import '../../widgets/help_dialog.dart';
 
 class ManagerDashboard extends ConsumerStatefulWidget {
   const ManagerDashboard({super.key});
@@ -34,6 +36,16 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
         backgroundColor: Colors.indigo.shade700,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline),
+            tooltip: 'Pomoc',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => const HelpDialog(),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.qr_code_2),
             tooltip: 'Udostępnij konfigurację',
@@ -65,6 +77,7 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
               SchedulerTab(),
               AvailabilityViewTab(),
               AttendanceApprovalTab(),
+              GiveawayTab(),
               TeamTab(),
             ],
           );
@@ -122,6 +135,10 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
           NavigationDestination(
             icon: Icon(Icons.fact_check),
             label: 'Obecności',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.swap_horiz),
+            label: 'Zmiany',
           ),
           NavigationDestination(
             icon: Icon(Icons.people),

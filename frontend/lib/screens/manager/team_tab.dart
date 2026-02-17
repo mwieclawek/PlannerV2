@@ -16,6 +16,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
   List<TeamMember>? _users;
   List<JobRole>? _roles;
   bool _isLoading = true;
+  bool _showInactive = false;
   String? _error;
 
   @override
@@ -32,11 +33,11 @@ class _TeamTabState extends ConsumerState<TeamTab> {
 
     try {
       final api = ref.read(apiServiceProvider);
-      final users = await api.getUsers();
+      final users = await api.getUsers(includeInactive: _showInactive);
       final roles = await api.getRoles();
       
       setState(() {
-        _users = users.where((u) => u.isEmployee).toList(); // Only show employees
+        _users = users.where((u) => u.isEmployee).toList();
         _roles = roles;
         _isLoading = false;
       });
@@ -45,6 +46,31 @@ class _TeamTabState extends ConsumerState<TeamTab> {
         _error = e.toString();
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _toggleUserActive(TeamMember user) async {
+    final newActive = !user.isActive;
+    final actionText = newActive ? 'aktywowany' : 'dezaktywowany';
+    try {
+      final api = ref.read(apiServiceProvider);
+      await api.updateUser(user.id, isActive: newActive);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${user.fullName} został $actionText'),
+            backgroundColor: newActive ? Colors.green : Colors.orange,
+          ),
+        );
+      }
+      await _loadData();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -347,17 +373,55 @@ class _TeamTabState extends ConsumerState<TeamTab> {
 
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.indigo.shade100,
-                  child: Text(
-                    user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?',
-                    style: TextStyle(color: Colors.indigo.shade700),
-                  ),
+              color: user.isActive ? null : Colors.grey.shade100,
+              child: Opacity(
+                opacity: user.isActive ? 1.0 : 0.6,
+                child: ListTile(
+                leading: Stack(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: user.isActive ? Colors.indigo.shade100 : Colors.grey.shade300,
+                      child: Text(
+                        user.fullName.isNotEmpty ? user.fullName[0].toUpperCase() : '?',
+                        style: TextStyle(color: user.isActive ? Colors.indigo.shade700 : Colors.grey.shade600),
+                      ),
+                    ),
+                    if (!user.isActive)
+                      Positioned(
+                        right: 0, bottom: 0,
+                        child: Container(
+                          width: 12, height: 12,
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade400,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                title: Text(
-                  user.fullName,
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        user.fullName,
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    if (!user.isActive)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Text(
+                          'NIEAKTYWNY',
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.red.shade600),
+                        ),
+                      ),
+                  ],
                 ),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,7 +429,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                     Text('@${user.username}', style: TextStyle(color: Colors.grey.shade600)),
                     
                     // Next Shift Display
-                    if (user.nextShift != null) ...[
+                    if (user.nextShift != null && user.isActive) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
@@ -385,7 +449,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                         '${user.nextShift!.date.day}.${user.nextShift!.date.month}  ${user.nextShift!.startTime} - ${user.nextShift!.endTime}',
                         style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade700),
                       ),
-                    ] else ...[
+                    ] else if (user.isActive) ...[
                        const SizedBox(height: 4),
                        Text('Brak nadchodzących zmian', style: TextStyle(fontSize: 12, color: Colors.grey.shade500, fontStyle: FontStyle.italic)),
                     ],
@@ -408,18 +472,60 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                     ],
                   ],
                 ),
-                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                trailing: PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Colors.grey),
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'details':
+                        showDialog(
+                          context: context,
+                          builder: (context) => EmployeeDetailDialog(
+                            user: user,
+                            onEdit: () => _showPreferencesDialog(user),
+                            onEditRoles: () => _showRoleDialog(user),
+                            onResetPassword: () => _showPasswordDialog(user),
+                          ),
+                        );
+                        break;
+                      case 'toggle_active':
+                        _toggleUserActive(user);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'details',
+                      child: ListTile(
+                        leading: Icon(Icons.info_outline),
+                        title: Text('Szczegóły'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'toggle_active',
+                      child: ListTile(
+                        leading: Icon(
+                          user.isActive ? Icons.person_off : Icons.person,
+                          color: user.isActive ? Colors.orange : Colors.green,
+                        ),
+                        title: Text(user.isActive ? 'Dezaktywuj' : 'Aktywuj'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ],
+                ),
                 onTap: () {
                   showDialog(
                     context: context,
                     builder: (context) => EmployeeDetailDialog(
                       user: user,
-                      onEdit: () => _showPreferencesDialog(user), // Or unified edit
+                      onEdit: () => _showPreferencesDialog(user),
                       onEditRoles: () => _showRoleDialog(user),
                       onResetPassword: () => _showPasswordDialog(user),
                     ),
                   );
                 },
+              ),
               ),
             );
           },
@@ -428,7 +534,30 @@ class _TeamTabState extends ConsumerState<TeamTab> {
     }
 
     return Scaffold(
-      body: content,
+      body: Column(
+        children: [
+          // Show inactive toggle
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: [
+                Icon(Icons.filter_list, size: 18, color: Colors.grey.shade600),
+                const SizedBox(width: 8),
+                Text('Pokaż nieaktywnych', style: GoogleFonts.inter(fontSize: 13)),
+                const SizedBox(width: 8),
+                Switch(
+                  value: _showInactive,
+                  onChanged: (v) {
+                    setState(() => _showInactive = v);
+                    _loadData();
+                  },
+                ),
+              ],
+            ),
+          ),
+          Expanded(child: content),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddUserDialog,
         child: const Icon(Icons.person_add),

@@ -37,6 +37,7 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     target_hours_per_month: Optional[int] = Field(default=None, sa_column=Column(Integer, nullable=True))
     target_shifts_per_month: Optional[int] = Field(default=None, sa_column=Column(Integer, nullable=True))
+    is_active: bool = Field(default=True)
 
     job_roles: List[JobRole] = Relationship(back_populates="users", link_model=UserJobRoleLink)
     availabilities: List["Availability"] = Relationship(back_populates="user")
@@ -101,3 +102,18 @@ class Attendance(SQLModel, table=True):
     
     user: User = Relationship()
 
+
+class GiveawayStatus(str, Enum):
+    OPEN = "OPEN"
+    TAKEN = "TAKEN"
+    CANCELLED = "CANCELLED"
+
+class ShiftGiveaway(SQLModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    schedule_id: UUID = Field(foreign_key="schedule.id")
+    offered_by: UUID = Field(foreign_key="user.id")
+    status: GiveawayStatus = Field(default=GiveawayStatus.OPEN)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    taken_by: Optional[UUID] = Field(default=None, foreign_key="user.id")
+
+    schedule: Schedule = Relationship()

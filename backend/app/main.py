@@ -38,11 +38,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from .routers import auth, manager, employee, scheduler
+from .routers import auth, manager, employee, scheduler, health, bug_report
 app.include_router(auth.router)
 app.include_router(manager.router)
 app.include_router(employee.router)
 app.include_router(scheduler.router)
+app.include_router(health.router)
+app.include_router(bug_report.router)
 
 @app.get("/")
 def read_root():

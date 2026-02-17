@@ -14,18 +14,12 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _fullNameController = TextEditingController();
-  final _pinController = TextEditingController();
-  bool _isRegisterMode = false;
   bool _isLoading = false;
-  String _selectedRole = 'EMPLOYEE'; // Default role
 
   @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
-    _fullNameController.dispose();
-    _pinController.dispose();
     super.dispose();
   }
 
@@ -37,30 +31,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
-    if (_isRegisterMode && _fullNameController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Podaj imię i nazwisko')),
-      );
-      return;
-    }
-
     setState(() => _isLoading = true);
 
     try {
-      if (_isRegisterMode) {
-        await ref.read(authProvider.notifier).register(
-              _usernameController.text,
-              _passwordController.text,
-              _fullNameController.text,
-              _selectedRole,
-              managerPin: _selectedRole == 'MANAGER' ? _pinController.text : null,
-            );
-      } else {
-        await ref.read(authProvider.notifier).login(
-              _usernameController.text,
-              _passwordController.text,
-            );
-      }
+      await ref.read(authProvider.notifier).login(
+            _usernameController.text,
+            _passwordController.text,
+          );
     } catch (e) {
       if (mounted) {
         String message = 'Wystąpił błąd';
@@ -68,19 +45,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           final responseData = e.response?.data;
           if (responseData is Map && responseData['detail'] != null) {
             message = responseData['detail'].toString();
-            // Translate common errors
-            if (message == 'Username already registered') {
-              message = 'Ten login jest już zajęty';
-            } else if (message == 'Incorrect username or password') {
+            if (message == 'Incorrect username or password') {
               message = 'Nieprawidłowy login lub hasło';
-            } else if (message == 'Invalid manager PIN') {
-              message = 'Nieprawidłowy kod PIN managera';
+            } else if (message.contains('deactivated')) {
+              message = 'Konto jest dezaktywowane. Skontaktuj się z managerem.';
             }
           }
         } else {
-           message = e.toString();
+          message = e.toString();
         }
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
@@ -142,26 +116,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          _isRegisterMode ? 'Utwórz konto' : 'Zaloguj się',
+                          'Zaloguj się',
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             color: Colors.grey.shade700,
                           ),
                         ),
                         const SizedBox(height: 32),
-                        if (_isRegisterMode) ...[
-                          TextField(
-                            controller: _fullNameController,
-                            decoration: InputDecoration(
-                              labelText: 'Imię i nazwisko',
-                              prefixIcon: const Icon(Icons.person),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
                         TextField(
                           controller: _usernameController,
                           decoration: InputDecoration(
@@ -172,6 +133,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
                           keyboardType: TextInputType.text,
+                          textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 16),
                         TextField(
@@ -184,44 +146,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
                           obscureText: true,
+                          onSubmitted: (_) => _submit(),
                         ),
-                        if (_isRegisterMode) ...[
-                          const SizedBox(height: 16),
-                          DropdownButtonFormField<String>(
-                            value: _selectedRole,
-                            decoration: InputDecoration(
-                              labelText: 'Rola',
-                              prefixIcon: const Icon(Icons.work),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            items: const [
-                              DropdownMenuItem(value: 'EMPLOYEE', child: Text('Pracownik')),
-                              DropdownMenuItem(value: 'MANAGER', child: Text('Menedżer')),
-                            ],
-                            onChanged: (value) {
-                              if (value != null) {
-                                setState(() => _selectedRole = value);
-                              }
-                            },
-                          ),
-                          if (_selectedRole == 'MANAGER') ...[
-                            const SizedBox(height: 16),
-                            TextField(
-                              controller: _pinController,
-                              decoration: InputDecoration(
-                                labelText: 'Kod PIN Managera',
-                                prefixIcon: const Icon(Icons.pin),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                helperText: 'Wymagany do rejestracji jako manager',
-                              ),
-                              obscureText: true,
-                            ),
-                          ],
-                        ],
                         const SizedBox(height: 24),
                         SizedBox(
                           width: double.infinity,
@@ -244,24 +170,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : Text(
-                                    _isRegisterMode ? 'Zarejestruj się' : 'Zaloguj',
-                                    style: const TextStyle(fontSize: 16),
+                                : const Text(
+                                    'Zaloguj',
+                                    style: TextStyle(fontSize: 16),
                                   ),
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _isRegisterMode = !_isRegisterMode;
-                            });
-                          },
-                          child: Text(
-                            _isRegisterMode
-                                ? 'Masz już konto? Zaloguj się'
-                                : 'Nie masz konta? Zarejestruj się',
-                            style: TextStyle(color: Colors.indigo.shade700),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Konto tworzy Twój manager',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
                           ),
                         ),
                       ],

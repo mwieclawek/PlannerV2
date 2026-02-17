@@ -145,3 +145,106 @@ def get_my_attendance(
         "status": a.status.value
     } for a in attendances]
 
+
+# Shift Giveaway Endpoints
+from uuid import UUID
+from fastapi import HTTPException
+from ..models import ShiftGiveaway, GiveawayStatus, JobRole
+
+@router.post("/giveaway/{schedule_id}")
+def offer_shift_giveaway(
+    schedule_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Mark a shift as available for giveaway"""
+    # Verify the schedule belongs to this user and is in the future
+    schedule = session.exec(
+        select(Schedule).where(
+            Schedule.id == schedule_id,
+            Schedule.user_id == current_user.id
+        )
+    ).first()
+    
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule entry not found")
+    
+    if schedule.date < date.today():
+        raise HTTPException(status_code=400, detail="Cannot give away past shifts")
+    
+    # Check if already offered
+    existing = session.exec(
+        select(ShiftGiveaway).where(
+            ShiftGiveaway.schedule_id == schedule_id,
+            ShiftGiveaway.status == GiveawayStatus.OPEN
+        )
+    ).first()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="This shift is already offered for giveaway")
+    
+    giveaway = ShiftGiveaway(
+        schedule_id=schedule_id,
+        offered_by=current_user.id,
+    )
+    session.add(giveaway)
+    session.commit()
+    session.refresh(giveaway)
+    
+    return {"id": str(giveaway.id), "status": "created"}
+
+@router.delete("/giveaway/{giveaway_id}")
+def cancel_giveaway(
+    giveaway_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Cancel a giveaway offer"""
+    giveaway = session.get(ShiftGiveaway, giveaway_id)
+    
+    if not giveaway:
+        raise HTTPException(status_code=404, detail="Giveaway not found")
+    
+    if giveaway.offered_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not your giveaway")
+    
+    if giveaway.status != GiveawayStatus.OPEN:
+        raise HTTPException(status_code=400, detail="Cannot cancel, giveaway already processed")
+    
+    giveaway.status = GiveawayStatus.CANCELLED
+    session.add(giveaway)
+    session.commit()
+    
+    return {"status": "cancelled"}
+
+@router.get("/giveaways/my")
+def get_my_giveaways(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """Get employee's own giveaway offers"""
+    giveaways = session.exec(
+        select(ShiftGiveaway).where(
+            ShiftGiveaway.offered_by == current_user.id
+        )
+    ).all()
+    
+    result = []
+    for g in giveaways:
+        schedule = g.schedule
+        shift = session.get(ShiftDefinition, schedule.shift_def_id) if schedule else None
+        role = session.get(JobRole, schedule.role_id) if schedule else None
+        
+        result.append({
+            "id": str(g.id),
+            "schedule_id": str(g.schedule_id),
+            "status": g.status.value,
+            "date": schedule.date.isoformat() if schedule else None,
+            "shift_name": shift.name if shift else None,
+            "role_name": role.name if role else None,
+            "start_time": shift.start_time.strftime("%H:%M") if shift else None,
+            "end_time": shift.end_time.strftime("%H:%M") if shift else None,
+            "created_at": g.created_at.isoformat(),
+        })
+    
+    return result

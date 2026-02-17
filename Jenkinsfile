@@ -105,16 +105,42 @@ pipeline {
                     echo "🐍 Backend DEV..."
                     sh 'docker build -t plannerv2-backend:dev ./backend'
                     
-                    sh '''
-                        docker run -d --name plannerv2-backend-dev --network plannerv2-network \
-                        -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db \
-                        --restart unless-stopped plannerv2-backend:dev
-                    '''
+                    withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
+                        sh """
+                            docker run -d --name plannerv2-backend-dev --network plannerv2-network \\
+                            -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db \\
+                            -e GITHUB_TOKEN=${GH_TOKEN} \\
+                            --restart unless-stopped plannerv2-backend:dev
+                        """
+                    }
                     sh 'sleep 10'
                     
                     sh '''
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev)" = "false" ]; then
                             echo "❌ Backend DEV padł! Logi:"
+                            docker logs plannerv2-backend-dev
+                            exit 1
+                        fi
+                    '''
+                    
+                    echo "🔍 Weryfikacja migracji bazy danych DEV..."
+                    sh '''
+                        HEALTH_OK=false
+                        for i in 1 2 3 4 5; do
+                            HEALTH=$(docker exec plannerv2-backend-dev curl -sf http://localhost:8000/health 2>/dev/null || echo '{}')
+                            MIGRATION=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('migration_current',''))" 2>/dev/null || echo "")
+                            if [ "$MIGRATION" = "True" ]; then
+                                echo "✅ Migracje bazy DEV aktualne"
+                                HEALTH_OK=true
+                                break
+                            else
+                                echo "⚠️ Próba $i: Migracje nie gotowe, czekam..."
+                                sleep 5
+                            fi
+                        done
+                        if [ "$HEALTH_OK" = "false" ]; then
+                            echo "❌ BŁĄD: Migracje bazy DEV nie zakończone!"
+                            echo "🔍 Health response: $HEALTH"
                             docker logs plannerv2-backend-dev
                             exit 1
                         fi
@@ -197,16 +223,42 @@ pipeline {
                     
                     sh 'docker build -t plannerv2-backend:latest ./backend'
                     
-                    sh '''
-                        docker run -d --name plannerv2-backend --network plannerv2-network \
-                        -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db \
-                        --restart unless-stopped plannerv2-backend:latest
-                    '''
+                    withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
+                        sh """
+                            docker run -d --name plannerv2-backend --network plannerv2-network \\
+                            -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db \\
+                            -e GITHUB_TOKEN=${GH_TOKEN} \\
+                            --restart unless-stopped plannerv2-backend:latest
+                        """
+                    }
                     sh 'sleep 10'
                     
                     sh '''
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend)" = "false" ]; then
                             echo "❌ Backend PROD padł! Logi:"
+                            docker logs plannerv2-backend
+                            exit 1
+                        fi
+                    '''
+                    
+                    echo "🔍 Weryfikacja migracji bazy danych PROD..."
+                    sh '''
+                        HEALTH_OK=false
+                        for i in 1 2 3 4 5; do
+                            HEALTH=$(docker exec plannerv2-backend curl -sf http://localhost:8000/health 2>/dev/null || echo '{}')
+                            MIGRATION=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('migration_current',''))" 2>/dev/null || echo "")
+                            if [ "$MIGRATION" = "True" ]; then
+                                echo "✅ Migracje bazy PROD aktualne"
+                                HEALTH_OK=true
+                                break
+                            else
+                                echo "⚠️ Próba $i: Migracje nie gotowe, czekam..."
+                                sleep 5
+                            fi
+                        done
+                        if [ "$HEALTH_OK" = "false" ]; then
+                            echo "❌ BŁĄD: Migracje bazy PROD nie zakończone!"
+                            echo "🔍 Health response: $HEALTH"
                             docker logs plannerv2-backend
                             exit 1
                         fi

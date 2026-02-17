@@ -7,6 +7,7 @@ import '../../models/models.dart';
 import '../../widgets/availability_grid.dart';
 import 'my_schedule_screen.dart';
 import 'attendance_tab.dart';
+import '../../widgets/help_dialog.dart';
 
 class EmployeeDashboard extends ConsumerStatefulWidget {
   const EmployeeDashboard({super.key});
@@ -132,6 +133,16 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
         backgroundColor: _selectedIndex == 0 ? Colors.teal.shade700 : _selectedIndex == 1 ? Colors.blue.shade700 : Colors.purple.shade700,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline),
+            tooltip: 'Pomoc',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => const HelpDialog(),
+              );
+            },
+          ),
           PopupMenuButton<String>(
             onSelected: (value) async {
               if (value == 'logout') {

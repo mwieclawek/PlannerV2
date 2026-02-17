@@ -241,12 +241,15 @@ class ManagerService:
 
     # --- New Features Logic ---
 
-    def get_users_with_shifts(self) -> List[dict]:
+    def get_users_with_shifts(self, include_inactive: bool = False) -> List[dict]:
         """Get all users with their next upcoming shift"""
         from ..models import Schedule
         from ..schemas import NextShiftInfo
         
-        users = self.session.exec(select(User).where(User.role_system == RoleSystem.EMPLOYEE)).all()
+        query = select(User).where(User.role_system == RoleSystem.EMPLOYEE)
+        if not include_inactive:
+            query = query.where(User.is_active == True)
+        users = self.session.exec(query).all()
         result = []
         today = date.today()
         
@@ -272,8 +275,9 @@ class ManagerService:
                 "created_at": user.created_at,
                 "role_system": user.role_system,
                 "target_hours_per_month": user.target_hours_per_month,
-                "target_shifts_per_month": user.target_shifts_per_month,
-                "job_roles": [r.id for r in user.job_roles]
+            "target_shifts_per_month": user.target_shifts_per_month,
+            "is_active": user.is_active,
+            "job_roles": [r.id for r in user.job_roles]
             }
             
             if next_shift:
@@ -373,7 +377,10 @@ class ManagerService:
         # 1. Working today
         # Get schedules for today
         schedules = self.session.exec(
-            select(Schedule).where(Schedule.date == today)
+            select(Schedule)
+            .where(Schedule.date == today)
+            .join(User, Schedule.user_id == User.id)
+            .where(User.is_active == True)
         ).all()
         
         working_today = []
@@ -423,4 +430,124 @@ class ManagerService:
             "working_today": working_today,
             "missing_confirmations": missing_responses
         }
+
+    # --- Shift Giveaway ---
+    def get_open_giveaways(self) -> List[dict]:
+        from ..models import ShiftGiveaway, GiveawayStatus, Availability
+        
+        giveaways = self.session.exec(
+            select(ShiftGiveaway).where(ShiftGiveaway.status == GiveawayStatus.OPEN)
+        ).all()
+        
+        result = []
+        for g in giveaways:
+            schedule = g.schedule
+            if not schedule:
+                continue
+            
+            shift = self.session.get(ShiftDefinition, schedule.shift_def_id)
+            role = self.session.get(JobRole, schedule.role_id)
+            offerer = self.session.get(User, g.offered_by)
+            
+            # Build suggestions: active employees with availability for this date + same role
+            eligible_users = self.session.exec(
+                select(User)
+                .where(User.role_system == RoleSystem.EMPLOYEE)
+                .where(User.is_active == True)
+                .where(User.id != g.offered_by)
+            ).all()
+            
+            suggestions = []
+            for u in eligible_users:
+                # Check if user has the required role
+                if schedule.role_id not in [r.id for r in u.job_roles]:
+                    continue
+                
+                # Check availability for the date
+                avail = self.session.exec(
+                    select(Availability).where(
+                        Availability.user_id == u.id,
+                        Availability.date == schedule.date
+                    )
+                ).first()
+                
+                # Check if already scheduled on that date
+                already_scheduled = self.session.exec(
+                    select(Schedule).where(
+                        Schedule.user_id == u.id,
+                        Schedule.date == schedule.date
+                    )
+                ).first()
+                
+                avail_status = avail.status if avail else "UNKNOWN"
+                if already_scheduled:
+                    avail_status = "ALREADY_SCHEDULED"
+                
+                suggestions.append({
+                    "user_id": u.id,
+                    "full_name": u.full_name,
+                    "availability_status": avail_status
+                })
+            
+            # Sort: AVAILABLE first, then UNKNOWN, then ALREADY_SCHEDULED
+            priority = {"AVAILABLE": 0, "PREFERRED": 1, "UNKNOWN": 2, "UNAVAILABLE": 3, "ALREADY_SCHEDULED": 4}
+            suggestions.sort(key=lambda s: priority.get(s["availability_status"], 5))
+            
+            result.append({
+                "id": g.id,
+                "schedule_id": g.schedule_id,
+                "offered_by": g.offered_by,
+                "offered_by_name": offerer.full_name if offerer else "",
+                "status": g.status.value,
+                "created_at": g.created_at,
+                "taken_by": g.taken_by,
+                "date": schedule.date,
+                "shift_name": shift.name if shift else None,
+                "role_name": role.name if role else None,
+                "start_time": shift.start_time.strftime("%H:%M") if shift else None,
+                "end_time": shift.end_time.strftime("%H:%M") if shift else None,
+                "suggestions": suggestions
+            })
+        
+        return result
+
+    def reassign_giveaway(self, giveaway_id: UUID, new_user_id: UUID) -> dict:
+        from ..models import ShiftGiveaway, GiveawayStatus
+        
+        giveaway = self.session.get(ShiftGiveaway, giveaway_id)
+        if not giveaway:
+            raise HTTPException(status_code=404, detail="Giveaway not found")
+        
+        if giveaway.status != GiveawayStatus.OPEN:
+            raise HTTPException(status_code=400, detail="Giveaway is not open")
+        
+        schedule = giveaway.schedule
+        if not schedule:
+            raise HTTPException(status_code=404, detail="Schedule not found")
+        
+        # Reassign the schedule to the new user
+        schedule.user_id = new_user_id
+        giveaway.status = GiveawayStatus.TAKEN
+        giveaway.taken_by = new_user_id
+        
+        self.session.add(schedule)
+        self.session.add(giveaway)
+        self.session.commit()
+        
+        new_user = self.session.get(User, new_user_id)
+        return {
+            "status": "reassigned",
+            "new_user_name": new_user.full_name if new_user else ""
+        }
+
+    def cancel_giveaway(self, giveaway_id: UUID):
+        from ..models import ShiftGiveaway, GiveawayStatus
+        
+        giveaway = self.session.get(ShiftGiveaway, giveaway_id)
+        if not giveaway:
+            raise HTTPException(status_code=404, detail="Giveaway not found")
+        
+        giveaway.status = GiveawayStatus.CANCELLED
+        self.session.add(giveaway)
+        self.session.commit()
 

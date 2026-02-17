@@ -10,7 +10,7 @@ class SolverService:
 
     def solve(self, start_date: date, end_date: date, save: bool = True):
         # 1. Fetch Data
-        employees = self.session.exec(select(User)).all()
+        employees = self.session.exec(select(User).where(User.is_active == True)).all()
         shifts = self.session.exec(select(ShiftDefinition)).all()
         roles = self.session.exec(select(JobRole)).all()
         

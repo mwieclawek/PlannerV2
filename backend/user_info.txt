@@ -1,0 +1,15 @@
+Using database at: C:\Users\matte\Desktop\PlannerV2\planner.db
+--- Table Info: user ---
+2026-02-17 01:47:21,286 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-02-17 01:47:21,286 INFO sqlalchemy.engine.Engine PRAGMA table_info(user)
+2026-02-17 01:47:21,286 INFO sqlalchemy.engine.Engine [generated in 0.00017s] ()
+(0, 'id', 'CHAR(32)', 1, None, 1)
+(1, 'username', 'VARCHAR', 1, None, 0)
+(2, 'email', 'VARCHAR', 0, None, 0)
+(3, 'password_hash', 'VARCHAR', 1, None, 0)
+(4, 'full_name', 'VARCHAR', 1, None, 0)
+(5, 'role_system', 'VARCHAR(8)', 1, None, 0)
+(6, 'created_at', 'DATETIME', 1, None, 0)
+(7, 'target_hours_per_month', 'INTEGER', 0, None, 0)
+(8, 'target_shifts_per_month', 'INTEGER', 0, None, 0)
+2026-02-17 01:47:21,287 INFO sqlalchemy.engine.Engine ROLLBACK

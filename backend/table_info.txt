@@ -1,0 +1,24 @@
+Using database at: C:\Users\matte\Desktop\PlannerV2\planner.db
+--- Table Info: schedule ---
+2026-02-17 01:46:59,370 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-02-17 01:46:59,370 INFO sqlalchemy.engine.Engine PRAGMA table_info(schedule)
+2026-02-17 01:46:59,371 INFO sqlalchemy.engine.Engine [generated in 0.00024s] ()
+(0, 'id', 'CHAR(32)', 1, None, 1)
+(1, 'date', 'DATE', 1, None, 0)
+(2, 'shift_def_id', 'INTEGER', 1, None, 0)
+(3, 'user_id', 'CHAR(32)', 1, None, 0)
+(4, 'role_id', 'INTEGER', 1, None, 0)
+(5, 'is_published', 'BOOLEAN', 1, None, 0)
+
+--- Index Info: schedule ---
+2026-02-17 01:46:59,372 INFO sqlalchemy.engine.Engine PRAGMA index_list(schedule)
+2026-02-17 01:46:59,373 INFO sqlalchemy.engine.Engine [generated in 0.00162s] ()
+(0, 'sqlite_autoindex_schedule_1', 1, 'pk', 0)
+
+--- Foreign Key List: schedule ---
+2026-02-17 01:46:59,374 INFO sqlalchemy.engine.Engine PRAGMA foreign_key_list(schedule)
+2026-02-17 01:46:59,374 INFO sqlalchemy.engine.Engine [generated in 0.00028s] ()
+(0, 0, 'jobrole', 'role_id', 'id', 'NO ACTION', 'NO ACTION', 'NONE')
+(1, 0, 'user', 'user_id', 'id', 'NO ACTION', 'NO ACTION', 'NONE')
+(2, 0, 'shiftdefinition', 'shift_def_id', 'id', 'NO ACTION', 'NO ACTION', 'NONE')
+2026-02-17 01:46:59,375 INFO sqlalchemy.engine.Engine ROLLBACK

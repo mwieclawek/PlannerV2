@@ -189,8 +189,10 @@ class ApiService {
   }
 
   // Team Management (Manager)
-  Future<List<TeamMember>> getUsers() async {
-    final response = await _dio.get('/manager/users');
+  Future<List<TeamMember>> getUsers({bool includeInactive = false}) async {
+    final response = await _dio.get('/manager/users', queryParameters: {
+      if (includeInactive) 'include_inactive': true,
+    });
     return (response.data as List).map((e) => TeamMember.fromJson(e)).toList();
   }
 
@@ -213,6 +215,7 @@ class ApiService {
     String? roleSystem,
     int? targetHoursPerMonth,
     int? targetShiftsPerMonth,
+    bool? isActive,
   }) async {
     await _dio.put('/manager/users/$userId', data: {
       if (fullName != null) 'full_name': fullName,
@@ -220,6 +223,7 @@ class ApiService {
       if (roleSystem != null) 'role_system': roleSystem,
       if (targetHoursPerMonth != null) 'target_hours_per_month': targetHoursPerMonth,
       if (targetShiftsPerMonth != null) 'target_shifts_per_month': targetShiftsPerMonth,
+      if (isActive != null) 'is_active': isActive,
     });
   }
 
@@ -438,6 +442,38 @@ class ApiService {
     }
     final response = await _dio.get('/manager/dashboard/home', queryParameters: queryParameters);
     return DashboardHome.fromJson(response.data);
+  }
+
+  // --- Shift Giveaway ---
+  Future<List<ShiftGiveaway>> getGiveaways() async {
+    final response = await _dio.get('/manager/giveaways');
+    return (response.data as List)
+        .map((e) => ShiftGiveaway.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> reassignGiveaway(String giveawayId, String newUserId) async {
+    await _dio.post('/manager/giveaways/$giveawayId/reassign', data: {
+      'new_user_id': newUserId,
+    });
+  }
+
+  Future<void> cancelGiveaway(String giveawayId) async {
+    await _dio.delete('/manager/giveaways/$giveawayId');
+  }
+
+  // --- Bug Reporting ---
+  Future<Map<String, dynamic>> submitBugReport({
+    required String title,
+    required String description,
+    String steps = '',
+  }) async {
+    final response = await _dio.post('/bug-report', data: {
+      'title': title,
+      'description': description,
+      'steps_to_reproduce': steps,
+    });
+    return response.data as Map<String, dynamic>;
   }
 
 }

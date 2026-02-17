@@ -18,7 +18,7 @@ from ..schemas import (
     ConfigUpdate, ConfigResponse,
     UserRolesUpdate, PasswordReset, UserResponse,
     UserUpdate, AttendanceCreate, AttendanceResponse, UserCreate,
-    UserStats, DashboardHomeResponse
+    UserStats, DashboardHomeResponse, GiveawayReassignRequest
 )
 from ..services.manager_service import ManagerService
 
@@ -154,8 +154,12 @@ def update_user(
     return service.update_user(user_id, update)
 
 @router.get("/users", response_model=List[UserResponse])
-def get_users(service: ManagerService = Depends(get_manager_service), _: User = Depends(get_manager_user)):
-    return service.get_users_with_shifts()
+def get_users(
+    include_inactive: bool = Query(False, description="Include inactive users"),
+    service: ManagerService = Depends(get_manager_service), 
+    _: User = Depends(get_manager_user)
+):
+    return service.get_users_with_shifts(include_inactive=include_inactive)
 
 @router.get("/users/{user_id}/stats", response_model=UserStats)
 def get_user_stats(
@@ -547,3 +551,33 @@ def get_employee_hours(
     
     return result
 
+
+# --- Shift Giveaway endpoints ---
+
+@router.get("/giveaways")
+def get_giveaways(
+    service: ManagerService = Depends(get_manager_service),
+    _: User = Depends(get_manager_user)
+):
+    """Get all open shift giveaways with replacement suggestions"""
+    return service.get_open_giveaways()
+
+@router.post("/giveaways/{giveaway_id}/reassign")
+def reassign_giveaway(
+    giveaway_id: UUID,
+    request: GiveawayReassignRequest,
+    service: ManagerService = Depends(get_manager_service),
+    _: User = Depends(get_manager_user)
+):
+    """Reassign a giveaway shift to a new user"""
+    return service.reassign_giveaway(giveaway_id, request.new_user_id)
+
+@router.delete("/giveaways/{giveaway_id}")
+def cancel_giveaway(
+    giveaway_id: UUID,
+    service: ManagerService = Depends(get_manager_service),
+    _: User = Depends(get_manager_user)
+):
+    """Cancel a giveaway (manager action)"""
+    service.cancel_giveaway(giveaway_id)
+    return {"status": "cancelled"}

@@ -7,6 +7,7 @@ class User {
   final DateTime createdAt;
   final int? targetHoursPerMonth;
   final int? targetShiftsPerMonth;
+  final bool isActive;
 
   User({
     required this.id,
@@ -17,6 +18,7 @@ class User {
     required this.createdAt,
     this.targetHoursPerMonth,
     this.targetShiftsPerMonth,
+    this.isActive = true,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class User {
       createdAt: DateTime.parse(json['created_at']),
       targetHoursPerMonth: json['target_hours_per_month'],
       targetShiftsPerMonth: json['target_shifts_per_month'],
+      isActive: json['is_active'] ?? true,
     );
   }
 
@@ -42,6 +45,7 @@ class User {
       'created_at': createdAt.toIso8601String(),
       'target_hours_per_month': targetHoursPerMonth,
       'target_shifts_per_month': targetShiftsPerMonth,
+      'is_active': isActive,
     };
   }
 
@@ -375,6 +379,7 @@ class TeamMember {
   final List<int> jobRoleIds;
   final int? targetHoursPerMonth;
   final int? targetShiftsPerMonth;
+  final bool isActive;
   final NextShiftInfo? nextShift;
 
   TeamMember({
@@ -386,6 +391,7 @@ class TeamMember {
     required this.jobRoleIds,
     this.targetHoursPerMonth,
     this.targetShiftsPerMonth,
+    this.isActive = true,
     this.nextShift,
   });
 
@@ -399,6 +405,7 @@ class TeamMember {
       jobRoleIds: (json['job_roles'] as List).map((e) => e as int).toList(),
       targetHoursPerMonth: json['target_hours_per_month'],
       targetShiftsPerMonth: json['target_shifts_per_month'],
+      isActive: json['is_active'] ?? true,
       nextShift: json['next_shift'] != null ? NextShiftInfo.fromJson(json['next_shift']) : null,
     );
   }
@@ -558,6 +565,83 @@ class DashboardHome {
           .map((e) => ScheduleEntry.fromJson(e))
           .toList(),
       missingConfirmations: (json['missing_confirmations'] as List).cast<Map<String, dynamic>>(),
+    );
+  }
+}
+
+// --- Shift Giveaway ---
+
+class GiveawaySuggestion {
+  final String userId;
+  final String fullName;
+  final String? availabilityStatus;
+
+  GiveawaySuggestion({
+    required this.userId,
+    required this.fullName,
+    this.availabilityStatus,
+  });
+
+  factory GiveawaySuggestion.fromJson(Map<String, dynamic> json) {
+    return GiveawaySuggestion(
+      userId: json['user_id'] as String,
+      fullName: json['full_name'] as String,
+      availabilityStatus: json['availability_status'] as String?,
+    );
+  }
+}
+
+class ShiftGiveaway {
+  final String id;
+  final String scheduleId;
+  final String offeredBy;
+  final String offeredByName;
+  final String status;
+  final DateTime createdAt;
+  final String? takenBy;
+  final String? takenByName;
+  final String? date;
+  final String? shiftName;
+  final String? roleName;
+  final String? startTime;
+  final String? endTime;
+  final List<GiveawaySuggestion> suggestions;
+
+  ShiftGiveaway({
+    required this.id,
+    required this.scheduleId,
+    required this.offeredBy,
+    required this.offeredByName,
+    required this.status,
+    required this.createdAt,
+    this.takenBy,
+    this.takenByName,
+    this.date,
+    this.shiftName,
+    this.roleName,
+    this.startTime,
+    this.endTime,
+    this.suggestions = const [],
+  });
+
+  factory ShiftGiveaway.fromJson(Map<String, dynamic> json) {
+    return ShiftGiveaway(
+      id: json['id'] as String,
+      scheduleId: json['schedule_id'] as String,
+      offeredBy: json['offered_by'] as String,
+      offeredByName: json['offered_by_name'] as String? ?? '',
+      status: json['status'] as String,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      takenBy: json['taken_by'] as String?,
+      takenByName: json['taken_by_name'] as String?,
+      date: json['date'] as String?,
+      shiftName: json['shift_name'] as String?,
+      roleName: json['role_name'] as String?,
+      startTime: json['start_time'] as String?,
+      endTime: json['end_time'] as String?,
+      suggestions: (json['suggestions'] as List? ?? [])
+          .map((e) => GiveawaySuggestion.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 }
