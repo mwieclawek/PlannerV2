@@ -37,6 +37,7 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     target_hours_per_month: Optional[int] = Field(default=None, sa_column=Column(Integer, nullable=True))
     target_shifts_per_month: Optional[int] = Field(default=None, sa_column=Column(Integer, nullable=True))
+    manager_pin: Optional[str] = Field(default=None)
     is_active: bool = Field(default=True)
 
     job_roles: List[JobRole] = Relationship(back_populates="users", link_model=UserJobRoleLink)

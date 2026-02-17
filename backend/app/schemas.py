@@ -2,7 +2,7 @@ from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 from datetime import datetime, date as date_type, time
 from typing import List, Optional
 from uuid import UUID
-from .models import RoleSystem, AvailabilityStatus, AttendanceStatus
+from .models import RoleSystem, AvailabilityStatus, AttendanceStatus, GiveawayStatus
 
 # ... (Previous imports remain, but need field_validator, ValidationInfo)
 
@@ -298,7 +298,7 @@ class ShiftGiveawayResponse(BaseModel):
     schedule_id: UUID
     offered_by: UUID
     offered_by_name: str = ""
-    status: str
+    status: GiveawayStatus
     created_at: datetime
     taken_by: Optional[UUID] = None
     taken_by_name: Optional[str] = None
@@ -326,4 +326,4 @@ class GiveawayReassignRequest(BaseModel):
 class DashboardHomeResponse(BaseModel):
     working_today: List[ScheduleResponse]
     missing_confirmations: List[AttendanceResponse]
-    open_giveaways: List[ShiftGiveawayResponse]
+    open_giveaways: List["ShiftGiveawayResponse"]

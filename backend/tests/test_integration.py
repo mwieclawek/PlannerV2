@@ -30,6 +30,9 @@ class TestFullWorkflow:
             "role_system": "MANAGER",
             "manager_pin": "1234"
         })
+        })
+        if response.status_code != 200:
+            print(f"Register failed: {response.status_code} - {response.text}")
         assert response.status_code == 200
         token = response.json()["access_token"]
         # Store for subsequent tests
