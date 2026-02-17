@@ -40,8 +40,19 @@ def health_check(session: Session = Depends(get_session)):
         # Determine alembic.ini path
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         ini_path = os.path.join(base_dir, "alembic.ini")
+        
+        # If alembic.ini doesn't exist at computed path, try /app (Docker)
+        if not os.path.exists(ini_path):
+            ini_path = "/app/alembic.ini"
 
         alembic_cfg = Config(ini_path)
+        # Ensure script_location is absolute (relative paths break in Docker)
+        script_loc = alembic_cfg.get_main_option("script_location")
+        if script_loc and not os.path.isabs(script_loc):
+            alembic_cfg.set_main_option(
+                "script_location",
+                os.path.join(os.path.dirname(ini_path), script_loc)
+            )
         script = ScriptDirectory.from_config(alembic_cfg)
 
         # Get head revision(s)

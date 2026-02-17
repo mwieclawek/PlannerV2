@@ -28,24 +28,18 @@ pipeline {
                 unstash 'source'
                 sh '''
                     pip install -r backend/requirements.txt
-                    pip install pytest httpx pytest-asyncio uvicorn
+                    pip install pytest httpx pytest-asyncio
                 '''
                 sh 'python -m py_compile backend/app/main.py'
                 sh 'mkdir -p test-results'
-                // Usunięcie starej bazy SQLite (create_all nie dodaje kolumn do istniejących tabel)
+                // Usunięcie starej bazy SQLite (safety net)
                 sh 'rm -f backend/*.db backend/app/*.db *.db'
-                // Uruchomienie testowe w tle
-                sh '''
-                    export PYTHONPATH=$PWD:$PWD/backend
-                    nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
-                    sleep 10
-                '''
+                // Testy używają in-memory SQLite — nie potrzeba uruchamiać serwera
                 sh 'export PYTHONPATH=$PWD:$PWD/backend && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
             }
             post {
                 always {
                     junit allowEmptyResults: true, testResults: 'test-results/*.xml'
-                    sh 'pkill -f uvicorn || true'
                 }
             }
         }
