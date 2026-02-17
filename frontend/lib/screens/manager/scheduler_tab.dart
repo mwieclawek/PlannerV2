@@ -803,11 +803,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                       color: Theme.of(context).colorScheme.onSecondaryContainer,
                     ),
                   ),
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.onSecondaryContainer,
-                    ),
-                  ),
+
                 ],
               ),
             ),

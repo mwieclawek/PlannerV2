@@ -194,6 +194,7 @@ class _HomeTabState extends ConsumerState<HomeTab> {
   // ============== DAY TIMELINE ==============
 
   Widget _buildDayTimeline(List<ScheduleEntry> entries) {
+    final colorScheme = Theme.of(context).colorScheme;
     if (entries.isEmpty) {
       return Card(
         color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -312,7 +313,6 @@ class _HomeTabState extends ConsumerState<HomeTab> {
   }
 
   List<Widget> _layoutEvents(List<_TimelineEntry> entries, int minHour, double pixelsPerMinute) {
-    final colorScheme = Theme.of(context).colorScheme;
     // Simple column layout — group overlapping events into columns
     final widgets = <Widget>[];
     final columns = <List<_TimelineEntry>>[];
