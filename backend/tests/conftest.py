@@ -9,7 +9,7 @@ from datetime import timedelta
 from app.auth_utils import create_access_token
 
 # Use in-memory SQLite for tests
-DATABASE_URL = "sqlite://"
+DATABASE_URL = "sqlite:///:memory:"
 
 # Create engine
 engine = create_engine(
