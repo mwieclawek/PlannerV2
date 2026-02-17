@@ -48,6 +48,14 @@ class EmployeeService:
         )
         schedules = self.session.exec(statement).all()
         
+        from ..models import ShiftGiveaway, GiveawayStatus
+        giveaways = self.session.exec(
+            select(ShiftGiveaway.schedule_id).where(
+                ShiftGiveaway.status == GiveawayStatus.OPEN
+            )
+        ).all()
+        giveaway_ids = set(str(g) for g in giveaways)
+
         response = []
         for s in schedules:
             shift = self.session.get(ShiftDefinition, s.shift_def_id)
@@ -57,6 +65,7 @@ class EmployeeService:
                 "shift_name": shift.name if shift else "Unknown",
                 "role_name": self.session.get(JobRole, s.role_id).name if s.role_id else "Unknown",
                 "start_time": shift.start_time.isoformat() if shift and shift.start_time else "",
-                "end_time": shift.end_time.isoformat() if shift and shift.end_time else ""
+                "end_time": shift.end_time.isoformat() if shift and shift.end_time else "",
+                "is_on_giveaway": str(s.id) in giveaway_ids
             })
         return response

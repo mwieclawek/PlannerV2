@@ -235,6 +235,7 @@ class EmployeeScheduleResponse(BaseModel):
     role_name: str
     start_time: str
     end_time: str
+    is_on_giveaway: bool = False
 
 # --- Restaurant Config ---
 class ConfigBase(BaseModel):

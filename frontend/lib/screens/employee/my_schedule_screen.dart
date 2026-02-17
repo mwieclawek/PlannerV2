@@ -247,12 +247,35 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Text(
-                                                  shift.shiftName,
-                                                  style: GoogleFonts.inter(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
+                                                Row(
+                                                  children: [
+                                                    Text(
+                                                      shift.shiftName,
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 16,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                    if (shift.isOnGiveaway) ...[
+                                                      const SizedBox(width: 8),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.purple.shade100,
+                                                          borderRadius: BorderRadius.circular(4),
+                                                          border: Border.all(color: Colors.purple.shade300),
+                                                        ),
+                                                        child: Text(
+                                                          'GIEŁDA',
+                                                          style: GoogleFonts.inter(
+                                                            fontSize: 10,
+                                                            color: Colors.purple.shade800,
+                                                            fontWeight: FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ],
                                                 ),
                                                 const SizedBox(height: 4),
                                                 Row(
@@ -295,14 +318,23 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                                           const SizedBox(height: 8),
                                           SizedBox(
                                             width: double.infinity,
-                                            child: TextButton.icon(
-                                              onPressed: () => _showGiveawayConfirmation(shift),
-                                              icon: Icon(Icons.swap_horiz, color: Colors.grey.shade700),
-                                              label: Text(
-                                                'Oddaj zmianę',
-                                                style: GoogleFonts.inter(color: Colors.grey.shade700),
-                                              ),
-                                            ),
+                                            child: shift.isOnGiveaway 
+                                              ? OutlinedButton.icon(
+                                                  onPressed: null, // Disabled
+                                                  icon: const Icon(Icons.check_circle_outline, color: Colors.purple),
+                                                  label: const Text('Wystawiono na giełdę', style: TextStyle(color: Colors.purple)),
+                                                  style: OutlinedButton.styleFrom(
+                                                    side: BorderSide(color: Colors.purple.shade200),
+                                                  ),
+                                                )
+                                              : TextButton.icon(
+                                                  onPressed: () => _showGiveawayConfirmation(shift),
+                                                  icon: Icon(Icons.swap_horiz, color: Colors.grey.shade700),
+                                                  label: Text(
+                                                    'Oddaj zmianę',
+                                                    style: GoogleFonts.inter(color: Colors.grey.shade700),
+                                                  ),
+                                                ),
                                           ),
                                         ],
                                       if (isToday) ...[
@@ -517,6 +549,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     setState(() => _isLoading = true);
     try {
       await ref.read(apiServiceProvider).giveAwayShift(scheduleId);
+      await _loadSchedule(); // Refresh to show "On Giveaway" status
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

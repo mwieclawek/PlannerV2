@@ -223,7 +223,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
                 icon: const Icon(Icons.save),
                 label: const Text('Zapisz zmiany'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue.shade700,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -336,7 +336,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
             children: [
               // Header row
               TableRow(
-                decoration: BoxDecoration(color: Colors.blue.shade50),
+                decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)),
                 children: [
                   _buildHeaderCell('Zmiana'),
                   ...List.generate(7, (i) {

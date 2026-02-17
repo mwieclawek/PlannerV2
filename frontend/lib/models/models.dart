@@ -351,6 +351,7 @@ class EmployeeScheduleEntry {
   final String roleName;
   final String startTime;
   final String endTime;
+  final bool isOnGiveaway;
 
   EmployeeScheduleEntry({
     required this.id,
@@ -359,6 +360,7 @@ class EmployeeScheduleEntry {
     required this.roleName,
     required this.startTime,
     required this.endTime,
+    this.isOnGiveaway = false,
   });
 
   factory EmployeeScheduleEntry.fromJson(Map<String, dynamic> json) {
@@ -369,6 +371,7 @@ class EmployeeScheduleEntry {
       roleName: json['role_name'],
       startTime: json['start_time'],
       endTime: json['end_time'],
+      isOnGiveaway: json['is_on_giveaway'] ?? false,
     );
   }
 }
