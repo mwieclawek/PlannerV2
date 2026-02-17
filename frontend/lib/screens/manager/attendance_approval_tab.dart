@@ -245,7 +245,7 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Obecności', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.indigo.shade700,
+        backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -265,7 +265,7 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab> {
           // Filters
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.grey.shade100,
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
             child: Column(
               children: [
                 Row(
@@ -398,28 +398,29 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab> {
                               final isConfirmed = status == 'CONFIRMED';
                               final isRejected = status == 'REJECTED';
 
+                              final colorScheme = Theme.of(context).colorScheme;
                               return Card(
                                 margin: const EdgeInsets.only(bottom: 12),
                                 elevation: isPending ? 2 : 1,
                                 color: isConfirmed
-                                    ? Colors.green.shade50
+                                    ? colorScheme.primaryContainer.withOpacity(0.4)
                                     : isRejected
-                                        ? Colors.red.shade50
+                                        ? colorScheme.errorContainer.withOpacity(0.4)
                                         : null,
                                 child: ListTile(
                                   leading: CircleAvatar(
                                     backgroundColor: isPending
                                         ? Colors.orange
                                         : isConfirmed
-                                            ? Colors.green
-                                            : Colors.red,
+                                            ? colorScheme.primary
+                                            : colorScheme.error,
                                     child: Icon(
                                       isPending
                                           ? Icons.pending
                                           : isConfirmed
                                               ? Icons.check_circle
                                               : Icons.cancel,
-                                      color: Colors.white,
+                                      color: colorScheme.onPrimary,
                                     ),
                                   ),
                                   title: Text(
@@ -442,8 +443,8 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab> {
                                           color: isPending
                                               ? Colors.orange.shade700
                                               : isConfirmed
-                                                  ? Colors.green.shade700
-                                                  : Colors.red.shade700,
+                                                  ? colorScheme.primary
+                                                  : colorScheme.error,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
@@ -470,7 +471,7 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab> {
                                             isConfirmed ? 'Zatwierdzone' : 'Odrzucone',
                                             style: const TextStyle(color: Colors.white, fontSize: 12),
                                           ),
-                                          backgroundColor: isConfirmed ? Colors.green : Colors.red,
+                                          backgroundColor: isConfirmed ? colorScheme.primary : colorScheme.error,
                                         ),
                                 ),
                               );

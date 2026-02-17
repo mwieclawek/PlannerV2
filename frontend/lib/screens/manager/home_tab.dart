@@ -279,14 +279,13 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                     width: 8,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: Colors.red.shade600,
-                      shape: BoxShape.circle,
+                      color: colorScheme.error,
                     ),
                   ),
                   Expanded(
                     child: Container(
                       height: 1.5,
-                      color: Colors.red.shade600,
+                      color: colorScheme.error,
                     ),
                   ),
                 ],
@@ -637,16 +636,16 @@ class _HomeTabState extends ConsumerState<HomeTab> {
 
     if (items.isEmpty) {
       return Card(
-        color: Colors.green.shade50,
+        color: colorScheme.errorContainer.withOpacity(0.4),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
             children: [
-              Icon(Icons.check_circle_outline, color: Colors.green.shade600),
+              Icon(Icons.check_circle_outline, color: colorScheme.primary),
               const SizedBox(width: 12),
               Text(
                 'Wszystkie obecności potwierdzone',
-                style: TextStyle(color: Colors.green.shade800),
+                style: TextStyle(color: colorScheme.onSurface),
               ),
             ],
           ),
@@ -671,8 +670,8 @@ class _HomeTabState extends ConsumerState<HomeTab> {
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
             leading: CircleAvatar(
-              backgroundColor: Colors.orange.shade100,
-              child: Icon(Icons.warning, color: Colors.orange.shade700, size: 20),
+              backgroundColor: colorScheme.errorContainer,
+              child: Icon(Icons.warning, color: colorScheme.error, size: 20),
             ),
             title: Text(userName, style: const TextStyle(fontWeight: FontWeight.w600)),
             subtitle: Text('Brak potwierdzenia obecności z dnia $dateStr'),
@@ -745,8 +744,8 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                   children: [
                     CircleAvatar(
                       radius: 16,
-                      backgroundColor: Colors.blue.shade100,
-                      child: Icon(Icons.swap_horiz, color: Colors.blue.shade700, size: 18),
+                      backgroundColor: colorScheme.secondaryContainer,
+                      child: Icon(Icons.swap_horiz, color: colorScheme.onSecondaryContainer, size: 18),
                     ),
                     const SizedBox(width: 12),
                     Expanded(

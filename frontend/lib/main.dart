@@ -32,9 +32,8 @@ class MyApp extends ConsumerWidget {
       primary: const Color(0xFF006A6A),
       primaryContainer: const Color(0xFF9CF4F4), // Light Mint
       secondary: const Color(0xFF4A6363), // Muted Grey-Green
-      surface: const Color(0xFFF2FBFB),
-      // background is deprecated in recent Flutter versions for ColorScheme, use surface or specific background if available
-      // but seedColor handles most generator logic
+      surface: const Color(0xFFF2FBFB), // Surface
+      error: const Color(0xFFBA1A1A),
       brightness: Brightness.light,
     );
 

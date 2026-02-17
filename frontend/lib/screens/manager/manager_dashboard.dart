@@ -33,7 +33,7 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
           'Panel Managera',
           style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Colors.indigo.shade700,
+        backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         actions: [
           IconButton(

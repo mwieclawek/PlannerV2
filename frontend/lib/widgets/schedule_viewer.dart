@@ -194,22 +194,22 @@ class ScheduleViewer extends StatelessWidget {
                               child: Container(
                                 margin: const EdgeInsets.symmetric(horizontal: 4),
                                 padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: hasWarnings
-                                      ? Colors.orange.shade50
-                                      : (daySchedules.isEmpty 
-                                          ? Colors.grey.shade100 
-                                          : Colors.indigo.shade50),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
+                                  decoration: BoxDecoration(
                                     color: hasWarnings
-                                        ? Colors.orange.shade400
+                                        ? Theme.of(context).colorScheme.errorContainer.withOpacity(0.5)
                                         : (daySchedules.isEmpty 
-                                            ? Colors.grey.shade300 
-                                            : Colors.indigo.shade200),
-                                    width: hasWarnings ? 1.5 : 1,
+                                            ? Theme.of(context).colorScheme.surfaceContainerLow 
+                                            : Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: hasWarnings
+                                          ? Theme.of(context).colorScheme.error
+                                          : (daySchedules.isEmpty 
+                                              ? Theme.of(context).colorScheme.outlineVariant
+                                              : Theme.of(context).colorScheme.primary.withOpacity(0.5)),
+                                      width: hasWarnings ? 1.5 : 1,
+                                    ),
                                   ),
-                                ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -304,7 +304,7 @@ class ScheduleViewer extends StatelessWidget {
                                                       Icon(
                                                         Icons.person,
                                                         size: 14,
-                                                        color: Colors.indigo.shade700,
+                                                        color: Theme.of(context).colorScheme.primary,
                                                       ),
                                                       const SizedBox(width: 4),
                                                       Expanded(
@@ -375,20 +375,20 @@ class ScheduleViewer extends StatelessWidget {
                                                 margin: const EdgeInsets.only(top: 4),
                                                 padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                                                 decoration: BoxDecoration(
-                                                  color: hasWarnings ? Colors.orange.shade100 : Colors.indigo.shade100,
+                                                  color: hasWarnings ? Theme.of(context).colorScheme.errorContainer : Theme.of(context).colorScheme.primaryContainer,
                                                   borderRadius: BorderRadius.circular(4),
                                                 ),
                                                 child: Row(
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
                                                     Icon(Icons.add, size: 12, 
-                                                        color: hasWarnings ? Colors.orange.shade700 : Colors.indigo.shade700),
+                                                        color: hasWarnings ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary),
                                                     const SizedBox(width: 4),
                                                     Text(
                                                       'Dodaj',
                                                       style: GoogleFonts.inter(
                                                         fontSize: 10,
-                                                        color: hasWarnings ? Colors.orange.shade700 : Colors.indigo.shade700,
+                                                        color: hasWarnings ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary,
                                                         fontWeight: FontWeight.w500,
                                                       ),
                                                     ),

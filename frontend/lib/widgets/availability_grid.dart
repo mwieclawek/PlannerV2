@@ -386,7 +386,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
   Widget _buildShiftNameCell(ShiftDefinition shift) {
     return Container(
       padding: const EdgeInsets.all(12),
-      color: Colors.grey.shade100,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,

@@ -70,16 +70,17 @@ class _AvailabilityViewTabState extends ConsumerState<AvailabilityViewTab> {
   }
 
   Color _getStatusColor(String status) {
+    final colorScheme = Theme.of(context).colorScheme;
     switch (status) {
       case 'PREFERRED':
-        return Colors.green.shade400;
+        return colorScheme.primary;
       case 'NEUTRAL':
-        return Colors.amber.shade400;
+        return colorScheme.secondary;
       case 'UNAVAILABLE':
-        return Colors.red.shade400;
+        return colorScheme.error;
       case 'AVAILABLE':
       default:
-        return Colors.grey.shade300;
+        return colorScheme.surfaceContainerHighest;
     }
   }
 
@@ -91,8 +92,8 @@ class _AvailabilityViewTabState extends ConsumerState<AvailabilityViewTab> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.indigo.shade50,
-            border: Border(bottom: BorderSide(color: Colors.indigo.shade200)),
+            color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+            border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

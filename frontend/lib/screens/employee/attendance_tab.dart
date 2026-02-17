@@ -275,8 +275,8 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.purple.shade50,
-              border: Border(bottom: BorderSide(color: Colors.purple.shade200)),
+              color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+              border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -317,8 +317,8 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
         onPressed: _showRegisterDialog,
         icon: const Icon(Icons.add),
         label: const Text('Zarejestruj'),
-        backgroundColor: Colors.purple.shade600,
-        foregroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
       ),
     );
   }

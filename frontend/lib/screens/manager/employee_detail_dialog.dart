@@ -72,13 +72,13 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
       children: [
         CircleAvatar(
           radius: 32,
-          backgroundColor: Colors.indigo.shade100,
+          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
           child: Text(
             widget.user.fullName.isNotEmpty ? widget.user.fullName[0].toUpperCase() : '?',
             style: GoogleFonts.inter(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Colors.indigo.shade700,
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         ),
@@ -169,7 +169,7 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
                     value,
                     style: TextStyle(
                       fontSize: 14,
-                      color: onTap != null ? Colors.indigo : Colors.black87,
+                      color: onTap != null ? Theme.of(context).colorScheme.primary : Colors.black87,
                       fontWeight: onTap != null ? FontWeight.w500 : FontWeight.normal,
                     ),
                   ),
@@ -216,8 +216,8 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
                         'Ukończone zmiany',
                         stats.totalShiftsCompleted.toString(),
                         Icons.check_circle_outline,
-                        Colors.blue.shade100,
-                        Colors.blue.shade700,
+                        Theme.of(context).colorScheme.primaryContainer,
+                        Theme.of(context).colorScheme.primary,
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -226,8 +226,8 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
                         'Przepracowane godziny',
                         stats.totalHoursWorked.toStringAsFixed(1),
                         Icons.access_time,
-                        Colors.green.shade100,
-                        Colors.green.shade700,
+                        Theme.of(context).colorScheme.secondaryContainer,
+                        Theme.of(context).colorScheme.secondary,
                       ),
                     ),
                   ],
@@ -258,7 +258,7 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
                             width: 20,
                             height: (count * 5).clamp(4, 100).toDouble(), // Scale factor
                             decoration: BoxDecoration(
-                              color: Colors.indigo.shade400,
+                              color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -332,8 +332,8 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
           icon: const Icon(Icons.edit),
           label: const Text('Edytuj dane'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.indigo,
-            foregroundColor: Colors.white,
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            foregroundColor: Theme.of(context).colorScheme.onPrimary,
           ),
         ),
       ],
