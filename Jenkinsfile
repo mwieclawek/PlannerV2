@@ -34,11 +34,11 @@ pipeline {
                 sh 'mkdir -p test-results'
                 // Uruchomienie testowe w tle
                 sh '''
-                    export PYTHONPATH=$PWD
+                    export PYTHONPATH=$PWD:$PWD/backend
                     nohup python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 > uvicorn.log 2>&1 &
                     sleep 10
                 '''
-                sh 'export PYTHONPATH=$PWD && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
+                sh 'export PYTHONPATH=$PWD:$PWD/backend && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
             }
             post {
                 always {
