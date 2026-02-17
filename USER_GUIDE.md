@@ -7,19 +7,21 @@ Witamy w systemie Planner V2 – kompleksowym narzędziu do zarządzania grafika
 ## Spis Treści
 
 1.  [Wstęp](#wstęp)
-2.  [Logowanie i Rejestracja](#logowanie-i-rejestracja)
+2.  [Logowanie](#logowanie)
 3.  [Dla Managerów](#dla-managerów)
     *   [Dashboard](#dashboard-managera)
     *   [Konfiguracja Systemu](#konfiguracja-systemu)
     *   [Zarządzanie Zespołem](#zarządzanie-zespołem)
     *   [Grafik Pracy](#grafik-pracy)
+    *   [Oddawanie Zmian](#oddawanie-zmian-manager)
     *   [Zarządzanie Obecnością](#zarządzanie-obecnością)
     *   [Raporty](#raporty)
 4.  [Dla Pracowników](#dla-pracowników)
     *   [Mój Grafik](#mój-grafik)
+    *   [Oddawanie Zmian](#oddawanie-zmian-pracownik)
     *   [Dostępność](#dostępność)
     *   [Rejestracja Obecności](#rejestracja-obecności)
-5.  [FAQ i Rozwiązywanie Problemów](#faq-i-rozwiązywanie-problemów)
+5.  [Pomoc i Zgłaszanie Błędów](#pomoc-i-zgłaszanie-błędów)
 
 ---
 
@@ -33,26 +35,16 @@ Standardowy adres aplikacji (wersja lokalna): `http://127.0.0.1:5000` (może si�
 
 ---
 
-## 2. Logowanie i Rejestracja
+## 2. Logowanie
 
-Aby korzystać z systemu, musisz posiadać konto.
+Aby korzystać z systemu, musisz posiadać konto utworzone przez Managera. Rejestracja samodzielna jest wyłączona.
 
 ### Logowanie
 1.  Otwórz aplikację w przeglądarce.
-2.  Na ekranie startowym podaj swój **Login (email)** oraz **Hasło**.
+2.  Na ekranie startowym podaj swój **Login** oraz **Hasło**.
 3.  Kliknij przycisk **"Zaloguj"**.
 
-### Rejestracja Nowego Użytkownika
-Jeśli nie masz jeszcze konta:
-1.  Na ekranie logowania kliknij link **"Zarejestruj się"**.
-2.  Wybierz swoją rolę: **Pracownik** lub **Manager**.
-3.  Wypełnij formularz:
-    *   **Nazwa użytkownika**: unikalny login w systemie.
-    *   **Imię i nazwisko**: Twoje dane, widoczne w grafikach.
-    *   **Email**: Adres do komunikacji.
-    *   **Hasło**: Hasło do logowania.
-4.  **Ważne dla Managerów**: Rejestracja konta Managera wymaga podania specjalnego kodu PIN: **`1234`**.
-5.  Po pomyślnej rejestracji zostaniesz automatycznie przekierowany do panelu logowania.
+> **Uwaga**: Jeśli zapomniałeś hasła, skontaktuj się ze swoim Managerem.
 
 ---
 
@@ -84,16 +76,16 @@ Zdefiniuj dane restauracji (nazwa, adres) oraz godziny otwarcia.
 
 ### Zarządzanie Zespołem
 Zakładka **Zespół** pozwala na administrowanie pracownikami.
-*   **Lista Pracowników**: Widzisz wszystkich zarejestrowanych użytkowników.
+*   **Tworzenie Konta**: Kliknij przycisk dodawania (+), aby utworzyć konto dla nowego pracownika.
 *   **Szczegóły Pracownika**: Kliknij na pracownika, aby:
     *   Przypisać mu role (stanowiska), na których może pracować.
     *   Zresetować hasło (jeśli pracownik je zapomni).
-    *   Edytować dane osobowe.
-    *   Zobaczyć podsumowanie przepracowanych godzin i historię zmian.
+    *   **Aktywować/Dezaktywować**: Zablokuj dostęp pracownikom, którzy już nie pracują.
+    *   Edytować dane osobowe i cele godzinowe.
 
 ### Grafik Pracy
 Sercem systemu jest moduł planowania.
-1.  **Widok**: Kalendarz tygodniowy z podziałem na dni i zmiany.
+1.  **Widok**: Kalendarz z podziałem na dni lub Tygodniowy.
 2.  **Wymagania Kadrowe**: Określ, ile osób na danym stanowisku jest potrzebnych w konkretny dzień (np. "Sobota Rano: 2x Barista").
 3.  **Generowanie Automatyczne**:
     *   Kliknij przycisk **"Generuj grafik"**.
@@ -105,6 +97,12 @@ Sercem systemu jest moduł planowania.
 5.  **Publikacja**:
     *   Gdy grafik jest gotowy, kliknij **"Opublikuj"**.
     *   Dopiero wtedy pracownicy zobaczą swoje zmiany w aplikacji.
+
+### Oddawanie Zmian (Manager)
+W zakładce **Zmiany** (ikona strzałek) widzisz prośby pracowników o oddanie zmiany.
+*   Rozwiń kartę, aby zobaczyć szczegóły.
+*   System podpowie sugerowane zastępstwa, sortując pracowników według dostępności (Zielony = dostępny).
+*   Kliknij **Przydziel**, aby zaakceptować zmianę osoby, lub **Anuluj oddanie**, aby odrzucić prośbę.
 
 ### Zarządzanie Obecnością
 System pozwala na weryfikację rzeczywistego czasu pracy.
@@ -126,6 +124,12 @@ Po zalogowaniu widzisz swój kalendarz pracy.
 *   **Widok Tygodniowy**: Sprawdź, kiedy i w jakich godzinach pracujesz.
 *   **Szczegóły Zmiany**: Data, godzina i rola (stanowisko), na którym masz pracować.
 
+### Oddawanie Zmian (Pracownik)
+Jeśli nie możesz przyjść na zaplanowaną zmianę:
+1.  Kliknij na zmianę w swoim grafiku.
+2.  Wybierz opcję **"Oddaj zmianę"**.
+3.  Twoja prośba trafi do Managera, który znajdzie zastępstwo. Dopóki Manager nie zatwierdzi zmiany, nadal jesteś przypisany do grafiku!
+
 ### Dostępność
 To kluczowa funkcja, dzięki której Manager wie, kiedy możesz pracować.
 1.  Przejdź do zakładki **Dostępność**.
@@ -137,30 +141,20 @@ To kluczowa funkcja, dzięki której Manager wie, kiedy możesz pracować.
 
 ### Rejestracja Obecności
 Używaj tej funkcji, gdy przychodzisz i wychodzisz z pracy.
-1.  Na ekranie głównym (Dashboard) znajdziesz sekcję "Rejestracja Czasu".
+1.  Na ekranie głównym (Dashboard) znajdziesz sekcję "Rejestracja Czasu" (lub zakładkę Obecność).
 2.  **Start Pracy**: Kliknij przycisk wejścia (Check-In). Czas zostanie zarejestrowany.
 3.  **Koniec Pracy**: Po zakończeniu zmiany kliknij przycisk wyjścia (Check-Out).
 4.  Twoje godziny trafią do systemu i po zatwierdzeniu przez Managera zostaną wliczone do wypłaty.
 
 ---
 
-## 5. FAQ i Rozwiązywanie Problemów
+## 5. Pomoc i Zgłaszanie Błędów
 
-**P: Zapomniałem hasła. Co robić?**
-O: Skontaktuj się ze swoim Managerem. Może on zresetować Twoje hasło w panelu "Zespół".
+W górnym pasku aplikacji znajdziesz ikonę znaku zapytania (❔).
 
-**P: Grafik jest pusty po wygenerowaniu.**
-O: (Dla Managera) Sprawdź, czy:
-1.  Zdefiniowane są **Wymagania Kadrowe** na ten tydzień.
-2.  Pracownicy mają przypisane odpowiednie **Role**.
-3.  Pracownicy zgłosili swoją **Dostępność** (nie są wszyscy "Niedostępni").
+*   **Pomoc**: Otwiera panel z najważniejszymi informacjami o obsłudze aplikacji.
+*   **Zgłoś błąd**: Jeśli zauważysz błąd w działaniu programu, kliknij przycisk "Zgłoś błąd" w oknie pomocy.
+    *   Wypełnij formularz (Tytuł, Opis, Kroki do odtworzenia).
+    *   Zgłoszenie trafi bezpośrednio do zespołu technicznego.
 
-**P: Nie mogę zarejestrować konta Managera.**
-O: Upewnij się, że podajesz poprawny kod PIN (domyślnie: `1234`). Jeśli został zmieniony, zapytaj administratora systemu.
-
-**P: Dlaczego nie widzę zmian w grafiku?**
-O: Jeśli jesteś pracownikiem - Manager mógł jeszcze nie **opublikować** grafiku (jest w trybie szkicu).
-Jeśli jesteś Managerem - upewnij się, że wybrałeś poprawny tydzień w kalendarzu.
-
-**P: Czy mogę zmienić swoją dostępność po wygenerowaniu grafiku?**
-O: Tak, ale zmiana dostępności po publikacji grafiku nie usunie Cię automatycznie z zaplanowanej zmiany. Musisz poinformować Managera bezpośrednio.
+---
