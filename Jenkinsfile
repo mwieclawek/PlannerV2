@@ -35,7 +35,7 @@ pipeline {
                 // Usunięcie starej bazy SQLite (safety net)
                 sh 'rm -f backend/*.db backend/app/*.db *.db'
                 // Testy używają in-memory SQLite — nie potrzeba uruchamiać serwera
-                sh 'export PYTHONPATH=$PWD:$PWD/backend && python -m pytest backend/tests/test_api.py -v --junitxml=test-results/backend-api.xml || true'
+                sh 'export PYTHONPATH=$PWD:$PWD/backend && python -m pytest backend/tests/test_api.py -v -o asyncio_mode=auto --junitxml=test-results/backend-api.xml || true'
             }
             post {
                 always {
@@ -124,8 +124,8 @@ pipeline {
                         HEALTH_OK=false
                         for i in 1 2 3 4 5; do
                             HEALTH=$(docker exec plannerv2-backend-dev curl -sf http://localhost:8000/health 2>/dev/null || echo '{}')
-                            MIGRATION=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('migration_current',''))" 2>/dev/null || echo "")
-                            if [ "$MIGRATION" = "True" ]; then
+                            echo "Health response: $HEALTH"
+                            if echo "$HEALTH" | grep -q '"migration_current":true'; then
                                 echo "✅ Migracje bazy DEV aktualne"
                                 HEALTH_OK=true
                                 break
@@ -242,8 +242,8 @@ pipeline {
                         HEALTH_OK=false
                         for i in 1 2 3 4 5; do
                             HEALTH=$(docker exec plannerv2-backend curl -sf http://localhost:8000/health 2>/dev/null || echo '{}')
-                            MIGRATION=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('migration_current',''))" 2>/dev/null || echo "")
-                            if [ "$MIGRATION" = "True" ]; then
+                            echo "Health response: $HEALTH"
+                            if echo "$HEALTH" | grep -q '"migration_current":true'; then
                                 echo "✅ Migracje bazy PROD aktualne"
                                 HEALTH_OK=true
                                 break
