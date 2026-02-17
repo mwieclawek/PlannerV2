@@ -32,6 +32,8 @@ pipeline {
                 '''
                 sh 'python -m py_compile backend/app/main.py'
                 sh 'mkdir -p test-results'
+                // Usunięcie starej bazy SQLite (create_all nie dodaje kolumn do istniejących tabel)
+                sh 'rm -f backend/*.db backend/app/*.db *.db'
                 // Uruchomienie testowe w tle
                 sh '''
                     export PYTHONPATH=$PWD:$PWD/backend
