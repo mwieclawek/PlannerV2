@@ -476,4 +476,8 @@ class ApiService {
     return response.data as Map<String, dynamic>;
   }
 
+  Future<void> giveAwayShift(String scheduleId) async {
+    await _dio.post('/employee/giveaway/$scheduleId');
+  }
+
 }

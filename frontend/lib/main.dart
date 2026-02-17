@@ -28,28 +28,32 @@ class MyApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
 
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF4338CA), // Indigo 700
+      seedColor: const Color(0xFF006A6A), // Deep Teal
+      primary: const Color(0xFF006A6A),
+      primaryContainer: const Color(0xFF9CF4F4), // Light Mint
+      secondary: const Color(0xFF4A6363), // Muted Grey-Green
+      surface: const Color(0xFFF2FBFB),
+      // background is deprecated in recent Flutter versions for ColorScheme, use surface or specific background if available
+      // but seedColor handles most generator logic
       brightness: Brightness.light,
     );
 
     return MaterialApp.router(
-      title: 'RestoPlan V2',
+      title: 'Planista',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: colorScheme,
         useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFFAFDFC), // Ice White background
         textTheme: GoogleFonts.interTextTheme(
           ThemeData.light().textTheme,
         ),
-        cardTheme: CardTheme(
-          elevation: 1,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          clipBehavior: Clip.antiAlias,
-        ),
+        // cardTheme removed to fix build error and rely on M3 defaults
         appBarTheme: AppBarTheme(
           centerTitle: false,
           elevation: 0,
           scrolledUnderElevation: 2,
+          backgroundColor: colorScheme.surface,
           titleTextStyle: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,

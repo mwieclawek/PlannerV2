@@ -71,7 +71,10 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     // NOTE: No Scaffold here - this is embedded inside EmployeeDashboard which has AppBar
     return _isLoading
         ? const Center(child: CircularProgressIndicator())
-        : SingleChildScrollView(
+        : Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,6 +290,20 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                                             ),
                                           ),
                                         ],
+                                        if (!isPast) ...[
+                                          const SizedBox(height: 8),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: TextButton.icon(
+                                              onPressed: () => _showGiveawayConfirmation(shift),
+                                              icon: Icon(Icons.swap_horiz, color: Colors.grey.shade700),
+                                              label: Text(
+                                                'Oddaj zmianę',
+                                                style: GoogleFonts.inter(color: Colors.grey.shade700),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                       if (isToday) ...[
                                         const SizedBox(height: 12),
@@ -341,6 +358,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                   ),
                 ],
               ),
+            ),
             );
 
   }
@@ -462,6 +480,56 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Błąd rejestracji: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+
+  void _showGiveawayConfirmation(EmployeeScheduleEntry shift) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Oddać zmianę?'),
+        content: Text(
+          'Czy na pewno chcesz oddać zmianę ${shift.shiftName} w dniu ${DateFormat('d MMMM', 'pl_PL').format(shift.date)}?\n\n'
+          'Zmiana zostanie oznaczona jako dostępna dla innych pracowników. Musisz pracować, dopóki ktoś jej nie przejmie lub manager nie zatwierdzi zmiany.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Anuluj'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _submitGiveaway(shift.id);
+            },
+            child: const Text('Potwierdź oddanie'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitGiveaway(String scheduleId) async {
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(apiServiceProvider).giveAwayShift(scheduleId);
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ Zmiana wystawiona na giełdę'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red),
         );
       }
     }

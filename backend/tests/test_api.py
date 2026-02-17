@@ -5,8 +5,12 @@ For Jenkins: pytest backend/tests/test_api.py --junitxml=test-results/backend.xm
 """
 import pytest
 import httpx
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import uuid
+from sqlmodel import Session, select
+from backend.app.database import engine
+from backend.app.models import User
+from backend.app.auth_utils import get_password_hash
 
 BASE_URL = "http://127.0.0.1:8000"
 
@@ -34,17 +38,39 @@ TEST_MANAGER = {
     "manager_pin": "1234"
 }
 
+def create_user_in_db(user_data):
+    """Directly insert user into DB since registration is disabled"""
+    with Session(engine) as session:
+        # Check if exists
+        existing = session.exec(select(User).where(User.username == user_data["username"])).first()
+        if existing:
+            return existing
+            
+        user = User(
+            username=user_data["username"],
+            email=user_data.get("email"),
+            full_name=user_data["full_name"],
+            role_system=user_data["role_system"],
+            password_hash=get_password_hash(user_data["password"]),
+            created_at=datetime.utcnow(),
+            is_active=True
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return user
+
 @pytest.fixture(scope="module")
 def client():
     return httpx.Client(base_url=BASE_URL, timeout=30.0)
 
 @pytest.fixture(scope="module")
 def manager_token(client):
-    """Create manager account and return token"""
-    # Try register first
-    response = client.post("/auth/register", json=TEST_MANAGER)
-    # Ignore error if exists (unlikely with unique email but safe)
+    """Create manager account in DB and return token"""
+    # Seed DB directly
+    create_user_in_db(TEST_MANAGER)
     
+    # Login
     response = client.post("/auth/token", data={
         "username": TEST_MANAGER["username"],
         "password": TEST_MANAGER["password"]
@@ -70,29 +96,24 @@ class TestHealthCheck:
 class TestAuthentication:
     """Auth endpoint tests"""
     
-    def test_register_employee(self, client):
+    def test_register_employee_disabled(self, client):
+        """Registration should be disabled"""
         data = get_employee_data()
         response = client.post("/auth/register", json=data)
-        assert response.status_code == 200
-        assert "access_token" in response.json()
+        assert response.status_code == 403
     
-    def test_register_manager_without_pin_fails(self, client):
-        data = get_employee_data() # Use fresh email
-        data["role_system"] = "MANAGER"
-        # No pin provided
-        response = client.post("/auth/register", json=data)
-        assert response.status_code == 403 or "Invalid" in response.text
-    
-    def test_register_manager_wrong_pin_fails(self, client):
+    def test_register_manager_fails(self, client):
+        """Manager registration also disabled"""
         data = get_employee_data()
         data["role_system"] = "MANAGER"
-        data["manager_pin"] = "0000"
+        data["manager_pin"] = "1234"
         response = client.post("/auth/register", json=data)
         assert response.status_code == 403
     
     def test_login_success(self, client):
-        # Ensure manager exists first
-        client.post("/auth/register", json=TEST_MANAGER)
+        # Ensure manager exists
+        create_user_in_db(TEST_MANAGER)
+        
         response = client.post("/auth/token", data={
             "username": TEST_MANAGER["username"],
             "password": TEST_MANAGER["password"]
@@ -100,8 +121,7 @@ class TestAuthentication:
         assert response.status_code == 200
     
     def test_login_wrong_password(self, client):
-        # Ensure manager exists first
-        client.post("/auth/register", json=TEST_MANAGER)
+        create_user_in_db(TEST_MANAGER)
         response = client.post("/auth/token", data={
             "username": TEST_MANAGER["username"],
             "password": "wrongpassword"
@@ -182,7 +202,7 @@ class TestSolverLogic:
         }).json()
         
         # 2. Create Shift
-        # Use weird hour to ensure uniqueness for test stability
+        # Use weird hour to verify uniqueness/setup
         shift = client.post("/manager/shifts", headers=auth_headers, json={
             "name": "SolverShift",
             "start_time": "04:30",
@@ -194,10 +214,16 @@ class TestSolverLogic:
         else:
             shift = shift.json()
             
-        # 3. Create Employee
+        # 3. Create Employee directly in DB
         emp_data = get_employee_data()
-        emp_reg = client.post("/auth/register", json=emp_data)
-        emp_token = emp_reg.json()["access_token"]
+        create_user_in_db(emp_data)
+        
+        # 3.5 Login as employee
+        emp_resp = client.post("/auth/token", data={
+            "username": emp_data["username"],
+            "password": emp_data["password"]
+        })
+        emp_token = emp_resp.json()["access_token"]
         
         # Get emp ID
         emp_me = client.get("/auth/me", headers={"Authorization": f"Bearer {emp_token}"}).json()
@@ -247,13 +273,11 @@ class TestSolverLogic:
         # Should be feasible
         assert data["status"] == "success"
         # Should have found 1 assignment (since we have 1 employee with role)
-        # Verify result contains the correct assignment
         assert data["count"] >= 1
         
         assignments = data["schedules"]
         emp_id_str = str(setup_data["emp_id"])
         my_assignment = next((a for a in assignments if str(a["user_id"]) == emp_id_str), None)
-        # Note: API might return UUID as string or as object, ensure check handles both
             
         assert my_assignment is not None, f"No assignment found for emp_id={emp_id_str}. Assignments: {assignments}"
         assert my_assignment["shift_def_id"] == shift_id

@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/providers.dart';
+import '../widgets/app_logo.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -78,9 +79,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Colors.indigo.shade900,
-              Colors.indigo.shade600,
-              Colors.blue.shade400,
+              Color(0xFF004D4D), // Darker Teal
+              Color(0xFF006A6A), // Primary Teal
+              Color(0xFF4A6363), // Muted Grey-Green
             ],
           ),
         ),
@@ -100,18 +101,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.calendar_month_rounded,
-                          size: 64,
-                          color: Colors.indigo.shade700,
-                        ),
-                        const SizedBox(height: 16),
+                        const AppLogo(size: 80),
+                        const SizedBox(height: 24),
                         Text(
-                          'RestoPlan V2',
+                          'Planista',
                           style: GoogleFonts.outfit(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
-                            color: Colors.indigo.shade900,
+                            color: const Color(0xFF006A6A),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -155,7 +152,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: ElevatedButton(
                             onPressed: _isLoading ? null : _submit,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.indigo.shade700,
+                              backgroundColor: const Color(0xFF006A6A),
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
