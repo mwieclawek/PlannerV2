@@ -626,7 +626,6 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                         ),
                       ),
                     ),
-                    ),
                   ),
                   if (_isGenerating) ...[
                     const SizedBox(height: 12),
