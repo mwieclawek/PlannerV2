@@ -626,7 +626,22 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                         ),
                       ),
                     ),
+                    ),
                   ),
+                  if (_isGenerating) ...[
+                    const SizedBox(height: 12),
+                    const LinearProgressIndicator(minHeight: 4),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Przetwarzanie może potrwać do 30 sekund...',
+                      style: GoogleFonts.inter(
+                        fontSize: 12, 
+                        color: Colors.grey.shade600,
+                        fontStyle: FontStyle.italic
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                   if (_hasUnsavedChanges) ...[
                     const SizedBox(height: 12),
                     SizedBox(

@@ -142,8 +142,12 @@ class SolverService:
             e_id, d, s_id, r_id = key
             status = avail_map.get((e_id, d, s_id), AvailabilityStatus.UNAVAILABLE) 
             
-            if status == AvailabilityStatus.UNAVAILABLE:
+            if status == AvailabilityStatus.UNAVAILABLE or status == AvailabilityStatus.AVAILABLE:
+                # print(f"DEBUG: forcing w_var=0 for {e_id} on {d} due to UNAVAILABLE")
                 model.Add(w_var == 0)
+            else:
+                # print(f"DEBUG: status {status} for {e_id} on {d} (shift {s_id})")
+                pass
 
         # C3. Staffing Requirements
         for d in days:
@@ -226,8 +230,9 @@ class SolverService:
                 objective_terms.append(w_var * 10)
             elif status == AvailabilityStatus.NEUTRAL:
                 objective_terms.append(w_var * 5)
-            elif status == AvailabilityStatus.AVAILABLE:
-                objective_terms.append(w_var * 1) # Base score for working
+            # elif status == AvailabilityStatus.AVAILABLE:
+            #     # print(f"DEBUG: Adding +1 for AVAILABLE")
+            #     objective_terms.append(w_var * 1) # Base score for working
         
         # 2. Penalty for split shifts (working > 1 shift per day)
         # We subtract Penalty * Excess from objective
