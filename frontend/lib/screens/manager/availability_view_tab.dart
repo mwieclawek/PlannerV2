@@ -70,17 +70,12 @@ class _AvailabilityViewTabState extends ConsumerState<AvailabilityViewTab> {
   }
 
   Color _getStatusColor(String status) {
-    final colorScheme = Theme.of(context).colorScheme;
     switch (status) {
-      case 'PREFERRED':
-        return colorScheme.primary;
-      case 'NEUTRAL':
-        return colorScheme.secondary;
-      case 'UNAVAILABLE':
-        return colorScheme.error;
       case 'AVAILABLE':
+        return Colors.green.shade400;
+      case 'UNAVAILABLE':
       default:
-        return colorScheme.surfaceContainerHighest;
+        return Colors.red.shade400;
     }
   }
 
@@ -209,7 +204,7 @@ class _AvailabilityViewTabState extends ConsumerState<AvailabilityViewTab> {
                           ..._shifts!.map((shift) {
                             final entry = dayEntries.firstWhere(
                               (e) => e.shiftDefId == shift.id,
-                              orElse: () => AvailabilityEntry(date: dateStr, shiftDefId: shift.id, status: 'AVAILABLE'),
+                              orElse: () => AvailabilityEntry(date: dateStr, shiftDefId: shift.id, status: 'UNAVAILABLE'),
                             );
                             return Container(
                               height: 24,

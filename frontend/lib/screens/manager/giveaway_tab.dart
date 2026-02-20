@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 
@@ -113,7 +112,6 @@ class _GiveawayTabState extends ConsumerState<GiveawayTab> {
   Color _availabilityColor(String? status) {
     switch (status) {
       case 'AVAILABLE':
-      case 'PREFERRED':
         return Colors.green;
       case 'UNAVAILABLE':
         return Colors.red;
@@ -128,8 +126,6 @@ class _GiveawayTabState extends ConsumerState<GiveawayTab> {
     switch (status) {
       case 'AVAILABLE':
         return 'Dostępny';
-      case 'PREFERRED':
-        return 'Preferowany';
       case 'UNAVAILABLE':
         return 'Niedostępny';
       case 'ALREADY_SCHEDULED':

@@ -20,6 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Old AVAILABLE was the implicit default meaning "untouched/unavailable"
+    op.execute("UPDATE availability SET status = 'UNAVAILABLE' WHERE status = 'AVAILABLE'")
+    # Old PREFERRED and NEUTRAL were explicit "Mogę" - migrate to new AVAILABLE
     op.execute("UPDATE availability SET status = 'AVAILABLE' WHERE status IN ('PREFERRED', 'NEUTRAL')")
 
 
