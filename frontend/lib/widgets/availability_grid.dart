@@ -143,7 +143,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
   String _getStatusLabel(AvailabilityStatus status) {
     switch (status) {
       case AvailabilityStatus.available:
-        return 'Mogę';
+        return 'Chcę';
       case AvailabilityStatus.unavailable:
         return 'Nie mogę';
     }
