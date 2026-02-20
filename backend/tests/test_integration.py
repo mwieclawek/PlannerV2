@@ -30,11 +30,18 @@ class TestFullWorkflow:
             "role_system": "MANAGER",
             "manager_pin": "1234"
         })
-        })
         if response.status_code != 200:
             print(f"Register failed: {response.status_code} - {response.text}")
         assert response.status_code == 200
-        token = response.json()["access_token"]
+        
+        # Now login to get the token
+        login_response = client.post("/auth/token", data={
+            "username": unique_username,
+            "password": "securepass123"
+        })
+        assert login_response.status_code == 200
+        token = login_response.json()["access_token"]
+        
         # Store for subsequent tests
         self.__class__.manager_token = token
         self.__class__.auth_headers = {"Authorization": f"Bearer {token}"}

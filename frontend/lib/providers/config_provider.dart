@@ -8,7 +8,7 @@ class ConfigNotifier extends StateNotifier<String?> {
   final ConfigService _configService;
 
   ConfigNotifier(this._configService) : super(
-    (kDebugMode || (kIsWeb && Uri.base.host.contains('localhost'))) 
+    (kIsWeb && Uri.base.host.contains('localhost')) 
         ? 'http://localhost:8000' 
         : _configService.baseUrl
   );
