@@ -63,7 +63,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
   }
 
   AvailabilityStatus _getStatus(DateTime date, int shiftId) {
-    return _localAvailability[_getKey(date, shiftId)] ?? AvailabilityStatus.available;
+    return _localAvailability[_getKey(date, shiftId)] ?? AvailabilityStatus.unavailable;
   }
 
   void _toggleStatus(DateTime date, int shiftId) {
@@ -72,14 +72,10 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
     
     AvailabilityStatus newStatus;
     switch (currentStatus) {
-      case AvailabilityStatus.available: // Default (treated as unavailable)
-      case AvailabilityStatus.unavailable: // Explicitly unavailable
-        newStatus = AvailabilityStatus.preferred;
+      case AvailabilityStatus.unavailable:
+        newStatus = AvailabilityStatus.available;
         break;
-      case AvailabilityStatus.preferred:
-        newStatus = AvailabilityStatus.neutral;
-        break;
-      case AvailabilityStatus.neutral:
+      case AvailabilityStatus.available:
         newStatus = AvailabilityStatus.unavailable;
         break;
     }
@@ -128,36 +124,27 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
 
   Color _getStatusColor(AvailabilityStatus status) {
     switch (status) {
-      case AvailabilityStatus.preferred:
+      case AvailabilityStatus.available:
         return Colors.green.shade400;
-      case AvailabilityStatus.neutral:
-        return Colors.amber.shade400;
       case AvailabilityStatus.unavailable:
-      case AvailabilityStatus.available: // Default shows as unavailable
         return Colors.red.shade400;
     }
   }
 
   IconData _getStatusIcon(AvailabilityStatus status) {
     switch (status) {
-      case AvailabilityStatus.preferred:
-        return Icons.thumb_up;
-      case AvailabilityStatus.neutral:
-        return Icons.remove_circle_outline;
-      case AvailabilityStatus.unavailable:
       case AvailabilityStatus.available:
+        return Icons.thumb_up;
+      case AvailabilityStatus.unavailable:
         return Icons.block;
     }
   }
 
   String _getStatusLabel(AvailabilityStatus status) {
     switch (status) {
-      case AvailabilityStatus.preferred:
-        return 'Chcę';
-      case AvailabilityStatus.neutral:
+      case AvailabilityStatus.available:
         return 'Mogę';
       case AvailabilityStatus.unavailable:
-      case AvailabilityStatus.available:
         return 'Nie mogę';
     }
   }
@@ -166,10 +153,9 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
     
-    // Legend items - excluding 'available' as it's visually same as 'unavailable'
+    // Legend items
     final legendItems = [
-      AvailabilityStatus.preferred,
-      AvailabilityStatus.neutral,
+      AvailabilityStatus.available,
       AvailabilityStatus.unavailable,
     ];
 

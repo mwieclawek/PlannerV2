@@ -10,8 +10,6 @@ class RoleSystem(str, Enum):
     EMPLOYEE = "EMPLOYEE"
 
 class AvailabilityStatus(str, Enum):
-    PREFERRED = "PREFERRED"
-    NEUTRAL = "NEUTRAL"
     UNAVAILABLE = "UNAVAILABLE"
     AVAILABLE = "AVAILABLE"
 

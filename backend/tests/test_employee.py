@@ -43,7 +43,7 @@ class TestEmployeeAvailability:
             user_id=user.id,
             date=date.today(),
             shift_def_id=shift_definition.id,
-            status=AvailabilityStatus.PREFERRED
+            status=AvailabilityStatus.AVAILABLE
         )
         session.add(avail)
         session.commit()
@@ -57,7 +57,7 @@ class TestEmployeeAvailability:
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
-        assert data[0]["status"] == "PREFERRED"
+        assert data[0]["status"] == "AVAILABLE"
     
     @pytest.mark.asyncio
     async def test_update_availability_single(
@@ -72,7 +72,7 @@ class TestEmployeeAvailability:
             json=[{
                 "date": str(today),
                 "shift_def_id": shift_definition.id,
-                "status": "PREFERRED"
+                "status": "AVAILABLE"
             }]
         )
         
@@ -91,7 +91,7 @@ class TestEmployeeAvailability:
             "/employee/availability",
             headers=employee_headers,
             json=[
-                {"date": str(today), "shift_def_id": shift_definition.id, "status": "PREFERRED"},
+                {"date": str(today), "shift_def_id": shift_definition.id, "status": "AVAILABLE"},
                 {"date": str(tomorrow), "shift_def_id": shift_definition.id, "status": "UNAVAILABLE"}
             ]
         )
@@ -110,7 +110,7 @@ class TestEmployeeAvailability:
         await client.post(
             "/employee/availability",
             headers=employee_headers,
-            json=[{"date": str(today), "shift_def_id": shift_definition.id, "status": "PREFERRED"}]
+            json=[{"date": str(today), "shift_def_id": shift_definition.id, "status": "AVAILABLE"}]
         )
         
         # Second update (should overwrite)
@@ -203,7 +203,7 @@ class TestEmployeeUnauthorized:
         """Test that update availability requires authentication"""
         response = await client.post(
             "/employee/availability",
-            json=[{"date": str(date.today()), "shift_def_id": 1, "status": "PREFERRED"}]
+            json=[{"date": str(date.today()), "shift_def_id": 1, "status": "AVAILABLE"}]
         )
         
         assert response.status_code == 401

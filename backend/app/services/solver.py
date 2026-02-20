@@ -226,13 +226,9 @@ class SolverService:
             # High reward for simply filling a requirement
             objective_terms.append(w_var * 100) 
             
-            if status == AvailabilityStatus.PREFERRED:
-                objective_terms.append(w_var * 10)
-            elif status == AvailabilityStatus.NEUTRAL:
-                objective_terms.append(w_var * 5)
-            elif status == AvailabilityStatus.AVAILABLE:
+            if status == AvailabilityStatus.AVAILABLE:
                 # Reward for being available
-                objective_terms.append(w_var * 2)
+                objective_terms.append(w_var * 10)
         
         # 2. Penalty for split shifts (working > 1 shift per day)
         # We subtract Penalty * Excess from objective

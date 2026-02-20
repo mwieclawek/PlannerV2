@@ -123,17 +123,11 @@ class ShiftDefinition {
 }
 
 enum AvailabilityStatus {
-  preferred,
-  neutral,
   unavailable,
   available;
 
   String toJson() {
     switch (this) {
-      case AvailabilityStatus.preferred:
-        return 'PREFERRED';
-      case AvailabilityStatus.neutral:
-        return 'NEUTRAL';
       case AvailabilityStatus.unavailable:
         return 'UNAVAILABLE';
       case AvailabilityStatus.available:
@@ -143,13 +137,11 @@ enum AvailabilityStatus {
 
   static AvailabilityStatus fromJson(String value) {
     switch (value) {
-      case 'PREFERRED':
-        return AvailabilityStatus.preferred;
-      case 'NEUTRAL':
-        return AvailabilityStatus.neutral;
       case 'UNAVAILABLE':
         return AvailabilityStatus.unavailable;
       case 'AVAILABLE':
+      case 'PREFERRED':
+      case 'NEUTRAL':
         return AvailabilityStatus.available;
       default:
         return AvailabilityStatus.available;

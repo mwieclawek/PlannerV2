@@ -326,19 +326,19 @@ class TestSolverConstraints:
 class TestSolverPreferences:
     """Tests for preference optimization"""
     
-    def test_solve_prefers_preferred_employee(self, session: Session, job_role, shift_definition):
-        """Test that preferred availability is prioritized"""
+    def test_solve_prefers_available_employee(self, session: Session, job_role, shift_definition):
+        """Test that available availability is properly considered"""
         # Create two employees
         user1 = User(
             username="pref_user1",
             password_hash=get_password_hash("test"),
-            full_name="Preferred User",
+            full_name="User 1",
             role_system=RoleSystem.EMPLOYEE
         )
         user2 = User(
             username="pref_user2",
             password_hash=get_password_hash("test"),
-            full_name="Neutral User",
+            full_name="User 2",
             role_system=RoleSystem.EMPLOYEE
         )
         session.add(user1)
@@ -353,14 +353,14 @@ class TestSolverPreferences:
         
         today = date.today()
         
-        # User1 prefers, User2 neutral
+        # User1 available, User2 unavailable
         avail1 = Availability(
             user_id=user1.id, date=today, 
-            shift_def_id=shift_definition.id, status=AvailabilityStatus.PREFERRED
+            shift_def_id=shift_definition.id, status=AvailabilityStatus.AVAILABLE
         )
         avail2 = Availability(
             user_id=user2.id, date=today,
-            shift_def_id=shift_definition.id, status=AvailabilityStatus.NEUTRAL
+            shift_def_id=shift_definition.id, status=AvailabilityStatus.UNAVAILABLE
         )
         session.add(avail1)
         session.add(avail2)
@@ -375,7 +375,7 @@ class TestSolverPreferences:
         
         if result["count"] == 1:
             assigned = result["schedules"][0]
-            # Should prefer user1 (PREFERRED > NEUTRAL)
+            # Should prefer user1 (AVAILABLE > UNAVAILABLE)
             # assigned is a dict when save=False
             assert str(assigned["user_id"]) == str(user1.id)
 
