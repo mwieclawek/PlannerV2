@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "357153331477",
+    "project_id": "planista-e31fe",
+    "storage_bucket": "planista-e31fe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:357153331477:android:6e27d5059aa13a5fba711c",
+        "android_client_info": {
+          "package_name": "com.example.frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJ3dUVx3LQiSRowSsEYpZ2-U0fnuJyPVU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

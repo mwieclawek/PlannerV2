@@ -54,10 +54,16 @@ pipeline {
             }
             steps {
                 unstash 'source'
-                dir('frontend') {
-                    sh 'flutter clean'
-                    sh 'flutter pub get'
-                    sh 'flutter build web --release'
+                script {
+                    def flutterEnv = "dev"
+                    if (env.TAG_NAME?.startsWith("v")) {
+                        flutterEnv = "prod"
+                    }
+                    dir('frontend') {
+                        sh 'flutter clean'
+                        sh 'flutter pub get'
+                        sh "flutter build web --release --dart-define=ENV=${flutterEnv}"
+                    }
                 }
                 stash includes: 'frontend/build/web/**/*', name: 'flutter-web'
             }

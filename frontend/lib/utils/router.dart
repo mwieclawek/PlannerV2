@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import '../providers/providers.dart';
 import '../screens/login_screen.dart';
 import '../screens/employee/employee_dashboard.dart';
@@ -29,6 +30,9 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/login',
     refreshListenable: authListenable,
+    observers: [
+      FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
+    ],
     redirect: (context, state) {
       final configUrl = ref.read(configProvider);
       final isSetupRoute = state.matchedLocation == '/setup';

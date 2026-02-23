@@ -7,11 +7,39 @@ import 'utils/router.dart';
 import 'services/config_service.dart';
 
 import 'package:calendar_view/calendar_view.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart';
+import 'firebase_options_dev.dart' as dev_options;
+import 'firebase_options_prod.dart' as prod_options;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ConfigService().init();
   await initializeDateFormatting('pl_PL', null);
+
+  const environment = String.fromEnvironment('ENV', defaultValue: 'dev');
+  final firebaseOptions = environment == 'prod' 
+      ? prod_options.DefaultFirebaseOptions.currentPlatform
+      : dev_options.DefaultFirebaseOptions.currentPlatform;
+
+  await Firebase.initializeApp(
+    options: firebaseOptions,
+  );
+
+  if (!kIsWeb) {
+    // Pass all uncaught "fatal" errors from the framework to Crashlytics
+    FlutterError.onError = (errorDetails) {
+      FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+    };
+    
+    // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
+    PlatformDispatcher.instance.onError = (error, stack) {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      return true;
+    };
+  }
+
   runApp(
     CalendarControllerProvider(
       controller: EventController(),
