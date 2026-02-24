@@ -1,214 +1,215 @@
 """
-Integration Tests - Full E2E Flow
+Integration Tests - Full E2E Workflow
+Tests the complete user journey: manager setup → employee creation → schedule generation.
+Uses the same in-memory async fixtures as other tests (conftest.py).
+
 Run with: python -m pytest backend/tests/test_integration.py -v
-For Jenkins: python -m pytest backend/tests/test_integration.py --junitxml=test-results/integration.xml
 """
 import pytest
-import httpx
-from datetime import date, timedelta
 import uuid
-
-from fastapi.testclient import TestClient
-from app.main import app
-
-class TestFullWorkflow:
-    """Complete user journey test"""
-    
-    @pytest.fixture(scope="class")
-    def client(self):
-        return TestClient(app)
-    
-    @pytest.fixture(scope="class")
-    def unique_username(self):
-        return f"integration_test_{uuid.uuid4().hex[:8]}"
-    
-    def test_01_register_manager(self, client, unique_username):
-        """Step 1: Create a manager directly in DB (registration endpoint is disabled by design)."""
-        from sqlmodel import Session, create_engine, select as sa_select
-        from app.models import User, RoleSystem
-        from app.auth_utils import get_password_hash
-
-        password = "SecurePass1"
-
-        engine = create_engine("sqlite:///./planner.db", connect_args={"check_same_thread": False})
-        with Session(engine) as session:
-            existing = session.exec(
-                sa_select(User).where(User.username == unique_username)
-            ).first()
-            if not existing:
-                user = User(
-                    username=unique_username,
-                    password_hash=get_password_hash(password),
-                    full_name="Integration Test Manager",
-                    role_system=RoleSystem.MANAGER,
-                )
-                session.add(user)
-                session.commit()
-
-        login_response = client.post("/auth/token", data={
-            "username": unique_username,
-            "password": password,
-        })
-        assert login_response.status_code == 200, login_response.text
-        token = login_response.json()["access_token"]
-
-        self.__class__.manager_token = token
-        self.__class__.auth_headers = {"Authorization": f"Bearer {token}"}
-
-    def test_02_create_roles(self, client):
-        """Step 2: Manager creates job roles"""
-        roles = [
-            {"name": "Barista", "color_hex": "#8B4513"},
-            {"name": "Cashier", "color_hex": "#228B22"},
-        ]
-        for role_data in roles:
-            response = client.post(
-                "/manager/roles",
-                headers=self.__class__.auth_headers,
-                json=role_data,
-            )
-            assert response.status_code == 200
-
-    def test_03_create_shifts(self, client):
-        """Step 3: Manager creates shift definitions"""
-        shifts = [
-            {"name": "Morning", "start_time": "07:00", "end_time": "15:00"},
-            {"name": "Evening", "start_time": "15:00", "end_time": "23:00"},
-        ]
-        for shift_data in shifts:
-            response = client.post(
-                "/manager/shifts",
-                headers=self.__class__.auth_headers,
-                json=shift_data,
-            )
-            # Accept 200 or 400 (duplicate from previous runs)
-            assert response.status_code in [200, 400]
-
-    def test_04_register_employee(self, client):
-        """Step 4: Manager creates an employee account via the manager API."""
-        employee_username = f"employee_{uuid.uuid4().hex[:8]}"
-
-        response = client.post(
-            "/manager/users",
-            headers=self.__class__.auth_headers,
-            json={
-                "username": employee_username,
-                "password": "EmpPass123",
-                "full_name": "Test Employee",
-                "role_system": "EMPLOYEE",
-            },
-        )
-        assert response.status_code == 200, response.text
-        self.__class__.employee_username = employee_username
+from datetime import date, timedelta
+from sqlmodel import Session, select
+from app.models import User, RoleSystem
+from app.auth_utils import get_password_hash, create_access_token
 
 
-    def test_05_assign_role_to_employee(self, client):
-        """Step 5: Manager assigns role to employee"""
-        # Get users list
-        response = client.get("/manager/users", headers=self.__class__.auth_headers)
-        assert response.status_code == 200
-        users = response.json()
-        
-        # Find the employee we created
-        employee = next((u for u in users if u["username"] == self.__class__.employee_username), None)
-        assert employee is not None
-        
-        # Get roles
-        response = client.get("/manager/roles", headers=self.__class__.auth_headers)
-        roles = response.json()
-        assert len(roles) > 0
-        
-        # Assign first role to employee
-        response = client.put(
-            f"/manager/users/{employee['id']}/roles",
-            headers=self.__class__.auth_headers,
-            json={"role_ids": [roles[0]["id"]]}
-        )
-        assert response.status_code == 200
-        self.__class__.employee_id = employee["id"]
-        self.__class__.role_id = roles[0]["id"]
-    
-    def test_06_generate_schedule(self, client):
-        """Step 6: Generate schedule (draft mode)"""
-        today = date.today()
-        monday = today - timedelta(days=today.weekday())
-        sunday = monday + timedelta(days=6)
-        
-        response = client.post(
-            "/scheduler/generate",
-            headers=self.__class__.auth_headers,
-            json={
-                "start_date": str(monday),
-                "end_date": str(sunday)
-            }
-        )
-        assert response.status_code == 200
-        result = response.json()
-        assert result["status"] in ["success", "infeasible"]
-        self.__class__.week_start = monday
-        self.__class__.week_end = sunday
-    
-    def test_07_manual_assignment(self, client):
-        """Step 7: Manually add assignment via batch save"""
-        # Get shifts
-        response = client.get("/manager/shifts", headers=self.__class__.auth_headers)
-        shifts = response.json()
-        
-        if len(shifts) > 0:
-            response = client.post(
-                "/scheduler/save_batch",
-                headers=self.__class__.auth_headers,
-                json={
-                    "start_date": str(self.__class__.week_start),
-                    "end_date": str(self.__class__.week_end),
-                    "items": [{
-                        "date": str(self.__class__.week_start),
-                        "shift_def_id": shifts[0]["id"],
-                        "user_id": self.__class__.employee_id,
-                        "role_id": self.__class__.role_id
-                    }]
-                }
-            )
-            assert response.status_code == 200
-            assert response.json()["count"] == 1
-    
-    def test_08_verify_schedule(self, client):
-        """Step 8: Verify schedule was saved"""
-        response = client.get(
-            f"/scheduler/list?start_date={self.__class__.week_start}&end_date={self.__class__.week_end}",
-            headers=self.__class__.auth_headers
-        )
-        assert response.status_code == 200
-        schedules = response.json()
-        assert len(schedules) >= 1
-    
-    def test_09_update_config(self, client):
-        """Step 9: Update restaurant config"""
-        response = client.post(
-            "/manager/config",
-            headers=self.__class__.auth_headers,
-            json={
-                "name": "Integration Test Restaurant",
-                "opening_hours": '{"mon-fri": "8:00-22:00", "sat-sun": "10:00-20:00"}',
-                "address": "Test Street 42"
-            }
-        )
-        assert response.status_code == 200
-    
-    def test_10_cleanup_verification(self, client):
-        """Step 10: Verify all data exists"""
-        # Roles exist
-        response = client.get("/manager/roles", headers=self.__class__.auth_headers)
-        assert len(response.json()) >= 2
-        
-        # Shifts exist
-        response = client.get("/manager/shifts", headers=self.__class__.auth_headers)
-        assert len(response.json()) >= 2
-        
-        # Config updated
-        response = client.get("/manager/config", headers=self.__class__.auth_headers)
-        assert "Integration Test Restaurant" in response.json().get("name", "")
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def unique(prefix="test"):
+    return f"{prefix}_{uuid.uuid4().hex[:8]}"
+
+
+def make_user(session: Session, role: RoleSystem = RoleSystem.EMPLOYEE, password="TestPass123") -> User:
+    """Insert a user directly into the in-memory test DB."""
+    username = unique("user")
+    user = User(
+        username=username,
+        full_name=f"Test {role.value.capitalize()}",
+        password_hash=get_password_hash(password),
+        role_system=role,
+        is_active=True,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def auth_header(user: User) -> dict:
+    token = create_access_token(data={"sub": user.username})
+    return {"Authorization": f"Bearer {token}"}
+
+
+# ── Full workflow ──────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_full_workflow(client, session: Session, manager_token_headers):
+    """
+    Step-by-step full workflow:
+    1. Manager creates a job role
+    2. Manager creates a shift definition
+    3. Manager creates an employee account
+    4. Manager assigns role to employee
+    5. Employee sets their availability (AVAILABLE)
+    6. Manager sets staffing requirements
+    7. Manager triggers schedule generation
+    8. Schedule is verified to include the employee
+    """
+    mgr_headers = manager_token_headers
+
+    # ── Step 1: Create role ────────────────────────────────────────────────────
+    role_name = unique("Role")
+    r = await client.post("/manager/roles", headers=mgr_headers, json={
+        "name": role_name, "color_hex": "#FF5733"
+    })
+    assert r.status_code == 200, f"Create role failed: {r.text}"
+    role = r.json()
+    role_id = role["id"]
+
+    # ── Step 2: Create shift ───────────────────────────────────────────────────
+    shift_name = unique("Shift")
+    # Use random offset so parallel runs don't collide on time uniqueness
+    hour = (uuid.uuid4().int % 10) + 1  # 01-10
+    r = await client.post("/manager/shifts", headers=mgr_headers, json={
+        "name": shift_name,
+        "start_time": f"{hour:02d}:00",
+        "end_time": f"{hour + 8:02d}:00",
+    })
+    assert r.status_code == 200, f"Create shift failed: {r.text}"
+    shift = r.json()
+    shift_id = shift["id"]
+
+    # ── Step 3: Manager creates employee ──────────────────────────────────────
+    emp_username = unique("emp")
+    r = await client.post("/manager/users", headers=mgr_headers, json={
+        "username": emp_username,
+        "password": "EmpPass123",
+        "full_name": "Integration Employee",
+        "role_system": "EMPLOYEE",
+    })
+    assert r.status_code == 200, f"Create employee failed: {r.text}"
+    emp_data = r.json()
+    emp_id = emp_data["id"]
+
+    # ── Step 4: Assign role to employee ───────────────────────────────────────
+    r = await client.put(
+        f"/manager/users/{emp_id}/roles",
+        headers=mgr_headers,
+        json={"role_ids": [role_id]},
+    )
+    assert r.status_code == 200, f"Assign role failed: {r.text}"
+
+    # ── Step 5: Employee logs in and sets availability ─────────────────────────
+    login_r = await client.post("/auth/token", data={
+        "username": emp_username, "password": "EmpPass123"
+    })
+    assert login_r.status_code == 200
+    emp_token = login_r.json()["access_token"]
+    emp_headers = {"Authorization": f"Bearer {emp_token}"}
+
+    tomorrow = date.today() + timedelta(days=1)
+    r = await client.post("/employee/availability", headers=emp_headers, json=[{
+        "date": str(tomorrow),
+        "shift_def_id": shift_id,
+        "status": "AVAILABLE",
+    }])
+    assert r.status_code == 200, f"Set availability failed: {r.text}"
+
+    # ── Step 6: Set staffing requirements ────────────────────────────────────
+    r = await client.post("/manager/requirements", headers=mgr_headers, json=[{
+        "date": str(tomorrow),
+        "shift_def_id": shift_id,
+        "role_id": role_id,
+        "min_count": 1,
+    }])
+    assert r.status_code == 200, f"Set requirements failed: {r.text}"
+
+    # ── Step 7: Generate schedule ─────────────────────────────────────────────
+    r = await client.post("/scheduler/generate", headers=mgr_headers, json={
+        "start_date": str(tomorrow),
+        "end_date": str(tomorrow),
+    })
+    assert r.status_code == 200, f"Generate schedule failed: {r.text}"
+    data = r.json()
+    assert data["status"] == "success", f"Unexpected status: {data}"
+    assert data["count"] >= 1, f"No assignments generated: {data}"
+
+    # ── Step 8: Verify correct employee was assigned ──────────────────────────
+    assignments = data["schedules"]
+    my_assign = next((a for a in assignments if str(a["user_id"]) == str(emp_id)), None)
+    assert my_assign is not None, (
+        f"Employee {emp_id} not in assignments: {assignments}"
+    )
+    assert my_assign["shift_def_id"] == shift_id
+    assert my_assign["role_id"] == role_id
+
+
+@pytest.mark.asyncio
+async def test_register_endpoint_disabled(client):
+    """Registration endpoint must always return 403 (accounts created by manager only)."""
+    r = await client.post("/auth/register", json={
+        "username": unique("u"),
+        "password": "TestPass123",
+        "full_name": "Bob",
+        "role_system": "EMPLOYEE",
+    })
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_employee_cannot_access_manager_routes(client, employee_token_headers):
+    """Employee must be blocked from manager-only endpoints."""
+    r = await client.post("/manager/roles", headers=employee_token_headers, json={
+        "name": "HackerRole", "color_hex": "#000000"
+    })
+    assert r.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_login_refresh_token_flow(client, session: Session):
+    """Login returns access+refresh token. Refresh endpoint yields a new access token."""
+    user = make_user(session, RoleSystem.EMPLOYEE)
+
+    # Login
+    r = await client.post("/auth/token", data={
+        "username": user.username, "password": "TestPass123"
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert "access_token" in body
+    assert "refresh_token" in body
+
+    refresh_token = body["refresh_token"]
+
+    # Refresh — yields a new access token
+    r2 = await client.post("/auth/refresh", headers={
+        "Authorization": f"Bearer {refresh_token}"
+    })
+    assert r2.status_code == 200, f"Refresh failed: {r2.text}"
+    body2 = r2.json()
+    assert "access_token" in body2
+
+    # Verify the new access token actually works
+    r3 = await client.get("/auth/me", headers={
+        "Authorization": f"Bearer {body2['access_token']}"
+    })
+    assert r3.status_code == 200, f"/auth/me with new token failed: {r3.text}"
+    assert r3.json()["username"] == user.username
+
+
+@pytest.mark.asyncio
+async def test_deactivated_user_cannot_login(client, session: Session):
+    """Inactive users must be rejected at login."""
+    user = make_user(session, RoleSystem.EMPLOYEE)
+    user.is_active = False
+    session.add(user)
+    session.commit()
+
+    r = await client.post("/auth/token", data={
+        "username": user.username, "password": "TestPass123"
+    })
+    assert r.status_code == 403
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v", "--tb=short"])
+    pytest.main([__file__, "-v"])

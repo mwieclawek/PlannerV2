@@ -36,6 +36,7 @@ pipeline {
                 sh 'rm -f backend/*.db backend/app/*.db *.db'
                 // Testy używają in-memory SQLite — nie potrzeba uruchamiać serwera
                 sh 'export PYTHONPATH=$PWD:$PWD/backend && python -m pytest backend/tests/test_api.py -v -o asyncio_mode=auto --junitxml=test-results/backend-api.xml || true'
+                sh 'export PYTHONPATH=$PWD:$PWD/backend && python -m pytest backend/tests/test_integration.py -v -o asyncio_mode=auto --junitxml=test-results/backend-integration.xml || true'
             }
             post {
                 always {
