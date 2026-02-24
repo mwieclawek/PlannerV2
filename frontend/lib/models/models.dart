@@ -640,3 +640,101 @@ class ShiftGiveaway {
     );
   }
 }
+
+// --- Leave Requests ---
+
+class LeaveRequest {
+  final String id;
+  final String userId;
+  final String userName;
+  final String startDate;  // "YYYY-MM-DD"
+  final String endDate;
+  final String? reason;
+  final String status;     // PENDING, APPROVED, REJECTED, CANCELLED
+  final String createdAt;
+  final String? reviewedAt;
+
+  LeaveRequest({
+    required this.id,
+    required this.userId,
+    required this.userName,
+    required this.startDate,
+    required this.endDate,
+    this.reason,
+    required this.status,
+    required this.createdAt,
+    this.reviewedAt,
+  });
+
+  factory LeaveRequest.fromJson(Map<String, dynamic> json) {
+    return LeaveRequest(
+      id: json['id'],
+      userId: json['user_id'],
+      userName: json['user_name'] ?? '',
+      startDate: json['start_date'],
+      endDate: json['end_date'],
+      reason: json['reason'],
+      status: json['status'],
+      createdAt: json['created_at'],
+      reviewedAt: json['reviewed_at'],
+    );
+  }
+}
+
+class LeaveCalendarEntry {
+  final String userId;
+  final String userName;
+  final String startDate;
+  final String endDate;
+  final String status;
+
+  LeaveCalendarEntry({
+    required this.userId,
+    required this.userName,
+    required this.startDate,
+    required this.endDate,
+    required this.status,
+  });
+
+  factory LeaveCalendarEntry.fromJson(Map<String, dynamic> json) {
+    return LeaveCalendarEntry(
+      userId: json['user_id'],
+      userName: json['user_name'],
+      startDate: json['start_date'],
+      endDate: json['end_date'],
+      status: json['status'],
+    );
+  }
+}
+
+class AvailableEmployee {
+  final String userId;
+  final String fullName;
+  final String availabilityStatus;
+  final List<JobRole> jobRoles;
+  final double? targetHours;
+  final double hoursThisMonth;
+
+  AvailableEmployee({
+    required this.userId,
+    required this.fullName,
+    required this.availabilityStatus,
+    required this.jobRoles,
+    this.targetHours,
+    required this.hoursThisMonth,
+  });
+
+  factory AvailableEmployee.fromJson(Map<String, dynamic> json) {
+    return AvailableEmployee(
+      userId: json['user_id'],
+      fullName: json['full_name'],
+      availabilityStatus: json['availability_status'],
+      jobRoles: (json['job_roles'] as List? ?? [])
+          .map((e) => JobRole.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      targetHours: json['target_hours']?.toDouble(),
+      hoursThisMonth: json['hours_this_month']?.toDouble() ?? 0.0,
+    );
+  }
+}
+

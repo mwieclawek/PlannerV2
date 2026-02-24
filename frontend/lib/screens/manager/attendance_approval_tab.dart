@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
-
+import 'leave_management_tab.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AttendanceApprovalTab extends ConsumerStatefulWidget {
@@ -242,243 +242,263 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Obecności', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            tooltip: 'Dodaj ręcznie',
-            onPressed: _showManualEntryDialog,
-          ),
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf),
-            tooltip: 'Eksportuj do PDF',
-            onPressed: _exportPdf,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Filters
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Zakres dat', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  icon: const Icon(Icons.calendar_today, size: 16),
-                                  label: Text('${_startDate.day}/${_startDate.month}/${_startDate.year}'),
-                                  onPressed: () async {
-                                    final date = await showDatePicker(
-                                      context: context,
-                                      initialDate: _startDate,
-                                      firstDate: DateTime(2020),
-                                      lastDate: DateTime.now(),
-                                    );
-                                    if (date != null) {
-                                      setState(() => _startDate = date);
-                                      _loadAttendance();
-                                    }
-                                  },
-                                ),
-                              ),
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 8),
-                                child: Text('-'),
-                              ),
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  icon: const Icon(Icons.calendar_today, size: 16),
-                                  label: Text('${_endDate.day}/${_endDate.month}/${_endDate.year}'),
-                                  onPressed: () async {
-                                    final date = await showDatePicker(
-                                      context: context,
-                                      initialDate: _endDate,
-                                      firstDate: _startDate,
-                                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                                    );
-                                    if (date != null) {
-                                      setState(() => _endDate = date);
-                                      _loadAttendance();
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Status', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          DropdownButtonFormField<String?>(
-                            value: _statusFilter,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            ),
-                            items: const [
-                              DropdownMenuItem(value: null, child: Text('Wszystkie')),
-                              DropdownMenuItem(value: 'PENDING', child: Text('Oczekujące')),
-                              DropdownMenuItem(value: 'CONFIRMED', child: Text('Potwierdzone')),
-                              DropdownMenuItem(value: 'REJECTED', child: Text('Odrzucone')),
-                            ],
-                            onChanged: (value) {
-                              setState(() => _statusFilter = value);
-                              _loadAttendance();
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Obecności i Urlopy', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Colors.white,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline),
+              tooltip: 'Dodaj ręcznie',
+              onPressed: _showManualEntryDialog,
             ),
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf),
+              tooltip: 'Eksportuj do PDF',
+              onPressed: _exportPdf,
+            ),
+          ],
+          bottom: const TabBar(
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            indicatorColor: Colors.white,
+            tabs: [
+              Tab(text: 'Obecności'),
+              Tab(text: 'Urlopy'),
+            ],
           ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.error, size: 48, color: Colors.red),
-                            const SizedBox(height: 16),
-                            Text('Błąd: $_error'),
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: _loadAttendance,
-                              child: const Text('Spróbuj ponownie'),
-                            ),
-                          ],
-                        ),
-                      )
-                    : _attendances.isEmpty
-                        ? Center(
+        ),
+        body: TabBarView(
+          children: [
+            // Sub-tab 0: Obecności (Existing content)
+            Column(
+              children: [
+                // Filters
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
                             child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Brak obecności w wybranym zakresie',
-                                  style: GoogleFonts.outfit(fontSize: 16, color: Colors.grey),
+                                Text('Zakres dat', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        icon: const Icon(Icons.calendar_today, size: 16),
+                                        label: Text('${_startDate.day}/${_startDate.month}/${_startDate.year}'),
+                                        onPressed: () async {
+                                          final date = await showDatePicker(
+                                            context: context,
+                                            initialDate: _startDate,
+                                            firstDate: DateTime(2020),
+                                            lastDate: DateTime.now(),
+                                          );
+                                          if (date != null) {
+                                            setState(() => _startDate = date);
+                                            _loadAttendance();
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 8),
+                                      child: Text('-'),
+                                    ),
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        icon: const Icon(Icons.calendar_today, size: 16),
+                                        label: Text('${_endDate.day}/${_endDate.month}/${_endDate.year}'),
+                                        onPressed: () async {
+                                          final date = await showDatePicker(
+                                            context: context,
+                                            initialDate: _endDate,
+                                            firstDate: _startDate,
+                                            lastDate: DateTime.now().add(const Duration(days: 365)),
+                                          );
+                                          if (date != null) {
+                                            setState(() => _endDate = date);
+                                            _loadAttendance();
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _attendances.length,
-                            itemBuilder: (context, index) {
-                              final attendance = _attendances[index];
-                              final status = attendance['status'] as String;
-                              final isPending = status == 'PENDING';
-                              final isConfirmed = status == 'CONFIRMED';
-                              final isRejected = status == 'REJECTED';
-
-                              final colorScheme = Theme.of(context).colorScheme;
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                elevation: isPending ? 2 : 1,
-                                color: isConfirmed
-                                    ? colorScheme.primaryContainer.withOpacity(0.4)
-                                    : isRejected
-                                        ? colorScheme.errorContainer.withOpacity(0.4)
-                                        : null,
-                                child: ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: isPending
-                                        ? Colors.orange
-                                        : isConfirmed
-                                            ? colorScheme.primary
-                                            : colorScheme.error,
-                                    child: Icon(
-                                      isPending
-                                          ? Icons.pending
-                                          : isConfirmed
-                                              ? Icons.check_circle
-                                              : Icons.cancel,
-                                      color: colorScheme.onPrimary,
-                                    ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Status', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 8),
+                                DropdownButtonFormField<String?>(
+                                  value: _statusFilter,
+                                  decoration: const InputDecoration(
+                                    border: OutlineInputBorder(),
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                   ),
-                                  title: Text(
-                                    attendance['user_name'] as String,
-                                    style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+                                  items: const [
+                                    DropdownMenuItem(value: null, child: Text('Wszystkie')),
+                                    DropdownMenuItem(value: 'PENDING', child: Text('Oczekujące')),
+                                    DropdownMenuItem(value: 'CONFIRMED', child: Text('Potwierdzone')),
+                                    DropdownMenuItem(value: 'REJECTED', child: Text('Odrzucone')),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() => _statusFilter = value);
+                                    _loadAttendance();
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _error != null
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.error, size: 48, color: Colors.red),
+                                  const SizedBox(height: 16),
+                                  Text('Błąd: $_error'),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton(
+                                    onPressed: _loadAttendance,
+                                    child: const Text('Spróbuj ponownie'),
                                   ),
-                                  subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                ],
+                              ),
+                            )
+                          : _attendances.isEmpty
+                              ? Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Text('Data: ${attendance['date']}'),
-                                      Text('Godz: ${attendance['check_in']} - ${attendance['check_out']}'),
-                                      if (!(attendance['was_scheduled'] as bool) && isPending)
-                                        Text(
-                                          '⚠️ Niezaplanowana obecność',
-                                          style: TextStyle(color: Colors.orange.shade700, fontWeight: FontWeight.bold),
-                                        ),
+                                      Icon(Icons.inbox, size: 64, color: Colors.grey.shade400),
+                                      const SizedBox(height: 16),
                                       Text(
-                                        'Status: ${isPending ? "Oczekuje" : isConfirmed ? "Potwierdzone" : "Odrzucone"}',
-                                        style: TextStyle(
-                                          color: isPending
-                                              ? Colors.orange.shade700
-                                              : isConfirmed
-                                                  ? colorScheme.primary
-                                                  : colorScheme.error,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                        'Brak obecności w wybranym zakresie',
+                                        style: GoogleFonts.outfit(fontSize: 16, color: Colors.grey),
                                       ),
                                     ],
                                   ),
-                                  trailing: isPending
-                                      ? Row(
-                                          mainAxisSize: MainAxisSize.min,
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.all(16),
+                                  itemCount: _attendances.length,
+                                  itemBuilder: (context, index) {
+                                    final attendance = _attendances[index];
+                                    final status = attendance['status'] as String;
+                                    final isPending = status == 'PENDING';
+                                    final isConfirmed = status == 'CONFIRMED';
+                                    final isRejected = status == 'REJECTED';
+      
+                                    final colorScheme = Theme.of(context).colorScheme;
+                                    return Card(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      elevation: isPending ? 2 : 1,
+                                      color: isConfirmed
+                                          ? colorScheme.primaryContainer.withOpacity(0.4)
+                                          : isRejected
+                                              ? colorScheme.errorContainer.withOpacity(0.4)
+                                              : null,
+                                      child: ListTile(
+                                        leading: CircleAvatar(
+                                          backgroundColor: isPending
+                                              ? Colors.orange
+                                              : isConfirmed
+                                                  ? colorScheme.primary
+                                                  : colorScheme.error,
+                                          child: Icon(
+                                            isPending
+                                                ? Icons.pending
+                                                : isConfirmed
+                                                    ? Icons.check_circle
+                                                    : Icons.cancel,
+                                            color: colorScheme.onPrimary,
+                                          ),
+                                        ),
+                                        title: Text(
+                                          attendance['user_name'] as String,
+                                          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+                                        ),
+                                        subtitle: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            IconButton(
-                                              icon: const Icon(Icons.check_circle, color: Colors.green),
-                                              onPressed: () => _confirmAttendance(attendance['id'] as String),
-                                              tooltip: 'Potwierdź',
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.cancel, color: Colors.red),
-                                              onPressed: () => _rejectAttendance(attendance['id'] as String),
-                                              tooltip: 'Odrzuć',
+                                            Text('Data: ${attendance['date']}'),
+                                            Text('Godz: ${attendance['check_in']} - ${attendance['check_out']}'),
+                                            if (!(attendance['was_scheduled'] as bool) && isPending)
+                                              Text(
+                                                '⚠️ Niezaplanowana obecność',
+                                                style: TextStyle(color: Colors.orange.shade700, fontWeight: FontWeight.bold),
+                                              ),
+                                            Text(
+                                              'Status: ${isPending ? "Oczekuje" : isConfirmed ? "Potwierdzone" : "Odrzucone"}',
+                                              style: TextStyle(
+                                                color: isPending
+                                                    ? Colors.orange.shade700
+                                                    : isConfirmed
+                                                        ? colorScheme.primary
+                                                        : colorScheme.error,
+                                                fontWeight: FontWeight.bold,
+                                              ),
                                             ),
                                           ],
-                                        )
-                                      : Chip(
-                                          label: Text(
-                                            isConfirmed ? 'Zatwierdzone' : 'Odrzucone',
-                                            style: const TextStyle(color: Colors.white, fontSize: 12),
-                                          ),
-                                          backgroundColor: isConfirmed ? colorScheme.primary : colorScheme.error,
                                         ),
+                                        trailing: isPending
+                                            ? Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  IconButton(
+                                                    icon: const Icon(Icons.check_circle, color: Colors.green),
+                                                    onPressed: () => _confirmAttendance(attendance['id'] as String),
+                                                    tooltip: 'Potwierdź',
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.cancel, color: Colors.red),
+                                                    onPressed: () => _rejectAttendance(attendance['id'] as String),
+                                                    tooltip: 'Odrzuć',
+                                                  ),
+                                                ],
+                                              )
+                                            : Chip(
+                                                label: Text(
+                                                  isConfirmed ? 'Zatwierdzone' : 'Odrzucone',
+                                                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                                                ),
+                                                backgroundColor: isConfirmed ? colorScheme.primary : colorScheme.error,
+                                              ),
+                                      ),
+                                    );
+                                  },
                                 ),
-                              );
-                            },
-                          ),
-          ),
-        ],
+                ),
+              ],
+            ),
+            
+            // Sub-tab 1: Urlopy
+            const LeaveManagementTab(),
+          ],
+        ),
       ),
     );
   }

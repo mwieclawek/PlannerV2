@@ -2,7 +2,7 @@ from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 from datetime import datetime, date as date_type, time
 from typing import List, Optional
 from uuid import UUID
-from .models import RoleSystem, AvailabilityStatus, AttendanceStatus, GiveawayStatus
+from .models import RoleSystem, AvailabilityStatus, AttendanceStatus, GiveawayStatus, LeaveStatus
 
 # ... (Previous imports remain, but need field_validator, ValidationInfo)
 
@@ -333,3 +333,27 @@ class DashboardHomeResponse(BaseModel):
     working_today: List[ScheduleResponse]
     missing_confirmations: List[AttendanceResponse]
     open_giveaways: List["ShiftGiveawayResponse"]
+
+# --- Leave Requests ---
+class LeaveRequestCreate(BaseModel):
+    start_date: date_type
+    end_date: date_type
+    reason: Optional[str] = None
+
+    @model_validator(mode='after')
+    def validate_dates(self):
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must be >= start_date")
+        return self
+
+class LeaveRequestResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    user_name: str
+    start_date: date_type
+    end_date: date_type
+    reason: Optional[str]
+    status: str
+    created_at: datetime
+    reviewed_at: Optional[datetime]
+

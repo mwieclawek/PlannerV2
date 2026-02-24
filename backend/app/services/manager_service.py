@@ -600,8 +600,39 @@ class ManagerService:
         }
 
     def get_available_employees_for_shift(self, date_in: date, shift_def_id: int) -> List[dict]:
-        from ..models import Availability, Schedule
+        from ..models import Availability, Schedule, ShiftDefinition, JobRole
+        from calendar import monthrange
+        from datetime import datetime, timedelta
         
+        # Calculate hours_this_month
+        first_day = date(date_in.year, date_in.month, 1)
+        last_day = date(date_in.year, date_in.month, monthrange(date_in.year, date_in.month)[1])
+        
+        schedules = self.session.exec(
+            select(Schedule).where(
+                Schedule.date >= first_day,
+                Schedule.date <= last_day
+            )
+        ).all()
+        
+        all_shifts = self.session.exec(select(ShiftDefinition)).all()
+        shift_map = {s.id: s for s in all_shifts}
+        
+        hours_by_user = {}
+        for schedule in schedules:
+            uid = str(schedule.user_id)
+            shift = shift_map.get(schedule.shift_def_id)
+            if not shift:
+                continue
+            
+            start_dt = datetime.combine(date.today(), shift.start_time)
+            end_dt = datetime.combine(date.today(), shift.end_time)
+            if end_dt <= start_dt:
+                end_dt += timedelta(days=1)
+            duration_hours = (end_dt - start_dt).total_seconds() / 3600
+            
+            hours_by_user[uid] = hours_by_user.get(uid, 0.0) + duration_hours
+
         # Get employees
         employees = self.session.exec(
             select(User)
@@ -609,11 +640,8 @@ class ManagerService:
             .where(User.is_active == True)
         ).all()
         
-        # Get shift details for role filtering later if needed, but for now just list all
-        # or list status.
         result = []
         for u in employees:
-            # Check availability
             avail = self.session.exec(
                 select(Availability).where(
                     Availability.user_id == u.id,
@@ -622,7 +650,6 @@ class ManagerService:
                 )
             ).first()
             
-            # Check if scheduled for this exact shift
             already_scheduled_this = self.session.exec(
                 select(Schedule).where(
                     Schedule.user_id == u.id,
@@ -631,7 +658,6 @@ class ManagerService:
                 )
             ).first()
             
-            # Check if scheduled for ANOTHER shift on this date (overlap check could be here)
             already_scheduled_other = self.session.exec(
                 select(Schedule).where(
                     Schedule.user_id == u.id,
@@ -646,13 +672,23 @@ class ManagerService:
             elif already_scheduled_other:
                 status = "ALREADY_SCHEDULED_OTHER"
                 
+            roles_list = []
+            for r in u.job_roles:
+                roles_list.append({
+                    "id": r.id,
+                    "name": r.name,
+                    "color_hex": r.color_hex
+                })
+                
             result.append({
                 "user_id": str(u.id),
                 "full_name": u.full_name,
-                "availability_status": status
+                "availability_status": status,
+                "job_roles": roles_list,
+                "target_hours": u.target_hours_per_month,
+                "hours_this_month": round(hours_by_user.get(str(u.id), 0.0), 1)
             })
             
-        # Optional sorting: PREFERRED first, AVAILABLE second
         priority = {
             "PREFERRED": 0, 
             "AVAILABLE": 1, 
@@ -674,4 +710,94 @@ class ManagerService:
         giveaway.status = GiveawayStatus.CANCELLED
         self.session.add(giveaway)
         self.session.commit()
+
+    def get_all_leave_requests(self, status: str = None):
+        from sqlmodel import select
+        from ..models import LeaveRequest, LeaveStatus, User
+        
+        query = select(LeaveRequest, User).join(User)
+        if status:
+            query = query.where(LeaveRequest.status == LeaveStatus(status))
+        query = query.order_by(LeaveRequest.start_date.desc())
+        
+        requests = self.session.exec(query).all()
+        return [{"req": r, "user": u} for r, u in requests]
+
+    def process_leave_request(self, request_id: UUID, approved: bool, manager_id: UUID):
+        from sqlmodel import select
+        from ..models import LeaveRequest, LeaveStatus, Availability, AvailabilityStatus, ShiftDefinition
+        from datetime import datetime, timedelta
+        
+        req = self.session.get(LeaveRequest, request_id)
+        if not req:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+            
+        if req.status != LeaveStatus.PENDING:
+            raise HTTPException(status_code=400, detail="Only PENDING requests can be processed")
+            
+        req.status = LeaveStatus.APPROVED if approved else LeaveStatus.REJECTED
+        req.reviewed_by = manager_id
+        req.reviewed_at = datetime.utcnow()
+        self.session.add(req)
+        
+        if approved:
+            # Auto-Set Availability on Approval
+            shifts = self.session.exec(select(ShiftDefinition)).all()
+            
+            curr_date = req.start_date
+            while curr_date <= req.end_date:
+                for shift in shifts:
+                    avail = self.session.exec(
+                        select(Availability).where(
+                            Availability.user_id == req.user_id,
+                            Availability.date == curr_date,
+                            Availability.shift_def_id == shift.id
+                        )
+                    ).first()
+                    
+                    if avail:
+                        avail.status = AvailabilityStatus.UNAVAILABLE
+                        self.session.add(avail)
+                    else:
+                        new_avail = Availability(
+                            user_id=req.user_id,
+                            date=curr_date,
+                            shift_def_id=shift.id,
+                            status=AvailabilityStatus.UNAVAILABLE
+                        )
+                        self.session.add(new_avail)
+                curr_date += timedelta(days=1)
+                
+        self.session.commit()
+        return req
+
+    def get_leave_calendar(self, year: int, month: int):
+        from sqlmodel import select
+        from ..models import LeaveRequest, LeaveStatus, User
+        import calendar
+        from datetime import date
+        
+        last_day = calendar.monthrange(year, month)[1]
+        start_date = date(year, month, 1)
+        end_date = date(year, month, last_day)
+        
+        requests = self.session.exec(
+            select(LeaveRequest, User).join(User).where(
+                LeaveRequest.start_date <= end_date,
+                LeaveRequest.end_date >= start_date,
+                LeaveRequest.status == LeaveStatus.APPROVED
+            )
+        ).all()
+        
+        entries = []
+        for req, user in requests:
+            entries.append({
+                "user_id": str(req.user_id),
+                "user_name": user.full_name,
+                "start_date": req.start_date.isoformat(),
+                "end_date": req.end_date.isoformat(),
+                "status": str(req.status.value)
+            })
+            
+        return {"entries": entries}
 

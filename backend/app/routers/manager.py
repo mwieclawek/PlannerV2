@@ -591,3 +591,59 @@ def cancel_giveaway(
     """Cancel a giveaway (manager action)"""
     service.cancel_giveaway(giveaway_id)
     return {"status": "cancelled"}
+
+# --- Leave Requests endpoints ---
+
+from ..schemas import LeaveRequestResponse
+
+@router.get("/leave-requests", response_model=List[LeaveRequestResponse])
+def get_all_leave_requests(
+    status: Optional[str] = None,
+    service: ManagerService = Depends(get_manager_service),
+    _: User = Depends(get_manager_user)
+):
+    """List all leave requests"""
+    requests = service.get_all_leave_requests(status)
+    return [
+        LeaveRequestResponse(
+            id=item["req"].id,
+            user_id=item["req"].user_id,
+            user_name=item["user"].full_name,
+            start_date=item["req"].start_date,
+            end_date=item["req"].end_date,
+            reason=item["req"].reason,
+            status=str(item["req"].status.value),
+            created_at=item["req"].created_at,
+            reviewed_at=item["req"].reviewed_at,
+        ) for item in requests
+    ]
+
+@router.post("/leave-requests/{request_id}/approve")
+def approve_leave_request(
+    request_id: UUID,
+    service: ManagerService = Depends(get_manager_service),
+    current_user: User = Depends(get_manager_user)
+):
+    """Approve a PENDING request"""
+    service.process_leave_request(request_id, approved=True, manager_id=current_user.id)
+    return {"status": "approved"}
+
+@router.post("/leave-requests/{request_id}/reject")
+def reject_leave_request(
+    request_id: UUID,
+    service: ManagerService = Depends(get_manager_service),
+    current_user: User = Depends(get_manager_user)
+):
+    """Reject a PENDING request"""
+    service.process_leave_request(request_id, approved=False, manager_id=current_user.id)
+    return {"status": "rejected"}
+
+@router.get("/leave-requests/calendar")
+def get_leave_calendar(
+    year: int,
+    month: int,
+    service: ManagerService = Depends(get_manager_service),
+    _: User = Depends(get_manager_user)
+):
+    """Returns calendar entries for leave requests"""
+    return service.get_leave_calendar(year, month)

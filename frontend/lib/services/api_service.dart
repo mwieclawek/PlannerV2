@@ -496,4 +496,55 @@ class ApiService {
     await _dio.delete('/employee/google-calendar/auth');
   }
 
+  // --- Leave Requests (Employee) ---
+  Future<List<LeaveRequest>> getMyLeaveRequests({String? status}) async {
+    final params = <String, dynamic>{};
+    if (status != null) params['status'] = status;
+    final response = await _dio.get('/employee/leave-requests', queryParameters: params);
+    return (response.data as List).map((e) => LeaveRequest.fromJson(e)).toList();
+  }
+
+  Future<void> createLeaveRequest(DateTime startDate, DateTime endDate, String? reason) async {
+    await _dio.post('/employee/leave-requests', data: {
+      'start_date': startDate.toIso8601String().split('T')[0],
+      'end_date': endDate.toIso8601String().split('T')[0],
+      'reason': reason,
+    });
+  }
+
+  Future<void> cancelLeaveRequest(String requestId) async {
+    await _dio.delete('/employee/leave-requests/$requestId');
+  }
+
+  // --- Leave Requests (Manager) ---
+  Future<List<LeaveRequest>> getAllLeaveRequests({String? status}) async {
+    final params = <String, dynamic>{};
+    if (status != null) params['status'] = status;
+    final response = await _dio.get('/manager/leave-requests', queryParameters: params);
+    return (response.data as List).map((e) => LeaveRequest.fromJson(e)).toList();
+  }
+
+  Future<void> approveLeaveRequest(String requestId) async {
+    await _dio.post('/manager/leave-requests/$requestId/approve');
+  }
+
+  Future<void> rejectLeaveRequest(String requestId) async {
+    await _dio.post('/manager/leave-requests/$requestId/reject');
+  }
+
+  Future<List<LeaveCalendarEntry>> getLeaveCalendar(int year, int month) async {
+    final response = await _dio.get('/manager/leave-requests/calendar', queryParameters: {
+      'year': year,
+      'month': month,
+    });
+    return (response.data['entries'] as List).map((e) => LeaveCalendarEntry.fromJson(e)).toList();
+  }
+
+  Future<List<AvailableEmployee>> getAvailableEmployeesForShift(DateTime date, int shiftDefId) async {
+    final response = await _dio.get('/manager/schedules/available-employees', queryParameters: {
+      'date': date.toIso8601String().split('T')[0],
+      'shift_def_id': shiftDefId,
+    });
+    return (response.data as List).map((e) => AvailableEmployee.fromJson(e)).toList();
+  }
 }

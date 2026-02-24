@@ -16,11 +16,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from sqlmodel import SQLModel
 
-# Import all models so they are registered with SQLModel.metadata
 from backend.app.models import (
     User, JobRole, ShiftDefinition, Availability,
     StaffingRequirement, Schedule, RestaurantConfig, UserJobRoleLink,
-    Attendance, AttendanceStatus, ShiftGiveaway, GiveawayStatus
+    Attendance, AttendanceStatus, ShiftGiveaway, GiveawayStatus,
+    LeaveRequest, LeaveStatus
 )
 
 # this is the Alembic Config object

@@ -268,3 +268,98 @@ def get_my_giveaways(
         })
     
     return result
+
+# Leave Requests Endpoints
+from typing import Optional
+from ..models import LeaveRequest, LeaveStatus
+from ..schemas import LeaveRequestCreate, LeaveRequestResponse
+
+@router.post("/leave-requests", response_model=LeaveRequestResponse, status_code=201)
+def create_leave_request(
+    request: LeaveRequestCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    if request.start_date < date.today():
+        raise HTTPException(status_code=400, detail="Cannot request leave in the past")
+    
+    # Check overlaps
+    overlaps = session.exec(
+        select(LeaveRequest).where(
+            LeaveRequest.user_id == current_user.id,
+            LeaveRequest.status.in_([LeaveStatus.PENDING, LeaveStatus.APPROVED]),
+            LeaveRequest.start_date <= request.end_date,
+            LeaveRequest.end_date >= request.start_date
+        )
+    ).first()
+    if overlaps:
+        raise HTTPException(status_code=400, detail="Leave request overlaps with an existing pending/approved request")
+
+    new_req = LeaveRequest(
+        user_id=current_user.id,
+        start_date=request.start_date,
+        end_date=request.end_date,
+        reason=request.reason,
+        status=LeaveStatus.PENDING
+    )
+    session.add(new_req)
+    session.commit()
+    session.refresh(new_req)
+
+    return LeaveRequestResponse(
+        id=new_req.id,
+        user_id=new_req.user_id,
+        user_name=current_user.full_name,
+        start_date=new_req.start_date,
+        end_date=new_req.end_date,
+        reason=new_req.reason,
+        status=str(new_req.status.value),
+        created_at=new_req.created_at,
+        reviewed_at=new_req.reviewed_at,
+    )
+
+@router.get("/leave-requests", response_model=List[LeaveRequestResponse])
+def get_my_leave_requests(
+    status: Optional[str] = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    query = select(LeaveRequest).where(LeaveRequest.user_id == current_user.id)
+    if status:
+        query = query.where(LeaveRequest.status == LeaveStatus(status))
+    query = query.order_by(LeaveRequest.start_date.desc())
+    
+    requests = session.exec(query).all()
+    
+    return [
+        LeaveRequestResponse(
+            id=r.id,
+            user_id=r.user_id,
+            user_name=current_user.full_name,
+            start_date=r.start_date,
+            end_date=r.end_date,
+            reason=r.reason,
+            status=str(r.status.value),
+            created_at=r.created_at,
+            reviewed_at=r.reviewed_at,
+        ) for r in requests
+    ]
+
+@router.delete("/leave-requests/{request_id}")
+def cancel_leave_request(
+    request_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    req = session.get(LeaveRequest, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+    if req.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to cancel this request")
+    if req.status != LeaveStatus.PENDING:
+        raise HTTPException(status_code=400, detail="Only PENDING requests can be cancelled")
+    
+    req.status = LeaveStatus.CANCELLED
+    session.add(req)
+    session.commit()
+    return {"status": "cancelled"}

@@ -178,95 +178,75 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
 
     final shift = _shifts.firstWhere((s) => s.id == shiftId);
 
-    // Fetch team availability for the week to show availability hints
-    List<TeamAvailability> teamAvailability = [];
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    List<AvailableEmployee> availableEmployees = [];
     try {
       final api = ref.read(apiServiceProvider);
-      teamAvailability = await api.getTeamAvailability(_selectedWeekStart, _selectedWeekEnd);
-    } catch (_) {
-      // Continue without availability data
-    }
-
-    // Build availability lookup: userId -> status for this date+shift
-    final Map<String, String> userAvailabilityStatus = {};
-    final dateStr = date.toIso8601String().split('T')[0];
-    for (final ta in teamAvailability) {
-      for (final entry in ta.entries) {
-        if (entry.date == dateStr && entry.shiftDefId == shiftId) {
-          userAvailabilityStatus[ta.userId] = entry.status;
-        }
+      availableEmployees = await api.getAvailableEmployeesForShift(date, shiftId);
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // pop loading
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Błąd: $e')));
       }
+      return;
     }
-
-    // Sort users: PREFERRED first, then AVAILABLE/NEUTRAL, then UNAVAILABLE
-    final sortedUsers = List<TeamMember>.from(_users);
-    sortedUsers.sort((a, b) {
-      final statusA = userAvailabilityStatus[a.id] ?? '';
-      final statusB = userAvailabilityStatus[b.id] ?? '';
-      int priorityA = statusA == 'PREFERRED' ? 0 : (statusA == 'UNAVAILABLE' ? 2 : 1);
-      int priorityB = statusB == 'PREFERRED' ? 0 : (statusB == 'UNAVAILABLE' ? 2 : 1);
-      return priorityA.compareTo(priorityB);
-    });
 
     if (!mounted) return;
+    Navigator.pop(context); // pop loading
+
+    // Group employees
+    final preferred = availableEmployees.where((e) => e.availabilityStatus == 'PREFERRED').toList();
+    final available = availableEmployees.where((e) => ['AVAILABLE', 'UNKNOWN'].contains(e.availabilityStatus)).toList();
+    final unavailable = availableEmployees.where((e) => ['UNAVAILABLE', 'ALREADY_SCHEDULED_THIS', 'ALREADY_SCHEDULED_OTHER'].contains(e.availabilityStatus)).toList();
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text('Dodaj przypisanie'),
+          title: const Text('Dodaj przypisanie'),
           content: SizedBox(
-            width: 350,
+            width: 400,
+            height: 500,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
                   '${DateFormat('EEEE, d MMM', 'pl_PL').format(date)} - ${shift.name}',
                   style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  decoration: InputDecoration(
-                    labelText: 'Pracownik',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ListView(
+                      padding: const EdgeInsets.all(8),
+                      children: [
+                        if (preferred.isNotEmpty) ...[
+                          _buildSectionHeader('Chcą pracować', preferred.length, Colors.green),
+                          ...preferred.map((e) => _buildEmployeeTile(e, selectedUserId, (id) => setDialogState(() => selectedUserId = id), context)),
+                        ],
+                        if (available.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          _buildSectionHeader('Neutralni / Dostępni', available.length, Colors.blue),
+                          ...available.map((e) => _buildEmployeeTile(e, selectedUserId, (id) => setDialogState(() => selectedUserId = id), context)),
+                        ],
+                        if (unavailable.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          _buildSectionHeader('Niedostępni / Przypisani', unavailable.length, Colors.red),
+                          ...unavailable.map((e) => _buildEmployeeTile(e, selectedUserId, (id) {}, context, isUnavailable: true)),
+                        ],
+                      ],
+                    ),
                   ),
-                  value: selectedUserId,
-                  isExpanded: true,
-                  items: sortedUsers.map((u) {
-                    final status = userAvailabilityStatus[u.id];
-                    Widget? trailing;
-                    if (status == 'PREFERRED') {
-                      trailing = Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.star, size: 16, color: Colors.green.shade600),
-                          const SizedBox(width: 4),
-                          Text('Chcę', style: TextStyle(fontSize: 11, color: Colors.green.shade700, fontWeight: FontWeight.w600)),
-                        ],
-                      );
-                    } else if (status == 'UNAVAILABLE') {
-                      trailing = Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.warning_amber, size: 16, color: Colors.red.shade400),
-                          const SizedBox(width: 4),
-                          Text('Nie może', style: TextStyle(fontSize: 11, color: Colors.red.shade500)),
-                        ],
-                      );
-                    }
-
-                    return DropdownMenuItem(
-                      value: u.id,
-                      child: Row(
-                        children: [
-                          Expanded(child: Text(u.fullName)),
-                          if (trailing != null) trailing,
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (v) => setDialogState(() => selectedUserId = v),
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<int>(
@@ -299,6 +279,105 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               child: const Text('Dodaj'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, int count, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      child: Row(
+        children: [
+          Icon(Icons.circle, size: 12, color: color),
+          const SizedBox(width: 8),
+          Text(
+            '$title ($count)',
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey.shade700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmployeeTile(AvailableEmployee emp, String? selectedId, Function(String) onSelect, BuildContext context, {bool isUnavailable = false}) {
+    final isSelected = emp.userId == selectedId;
+    final hoursText = emp.targetHours != null 
+        ? '${emp.hoursThisMonth}/${emp.targetHours}h'
+        : '${emp.hoursThisMonth}h';
+        
+    final overTarget = emp.targetHours != null && emp.hoursThisMonth >= emp.targetHours!;
+
+    return Opacity(
+      opacity: isUnavailable ? 0.5 : 1.0,
+      child: InkWell(
+        onTap: isUnavailable ? null : () => onSelect(emp.userId),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isSelected ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5) : Colors.transparent,
+            border: Border.all(
+              color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+              width: 2,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              if (emp.availabilityStatus == 'PREFERRED')
+                const Icon(Icons.star, size: 16, color: Colors.amber)
+              else if (isUnavailable)
+                const Icon(Icons.block, size: 16, color: Colors.red),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      emp.fullName,
+                      style: GoogleFonts.inter(
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        decoration: isUnavailable ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        ...emp.jobRoles.map((r) => Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Color(int.parse(r.colorHex.replaceFirst('#', '0xFF'))).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            r.name,
+                            style: GoogleFonts.inter(
+                              fontSize: 10,
+                              color: Color(int.parse(r.colorHex.replaceFirst('#', '0xFF'))),
+                            ),
+                          ),
+                        )),
+                        const SizedBox(width: 4),
+                        Text(
+                          '•  $hoursText',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: overTarget ? Colors.orange.shade800 : Colors.grey.shade600,
+                            fontWeight: overTarget ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

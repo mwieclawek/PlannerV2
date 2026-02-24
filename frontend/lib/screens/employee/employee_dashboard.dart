@@ -8,6 +8,7 @@ import '../../models/models.dart';
 import '../../widgets/availability_grid.dart';
 import 'my_schedule_screen.dart';
 import 'attendance_tab.dart';
+import 'leave_requests_tab.dart';
 import '../../widgets/help_dialog.dart';
 
 class EmployeeDashboard extends ConsumerStatefulWidget {
@@ -400,82 +401,105 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
           }
           
           // Availability Tab
-          return Column(
-            children: [
-              // Week Selector
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.secondaryContainer,
-                  border: Border(
-                    bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left),
-                      onPressed: _previousWeek,
-                    ),
-                    Text(
-                      '${DateFormat('d MMM', 'pl_PL').format(_selectedWeekStart)} - ${DateFormat('d MMM yyyy', 'pl_PL').format(_selectedWeekEnd)}',
-                      style: GoogleFonts.inter(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right),
-                      onPressed: _nextWeek,
-                    ),
+          return DefaultTabController(
+            length: 2,
+            child: Column(
+              children: [
+                const TabBar(
+                  tabs: [
+                    Tab(text: 'Dyspozycja'),
+                    Tab(text: 'Wnioski urlopowe'),
                   ],
                 ),
-              ),
-              
-              // Availability Grid
-              Expanded(
-                child: shiftsAsync.when(
-                  data: (shifts) {
-                    if (shifts.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.info_outline, size: 64, color: Colors.grey.shade400),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Brak zdefiniowanych zmian',
-                              style: GoogleFonts.inter(
-                                fontSize: 16,
-                                color: Colors.grey.shade600,
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      // Sub-tab 0: Dyspozycja
+                      Column(
+                        children: [
+                          // Week Selector
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.secondaryContainer,
+                              border: Border(
+                                bottom: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Skontaktuj się z menadżerem',
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                color: Colors.grey.shade500,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.chevron_left),
+                                  onPressed: _previousWeek,
+                                ),
+                                Text(
+                                  '${DateFormat('d MMM', 'pl_PL').format(_selectedWeekStart)} - ${DateFormat('d MMM yyyy', 'pl_PL').format(_selectedWeekEnd)}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.chevron_right),
+                                  onPressed: _nextWeek,
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          // Availability Grid
+                          Expanded(
+                            child: shiftsAsync.when(
+                              data: (shifts) {
+                                if (shifts.isEmpty) {
+                                  return Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.info_outline, size: 64, color: Colors.grey.shade400),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'Brak zdefiniowanych zmian',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 16,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Skontaktuj się z menadżerem',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 14,
+                                            color: Colors.grey.shade500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
+                                
+                                return AvailabilityGrid(
+                                  weekStart: _selectedWeekStart,
+                                  shifts: shifts,
+                                );
+                              },
+                              loading: () => const Center(child: CircularProgressIndicator()),
+                              error: (error, stack) => Center(
+                                child: Text('Błąd: $error'),
                               ),
                             ),
-                          ],
-                        ),
-                      );
-                    }
-                    
-                    return AvailabilityGrid(
-                      weekStart: _selectedWeekStart,
-                      shifts: shifts,
-                    );
-                  },
-                  loading: () => const Center(child: CircularProgressIndicator()),
-                  error: (error, stack) => Center(
-                    child: Text('Błąd: $error'),
+                          ),
+                        ],
+                      ),
+                      
+                      // Sub-tab 1: Wnioski urlopowe
+                      const LeaveRequestsTab(),
+                    ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
