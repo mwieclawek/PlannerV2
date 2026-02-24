@@ -115,9 +115,9 @@ pipeline {
                         sh """
                             docker run -d --name plannerv2-backend-dev --network plannerv2-network \\
                             -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db \\
-                            -e GITHUB_TOKEN=${GH_TOKEN} \\
-                            -e JWT_SECRET_KEY=${JWT_SECRET} \\
-                            -e MANAGER_REGISTRATION_PIN=${MGR_PIN} \\
+                            -e GITHUB_TOKEN=${env.GH_TOKEN} \\
+                            -e JWT_SECRET_KEY=${env.JWT_SECRET} \\
+                            -e MANAGER_REGISTRATION_PIN=${env.MGR_PIN} \\
                             -e ALLOWED_ORIGINS=http://46.225.49.0:8091 \\
                             --restart unless-stopped plannerv2-backend:dev
                         """
@@ -240,9 +240,9 @@ pipeline {
                         sh """
                             docker run -d --name plannerv2-backend --network plannerv2-network \\
                             -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db \\
-                            -e GITHUB_TOKEN=${GH_TOKEN} \\
-                            -e JWT_SECRET_KEY=${JWT_SECRET} \\
-                            -e MANAGER_REGISTRATION_PIN=${MGR_PIN} \\
+                            -e GITHUB_TOKEN=${env.GH_TOKEN} \\
+                            -e JWT_SECRET_KEY=${env.JWT_SECRET} \\
+                            -e MANAGER_REGISTRATION_PIN=${env.MGR_PIN} \\
                             -e ALLOWED_ORIGINS=https://restoplan.pl,http://46.225.49.0 \\
                             --restart unless-stopped plannerv2-backend:latest
                         """
