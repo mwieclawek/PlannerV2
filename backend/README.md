@@ -116,6 +116,7 @@ OR-Tools CP-SAT solver z następującymi regułami:
 | `GET` | `/manager/user-stats/{id}` | Statystyki pracownika |
 | `GET` | `/manager/dashboard-home` | Dashboard (dzienne podsumowanie) |
 | `GET/PUT` | `/manager/config` | Konfiguracja restauracji |
+| `GET` | `/manager/schedules/available-employees` | Dostępność pracowników na konkretną zmianę |
 | `GET` | `/manager/team-availability` | Dostępność zespołu |
 | `GET` | `/manager/attendance` | Obecności (filtry: daty, status) |
 | `POST` | `/manager/attendance` | Ręczne dodanie obecności |
@@ -132,6 +133,7 @@ OR-Tools CP-SAT solver z następującymi regułami:
 |--------|----------|------|
 | `GET` | `/employee/availability` | Moja dostępność |
 | `PUT` | `/employee/availability` | Aktualizacja dostępności |
+| `GET` | `/employee/availability/status` | Sprawdzenie statusu wysłania dostępności |
 | `GET` | `/employee/schedule` | Mój grafik |
 | `GET` | `/employee/attendance-defaults` | Domyślne godziny z grafiku |
 | `POST` | `/employee/attendance` | Rejestracja obecności |
@@ -139,6 +141,7 @@ OR-Tools CP-SAT solver z następującymi regułami:
 | `POST` | `/employee/giveaway/{schedule_id}` | Oddaj zmianę |
 | `DELETE` | `/employee/giveaway/{id}` | Anuluj oddanie |
 | `GET` | `/employee/giveaways` | Moje oddania |
+| `POST` | `/employee/google-calendar/auth` | Podpięcie Google Calendar |
 
 ### Scheduler (`/scheduler`)
 | Metoda | Endpoint | Opis |

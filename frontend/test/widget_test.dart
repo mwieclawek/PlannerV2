@@ -96,5 +96,38 @@ void main() {
       expect(member.isEmployee, true);
       expect(member.jobRoleIds, [1, 2]);
     });
+
+    test('EmployeeScheduleEntry parses coworkers correctly', () {
+      final json = {
+        'id': 'shift-001',
+        'date': '2026-03-01',
+        'shift_name': 'Morning',
+        'role_name': 'Barista',
+        'start_time': '08:00',
+        'end_time': '16:00',
+        'is_on_giveaway': false,
+        'coworkers': ['Anna Kowalska', 'Jan Nowak'],
+      };
+
+      final entry = EmployeeScheduleEntry.fromJson(json);
+      expect(entry.shiftName, 'Morning');
+      expect(entry.coworkers, ['Anna Kowalska', 'Jan Nowak']);
+      expect(entry.coworkers.length, 2);
+    });
+
+    test('EmployeeScheduleEntry defaults coworkers to empty list', () {
+      final json = {
+        'id': 'shift-002',
+        'date': '2026-03-02',
+        'shift_name': 'Evening',
+        'role_name': 'Cashier',
+        'start_time': '16:00',
+        'end_time': '23:00',
+      };
+
+      final entry = EmployeeScheduleEntry.fromJson(json);
+      expect(entry.coworkers, isEmpty);
+      expect(entry.isOnGiveaway, false);
+    });
   });
 }

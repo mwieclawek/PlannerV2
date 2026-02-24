@@ -216,7 +216,27 @@ class ManagerService:
         user = self.session.get(User, user_id)
         if not user:
              raise HTTPException(status_code=404, detail="User not found")
+             
         data = update.dict(exclude_unset=True)
+        
+        # Handle first_name and last_name mapping to full_name if provided
+        if "first_name" in data or "last_name" in data:
+            current_first = ""
+            current_last = ""
+            # Try to split existing full_name
+            if user.full_name:
+                parts = user.full_name.split(" ", 1)
+                current_first = parts[0]
+                if len(parts) > 1:
+                    current_last = parts[1]
+            
+            new_first = data.pop("first_name", current_first)
+            new_last = data.pop("last_name", current_last)
+            
+            new_full_name = f"{new_first} {new_last}".strip()
+            if new_full_name:
+                data["full_name"] = new_full_name
+
         for key, value in data.items():
             setattr(user, key, value)
         self.session.add(user)
@@ -578,6 +598,71 @@ class ManagerService:
             "status": "reassigned",
             "new_user_name": new_user.full_name if new_user else ""
         }
+
+    def get_available_employees_for_shift(self, date_in: date, shift_def_id: int) -> List[dict]:
+        from ..models import Availability, Schedule
+        
+        # Get employees
+        employees = self.session.exec(
+            select(User)
+            .where(User.role_system == RoleSystem.EMPLOYEE)
+            .where(User.is_active == True)
+        ).all()
+        
+        # Get shift details for role filtering later if needed, but for now just list all
+        # or list status.
+        result = []
+        for u in employees:
+            # Check availability
+            avail = self.session.exec(
+                select(Availability).where(
+                    Availability.user_id == u.id,
+                    Availability.date == date_in,
+                    Availability.shift_def_id == shift_def_id
+                )
+            ).first()
+            
+            # Check if scheduled for this exact shift
+            already_scheduled_this = self.session.exec(
+                select(Schedule).where(
+                    Schedule.user_id == u.id,
+                    Schedule.date == date_in,
+                    Schedule.shift_def_id == shift_def_id
+                )
+            ).first()
+            
+            # Check if scheduled for ANOTHER shift on this date (overlap check could be here)
+            already_scheduled_other = self.session.exec(
+                select(Schedule).where(
+                    Schedule.user_id == u.id,
+                    Schedule.date == date_in,
+                    Schedule.shift_def_id != shift_def_id
+                )
+            ).first()
+            
+            status = avail.status.value if avail else "UNKNOWN"
+            if already_scheduled_this:
+                status = "ALREADY_SCHEDULED_THIS"
+            elif already_scheduled_other:
+                status = "ALREADY_SCHEDULED_OTHER"
+                
+            result.append({
+                "user_id": str(u.id),
+                "full_name": u.full_name,
+                "availability_status": status
+            })
+            
+        # Optional sorting: PREFERRED first, AVAILABLE second
+        priority = {
+            "PREFERRED": 0, 
+            "AVAILABLE": 1, 
+            "UNKNOWN": 2, 
+            "UNAVAILABLE": 3, 
+            "ALREADY_SCHEDULED_OTHER": 4, 
+            "ALREADY_SCHEDULED_THIS": 5
+        }
+        result.sort(key=lambda x: priority.get(x["availability_status"], 9))
+        return result
 
     def cancel_giveaway(self, giveaway_id: UUID):
         from ..models import ShiftGiveaway, GiveawayStatus

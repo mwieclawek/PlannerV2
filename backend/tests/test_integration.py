@@ -8,14 +8,15 @@ import httpx
 from datetime import date, timedelta
 import uuid
 
-BASE_URL = "http://127.0.0.1:8000"
+from fastapi.testclient import TestClient
+from app.main import app
 
 class TestFullWorkflow:
     """Complete user journey test"""
     
     @pytest.fixture(scope="class")
     def client(self):
-        return httpx.Client(base_url=BASE_URL, timeout=30.0)
+        return TestClient(app)
     
     @pytest.fixture(scope="class")
     def unique_username(self):

@@ -16,6 +16,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
   DateTime _selectedWeekStart = _getMonday(DateTime.now());
   bool _isLoading = false;
   List<EmployeeScheduleEntry> _scheduleEntries = [];
+  bool _showCoworkers = false;
 
   static DateTime _getMonday(DateTime date) {
     return date.subtract(Duration(days: date.weekday - 1));
@@ -148,7 +149,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Twoje zmiany',
+                          _showCoworkers ? 'Cała załoga' : 'Twoje zmiany',
                           style: GoogleFonts.outfit(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -160,6 +161,31 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                           label: const Text('Odśwież'),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // View mode toggle
+                    Center(
+                      child: SegmentedButton<bool>(
+                        segments: const [
+                          ButtonSegment(
+                            value: false,
+                            label: Text('Moje zmiany'),
+                            icon: Icon(Icons.person),
+                          ),
+                          ButtonSegment(
+                            value: true,
+                            label: Text('Cała załoga'),
+                            icon: Icon(Icons.people),
+                          ),
+                        ],
+                        selected: {_showCoworkers},
+                        onSelectionChanged: (v) => setState(() => _showCoworkers = v.first),
+                        style: SegmentedButton.styleFrom(
+                          selectedBackgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                          selectedForegroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     
@@ -311,10 +337,60 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                                                 ),
                                               ],
                                             ),
+                                            ),
+                                          ],
+                                        ), // <-- Added missing closing parenthesis for Row
+                                      // Coworker list (when toggle is on)
+                                      if (_showCoworkers && shift.coworkers.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).colorScheme.surfaceContainerLow,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
                                           ),
-                                        ],
-                                      ),
-                                        if (!isPast) ...[
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Współpracownicy:',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.grey.shade700,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Wrap(
+                                                spacing: 6,
+                                                runSpacing: 4,
+                                                children: shift.coworkers.map((name) => Chip(
+                                                  avatar: CircleAvatar(
+                                                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                                                    child: Text(
+                                                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                                      style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                                                    ),
+                                                  ),
+                                                  label: Text(name, style: GoogleFonts.inter(fontSize: 12)),
+                                                  padding: EdgeInsets.zero,
+                                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  visualDensity: VisualDensity.compact,
+                                                )).toList(),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ] else if (_showCoworkers && shift.coworkers.isEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Brak współpracowników na tej zmianie',
+                                          style: GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade500, fontStyle: FontStyle.italic),
+                                        ),
+                                      ],
+                                      if (!isPast) ...[
                                           const SizedBox(height: 8),
                                           SizedBox(
                                             width: double.infinity,

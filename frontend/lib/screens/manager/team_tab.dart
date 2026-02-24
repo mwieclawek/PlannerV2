@@ -79,6 +79,95 @@ class _TeamTabState extends ConsumerState<TeamTab> {
     return Color(int.parse('FF$hexCode', radix: 16));
   }
 
+  void _showEditNameDialog(TeamMember user) {
+    // Split full name into first/last
+    final parts = user.fullName.split(' ');
+    final firstNameController = TextEditingController(text: parts.isNotEmpty ? parts.first : '');
+    final lastNameController = TextEditingController(text: parts.length > 1 ? parts.sublist(1).join(' ') : '');
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Edytuj dane: ${user.fullName}'),
+          content: SizedBox(
+            width: 300,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: firstNameController,
+                  decoration: InputDecoration(
+                    labelText: 'Imię',
+                    prefixIcon: const Icon(Icons.person),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: lastNameController,
+                  decoration: InputDecoration(
+                    labelText: 'Nazwisko',
+                    prefixIcon: const Icon(Icons.person_outline),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                if (isLoading)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 16),
+                    child: CircularProgressIndicator(),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: const Text('Anuluj'),
+            ),
+            FilledButton(
+              onPressed: isLoading ? null : () async {
+                final firstName = firstNameController.text.trim();
+                final lastName = lastNameController.text.trim();
+                if (firstName.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Imię jest wymagane')),
+                  );
+                  return;
+                }
+                final fullName = lastName.isNotEmpty ? '$firstName $lastName' : firstName;
+
+                setDialogState(() => isLoading = true);
+                try {
+                  final api = ref.read(apiServiceProvider);
+                  await api.updateUser(user.id, fullName: fullName);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Dane zaktualizowane'), backgroundColor: Colors.green),
+                    );
+                    _loadData();
+                  }
+                } catch (e) {
+                  setDialogState(() => isLoading = false);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Błąd: $e'), backgroundColor: Theme.of(context).colorScheme.error),
+                    );
+                  }
+                }
+              },
+              child: const Text('Zapisz'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showRoleDialog(TeamMember user) {
     final selectedRoles = Set<int>.from(user.jobRoleIds);
     
@@ -484,8 +573,12 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                             onEdit: () => _showPreferencesDialog(user),
                             onEditRoles: () => _showRoleDialog(user),
                             onResetPassword: () => _showPasswordDialog(user),
+                            onEditName: () => _showEditNameDialog(user),
                           ),
                         );
+                        break;
+                      case 'edit_name':
+                        _showEditNameDialog(user);
                         break;
                       case 'toggle_active':
                         _toggleUserActive(user);
@@ -498,6 +591,14 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                       child: ListTile(
                         leading: Icon(Icons.info_outline),
                         title: Text('Szczegóły'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'edit_name',
+                      child: ListTile(
+                        leading: Icon(Icons.edit),
+                        title: Text('Edytuj dane'),
                         contentPadding: EdgeInsets.zero,
                       ),
                     ),
@@ -522,6 +623,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                       onEdit: () => _showPreferencesDialog(user),
                       onEditRoles: () => _showRoleDialog(user),
                       onResetPassword: () => _showPasswordDialog(user),
+                      onEditName: () => _showEditNameDialog(user),
                     ),
                   );
                 },

@@ -344,6 +344,7 @@ class EmployeeScheduleEntry {
   final String startTime;
   final String endTime;
   final bool isOnGiveaway;
+  final List<String> coworkers;
 
   EmployeeScheduleEntry({
     required this.id,
@@ -353,6 +354,7 @@ class EmployeeScheduleEntry {
     required this.startTime,
     required this.endTime,
     this.isOnGiveaway = false,
+    this.coworkers = const [],
   });
 
   factory EmployeeScheduleEntry.fromJson(Map<String, dynamic> json) {
@@ -364,6 +366,7 @@ class EmployeeScheduleEntry {
       startTime: json['start_time'],
       endTime: json['end_time'],
       isOnGiveaway: json['is_on_giveaway'] ?? false,
+      coworkers: (json['coworkers'] as List?)?.map((e) => e.toString()).toList() ?? [],
     );
   }
 }

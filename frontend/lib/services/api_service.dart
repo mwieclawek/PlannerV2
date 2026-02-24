@@ -480,4 +480,20 @@ class ApiService {
     await _dio.post('/employee/giveaway/$scheduleId');
   }
 
+  // --- Google Calendar Integration ---
+  Future<Map<String, dynamic>> getGoogleCalendarStatus() async {
+    final response = await _dio.get('/employee/google-calendar/status');
+    return response.data;
+  }
+
+  Future<void> connectGoogleCalendar(String authCode) async {
+    await _dio.post('/employee/google-calendar/auth', data: {
+      'auth_code': authCode,
+    });
+  }
+
+  Future<void> disconnectGoogleCalendar() async {
+    await _dio.delete('/employee/google-calendar/auth');
+  }
+
 }

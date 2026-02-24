@@ -61,6 +61,13 @@ check_dashboard.py
 check_dashboard_simple.py
 check_db_schedules.py
 check_shifts.py
+add_column.py
+check_alembic.py
+check_giveaway_schema.py
+check_schema.py
+check_tables.py
+debug_main.py
+debug_schemas.py
 
 # Output / log text files (root)
 alembic_status.txt
@@ -85,6 +92,10 @@ backend/schema_dump.txt
 backend/table_info.txt
 backend/user_info.txt
 backend/pytest.ini
+backend/error.log
+backend/error_full.txt
+backend/pydantic_error.txt
+backend/test_failures.txt
 
 # Frontend analysis
 frontend/analysis.txt

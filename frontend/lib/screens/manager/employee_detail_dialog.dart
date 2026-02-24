@@ -11,6 +11,7 @@ class EmployeeDetailDialog extends ConsumerStatefulWidget {
   final VoidCallback onEdit;
   final VoidCallback onEditRoles;
   final VoidCallback onResetPassword;
+  final VoidCallback? onEditName;
 
   const EmployeeDetailDialog({
     super.key,
@@ -18,6 +19,7 @@ class EmployeeDetailDialog extends ConsumerStatefulWidget {
     required this.onEdit,
     required this.onEditRoles,
     required this.onResetPassword,
+    this.onEditName,
   });
 
   @override
@@ -132,6 +134,8 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
           style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 12),
+        _buildInfoRow(Icons.person, 'Imię i nazwisko', widget.user.fullName, onTap: widget.onEditName),
+        const SizedBox(height: 8),
         _buildInfoRow(Icons.work_outline, 'Role', 'Kliknij edytuj, aby zarządzać', onTap: widget.onEditRoles),
         if (widget.user.targetHoursPerMonth != null || widget.user.targetShiftsPerMonth != null) ...[
           const SizedBox(height: 8),

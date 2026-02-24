@@ -33,7 +33,12 @@ class UserCreate(UserBase):
             raise ValueError('Username cannot contain spaces')
         return v.lower()  # Normalize to lowercase
 
+class GoogleAuthRequest(BaseModel):
+    auth_code: str
+
 class UserUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     full_name: Optional[str] = None
     email: Optional[str] = None
     role_system: Optional[RoleSystem] = None
@@ -236,6 +241,7 @@ class EmployeeScheduleResponse(BaseModel):
     start_time: str
     end_time: str
     is_on_giveaway: bool = False
+    coworkers: List[str] = []
 
 # --- Restaurant Config ---
 class ConfigBase(BaseModel):

@@ -230,6 +230,16 @@ def get_team_availability(
     
     return list(result.values())
 
+@router.get("/schedules/available-employees")
+def get_available_employees(
+    date: date,
+    shift_def_id: int,
+    service: ManagerService = Depends(get_manager_service),
+    _: User = Depends(get_manager_user)
+):
+    """Get list of employees and their availability status for a specific shift instance"""
+    return service.get_available_employees_for_shift(date, shift_def_id)
+
 # Attendance Management Endpoints
 from ..models import Attendance, AttendanceStatus
 

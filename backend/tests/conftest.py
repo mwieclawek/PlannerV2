@@ -26,7 +26,9 @@ def session_fixture() -> Generator[Session, None, None]:
         yield session
     SQLModel.metadata.drop_all(engine)
 
-@pytest.fixture(name="client")
+import pytest_asyncio
+
+@pytest_asyncio.fixture(name="client")
 async def client_fixture(session: Session) -> AsyncGenerator[AsyncClient, None]:
     # Override the dependency
     def get_session_override():

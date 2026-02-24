@@ -34,6 +34,8 @@ TEST_MANAGER = {
     "manager_pin": "1234"
 }
 
+from app.main import app
+
 @pytest.fixture(scope="module")
 def client():
     # In a real environment, we'd use the app directly with TestClient(app)
@@ -42,8 +44,7 @@ def client():
     # OR if this is a unit test, we should mock. 
     # USER REQUEST said "Add new test ... that simulates impossible situation".
     # Best to use the same approach as test_api.py for consistency.
-    import httpx
-    return httpx.Client(base_url=BASE_URL, timeout=30.0)
+    return TestClient(app)
 
 @pytest.fixture(scope="module")
 def manager_token(client):

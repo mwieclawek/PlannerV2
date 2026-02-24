@@ -172,11 +172,43 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     }
   }
 
-  void _showAddAssignmentDialog(DateTime date, int shiftId) {
+  void _showAddAssignmentDialog(DateTime date, int shiftId) async {
     String? selectedUserId;
     int? selectedRoleId;
 
     final shift = _shifts.firstWhere((s) => s.id == shiftId);
+
+    // Fetch team availability for the week to show availability hints
+    List<TeamAvailability> teamAvailability = [];
+    try {
+      final api = ref.read(apiServiceProvider);
+      teamAvailability = await api.getTeamAvailability(_selectedWeekStart, _selectedWeekEnd);
+    } catch (_) {
+      // Continue without availability data
+    }
+
+    // Build availability lookup: userId -> status for this date+shift
+    final Map<String, String> userAvailabilityStatus = {};
+    final dateStr = date.toIso8601String().split('T')[0];
+    for (final ta in teamAvailability) {
+      for (final entry in ta.entries) {
+        if (entry.date == dateStr && entry.shiftDefId == shiftId) {
+          userAvailabilityStatus[ta.userId] = entry.status;
+        }
+      }
+    }
+
+    // Sort users: PREFERRED first, then AVAILABLE/NEUTRAL, then UNAVAILABLE
+    final sortedUsers = List<TeamMember>.from(_users);
+    sortedUsers.sort((a, b) {
+      final statusA = userAvailabilityStatus[a.id] ?? '';
+      final statusB = userAvailabilityStatus[b.id] ?? '';
+      int priorityA = statusA == 'PREFERRED' ? 0 : (statusA == 'UNAVAILABLE' ? 2 : 1);
+      int priorityB = statusB == 'PREFERRED' ? 0 : (statusB == 'UNAVAILABLE' ? 2 : 1);
+      return priorityA.compareTo(priorityB);
+    });
+
+    if (!mounted) return;
 
     showDialog(
       context: context,
@@ -184,7 +216,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         builder: (context, setDialogState) => AlertDialog(
           title: Text('Dodaj przypisanie'),
           content: SizedBox(
-            width: 300,
+            width: 350,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -200,10 +232,40 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   value: selectedUserId,
-                  items: _users.map((u) => DropdownMenuItem(
-                    value: u.id,
-                    child: Text(u.fullName),
-                  )).toList(),
+                  isExpanded: true,
+                  items: sortedUsers.map((u) {
+                    final status = userAvailabilityStatus[u.id];
+                    Widget? trailing;
+                    if (status == 'PREFERRED') {
+                      trailing = Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.star, size: 16, color: Colors.green.shade600),
+                          const SizedBox(width: 4),
+                          Text('Chcę', style: TextStyle(fontSize: 11, color: Colors.green.shade700, fontWeight: FontWeight.w600)),
+                        ],
+                      );
+                    } else if (status == 'UNAVAILABLE') {
+                      trailing = Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.warning_amber, size: 16, color: Colors.red.shade400),
+                          const SizedBox(width: 4),
+                          Text('Nie może', style: TextStyle(fontSize: 11, color: Colors.red.shade500)),
+                        ],
+                      );
+                    }
+
+                    return DropdownMenuItem(
+                      value: u.id,
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(u.fullName)),
+                          if (trailing != null) trailing,
+                        ],
+                      ),
+                    );
+                  }).toList(),
                   onChanged: (v) => setDialogState(() => selectedUserId = v),
                 ),
                 const SizedBox(height: 16),

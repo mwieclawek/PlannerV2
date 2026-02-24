@@ -5,13 +5,33 @@ from sqlmodel import Session
 from ..database import get_session
 from ..models import User, Availability
 from ..auth_utils import get_current_user
-from ..schemas import AvailabilityUpdate, EmployeeScheduleResponse
+from ..schemas import AvailabilityUpdate, EmployeeScheduleResponse, GoogleAuthRequest
 from ..services.employee_service import EmployeeService
 
 router = APIRouter(prefix="/employee", tags=["employee"])
 
 def get_employee_service(session: Session = Depends(get_session)) -> EmployeeService:
     return EmployeeService(session)
+
+@router.post("/google-calendar/auth")
+def link_google_calendar(
+    request: GoogleAuthRequest,
+    current_user: User = Depends(get_current_user),
+    service: EmployeeService = Depends(get_employee_service)
+):
+    service.link_google_calendar(current_user.id, request.auth_code)
+    return {"status": "success", "message": "Google Calendar linked successfully"}
+
+@router.get("/availability/status")
+def check_availability_status(
+    start_date: date, 
+    end_date: date, 
+    current_user: User = Depends(get_current_user), 
+    service: EmployeeService = Depends(get_employee_service)
+):
+    """Check if the employee has submitted availability for the given date range"""
+    availabilities = service.get_availability(current_user.id, start_date, end_date)
+    return {"submitted": len(availabilities) > 0}
 
 @router.get("/availability", response_model=List[Availability])
 def get_my_availability(

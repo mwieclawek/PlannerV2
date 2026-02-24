@@ -157,20 +157,43 @@ class TestEmployeeSchedule:
         session, shift_definition, job_role
     ):
         """Test getting schedule when data exists"""
-        from app.models import User
+        from app.models import User, RoleSystem
+        from app.auth_utils import get_password_hash
         from sqlmodel import select
         
         user = session.exec(select(User).where(User.email == "employee@test.com")).first()
         
-        # Create schedule entry
-        schedule = Schedule(
+        # Create coworker
+        coworker = User(
+            username="coworker_test",
+            email="coworker@test.com",
+            password_hash=get_password_hash("secret"),
+            full_name="Test Coworker",
+            role_system=RoleSystem.EMPLOYEE
+        )
+        session.add(coworker)
+        session.commit()
+        session.refresh(coworker)
+        
+        # Create schedule entry for main user
+        schedule1 = Schedule(
             date=date.today(),
             shift_def_id=shift_definition.id,
             user_id=user.id,
             role_id=job_role.id,
             is_published=True
         )
-        session.add(schedule)
+        session.add(schedule1)
+        
+        # Create schedule entry for coworker on same shift
+        schedule2 = Schedule(
+            date=date.today(),
+            shift_def_id=shift_definition.id,
+            user_id=coworker.id,
+            role_id=job_role.id,
+            is_published=True
+        )
+        session.add(schedule2)
         session.commit()
         
         today = date.today()
@@ -182,6 +205,7 @@ class TestEmployeeSchedule:
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
+        assert "Test Coworker" in data[0]["coworkers"]
 
 
 class TestEmployeeUnauthorized:

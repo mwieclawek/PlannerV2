@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
 import '../../models/models.dart';
@@ -119,6 +120,197 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
     );
   }
 
+  void _showGoogleCalendarDialog() async {
+    // Check current status
+    bool isConnected = false;
+    bool isLoading = true;
+    bool isSigningIn = false;
+    String? error;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          // Load status on first build
+          if (isLoading && !isSigningIn) {
+            ref.read(apiServiceProvider).getGoogleCalendarStatus().then((data) {
+              setDialogState(() {
+                isConnected = data['connected'] == true;
+                isLoading = false;
+              });
+            }).catchError((e) {
+              setDialogState(() {
+                isLoading = false;
+                error = 'Nie udało się sprawdzić statusu';
+              });
+            });
+          }
+
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.calendar_month, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                const Text('Kalendarz Google'),
+              ],
+            ),
+            content: SizedBox(
+              width: 300,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (isLoading || isSigningIn) ...[
+                    Center(
+                      child: Column(
+                        children: [
+                          const CircularProgressIndicator(),
+                          if (isSigningIn) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              'Logowanie przez Google...',
+                              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ] else if (error != null) ...[
+                    Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  ] else if (isConnected) ...[
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.green.shade600, size: 20),
+                        const SizedBox(width: 8),
+                        const Expanded(child: Text('Kalendarz Google jest połączony')),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Twoje zmiany są automatycznie synchronizowane z Kalendarzem Google.',
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                  ] else ...[
+                    Row(
+                      children: [
+                        Icon(Icons.link_off, color: Colors.grey.shade500, size: 20),
+                        const SizedBox(width: 8),
+                        const Expanded(child: Text('Kalendarz Google nie jest połączony')),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Połącz swoje konto Google, aby automatycznie dodawać zmiany do kalendarza.',
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Zamknij'),
+              ),
+              if (!isLoading && !isSigningIn && error == null)
+                isConnected
+                    ? OutlinedButton.icon(
+                        onPressed: () async {
+                          setDialogState(() => isLoading = true);
+                          try {
+                            await ref.read(apiServiceProvider).disconnectGoogleCalendar();
+                            setDialogState(() {
+                              isConnected = false;
+                              isLoading = false;
+                            });
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Kalendarz Google odłączony'), backgroundColor: Colors.orange),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() {
+                              isLoading = false;
+                              error = 'Błąd: $e';
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.link_off, size: 18),
+                        label: const Text('Odłącz'),
+                        style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                      )
+                    : FilledButton.icon(
+                        onPressed: () async {
+                          setDialogState(() => isSigningIn = true);
+                          try {
+                            final googleSignIn = GoogleSignIn(
+                              scopes: [
+                                'https://www.googleapis.com/auth/calendar.events',
+                              ],
+                              serverClientId: '357153331477-b6512tnr51gi4kslrh9f8tjndhdp74j7.apps.googleusercontent.com',
+                            );
+
+                            final account = await googleSignIn.signIn();
+                            if (account == null) {
+                              // User cancelled
+                              setDialogState(() => isSigningIn = false);
+                              return;
+                            }
+
+                            final auth = await account.authentication;
+                            final authCode = auth.serverAuthCode ?? auth.accessToken;
+
+                            if (authCode == null) {
+                              setDialogState(() {
+                                isSigningIn = false;
+                                error = 'Nie udało się uzyskać kodu autoryzacji od Google';
+                              });
+                              return;
+                            }
+
+                            // Send auth code to backend
+                            await ref.read(apiServiceProvider).connectGoogleCalendar(authCode);
+
+                            setDialogState(() {
+                              isSigningIn = false;
+                              isConnected = true;
+                            });
+
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('✓ Kalendarz Google połączony pomyślnie'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() {
+                              isSigningIn = false;
+                              error = 'Błąd logowania Google: $e';
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.link, size: 18),
+                        label: const Text('Połącz z Google'),
+                      ),
+              if (error != null && !isLoading)
+                TextButton(
+                  onPressed: () {
+                    setDialogState(() {
+                      error = null;
+                      isLoading = true;
+                    });
+                  },
+                  child: const Text('Spróbuj ponownie'),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final userAsync = ref.watch(authProvider);
@@ -149,9 +341,21 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                 await ref.read(authProvider.notifier).logout();
               } else if (value == 'password') {
                 _showChangePasswordDialog();
+              } else if (value == 'google_calendar') {
+                _showGoogleCalendarDialog();
               }
             },
             itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(
+                value: 'google_calendar',
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_month, color: Colors.grey),
+                    SizedBox(width: 8),
+                    Text('Kalendarz Google'),
+                  ],
+                ),
+              ),
               const PopupMenuItem<String>(
                 value: 'password',
                 child: Row(

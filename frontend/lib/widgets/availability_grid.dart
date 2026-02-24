@@ -23,6 +23,8 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
   // Local state: Map of (date, shiftId) -> status
   final Map<String, AvailabilityStatus> _localAvailability = {};
   bool _hasChanges = false;
+  bool _isEditing = false;
+  bool _hasExistingData = false;
 
   @override
   void initState() {
@@ -52,6 +54,8 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
           _localAvailability[key] = avail.status;
         }
         _hasChanges = false;
+        _hasExistingData = availabilities.isNotEmpty;
+        _isEditing = !_hasExistingData; // Start editable if no data
       });
     } catch (e) {
       // Handle error
@@ -67,6 +71,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
   }
 
   void _toggleStatus(DateTime date, int shiftId) {
+    if (!_isEditing) return; // Block toggles when not editing
     final key = _getKey(date, shiftId);
     final currentStatus = _getStatus(date, shiftId);
     
@@ -82,6 +87,22 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
     
     setState(() {
       _localAvailability[key] = newStatus;
+      _hasChanges = true;
+    });
+  }
+
+  void _setAllPreferred() {
+    setState(() {
+      for (int i = 0; i < 7; i++) {
+        final date = widget.weekStart.add(Duration(days: i));
+        for (final shift in widget.shifts) {
+          final dayIndex = date.weekday - 1;
+          if (shift.applicableDays.contains(dayIndex)) {
+            final key = _getKey(date, shift.id);
+            _localAvailability[key] = AvailabilityStatus.available;
+          }
+        }
+      }
       _hasChanges = true;
     });
   }
@@ -105,7 +126,11 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
       await ref.read(apiServiceProvider).updateAvailability(updates);
       
       if (mounted) {
-        setState(() => _hasChanges = false);
+        setState(() {
+          _hasChanges = false;
+          _hasExistingData = true;
+          _isEditing = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✓ Dostępność zapisana'),
@@ -183,14 +208,68 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
             }).toList(),
           ),
         ),
+
+        // Action buttons row
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Row(
+            children: [
+              // "Set all to Want" button
+              if (_isEditing)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _setAllPreferred,
+                    icon: const Icon(Icons.check_circle_outline, size: 18),
+                    label: const Text('Ustaw wszystkie na Chcę'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.green.shade700,
+                      side: BorderSide(color: Colors.green.shade400),
+                    ),
+                  ),
+                ),
+              // Edit / Read-only toggle
+              if (_hasExistingData && !_isEditing) ...[
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => setState(() => _isEditing = true),
+                    icon: const Icon(Icons.edit, size: 18),
+                    label: const Text('Edytuj dyspozycyjność'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        
+        if (!_isEditing && _hasExistingData)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Row(
+              children: [
+                Icon(Icons.lock_outline, size: 14, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'Dyspozycyjność jest w trybie podglądu. Kliknij "Edytuj" aby wprowadzić zmiany.',
+                    style: GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade500, fontStyle: FontStyle.italic),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        const SizedBox(height: 8),
         
         // Grid
         Expanded(
-          child: isMobile ? _buildMobileView() : _buildDesktopView(),
+          child: Opacity(
+            opacity: _isEditing ? 1.0 : 0.7,
+            child: isMobile ? _buildMobileView() : _buildDesktopView(),
+          ),
         ),
         
         // Save Button
-        if (_hasChanges)
+        if (_isEditing && _hasChanges)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -209,7 +288,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
               child: ElevatedButton.icon(
                 onPressed: _saveChanges,
                 icon: const Icon(Icons.save),
-                label: const Text('Zapisz zmiany'),
+                label: Text(_hasExistingData ? 'Zapisz zmiany' : 'Zapisz'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Colors.white,

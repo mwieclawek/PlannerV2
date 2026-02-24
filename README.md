@@ -125,6 +125,7 @@ PlannerV2/
 | `GET` | `/manager/giveaways` | Lista oddawanych zmian |
 | `POST` | `/manager/giveaways/{id}/reassign` | Przydzielenie zastępstwa |
 | `POST` | `/manager/giveaways/{id}/cancel` | Anulowanie oddania |
+| `GET` | `/manager/schedules/available-employees` | Lista dostępnych na konkretną zmianę |
 | `GET` | `/manager/team-availability` | Dostępność całego zespołu |
 
 ### Employee (`/employee`)
@@ -132,6 +133,7 @@ PlannerV2/
 |--------|----------|------|
 | `GET` | `/employee/availability` | Moja dostępność |
 | `PUT` | `/employee/availability` | Aktualizacja dostępności |
+| `GET` | `/employee/availability/status` | Status wysłanej dostępności |
 | `GET` | `/employee/schedule` | Mój grafik |
 | `GET` | `/employee/attendance-defaults` | Domyślne godziny check-in/out |
 | `POST` | `/employee/attendance` | Rejestracja obecności |
@@ -139,6 +141,7 @@ PlannerV2/
 | `POST` | `/employee/giveaway/{schedule_id}` | Oddaj zmianę |
 | `DELETE` | `/employee/giveaway/{id}` | Anuluj oddanie |
 | `GET` | `/employee/giveaways` | Moje oddania zmian |
+| `POST` | `/employee/google-calendar/auth` | Integracja Google Calendar |
 
 ### Scheduler (`/scheduler`)
 | Metoda | Endpoint | Opis |

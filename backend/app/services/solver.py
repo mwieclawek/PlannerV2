@@ -38,6 +38,24 @@ class SolverService:
         global_reqs = self.session.exec(select(StaffingRequirement).where(
             StaffingRequirement.day_of_week != None
         )).all()
+        
+        # Fetch month-to-date schedules for hours calculation
+        month_start_date = start_date.replace(day=1)
+        mtd_schedules = self.session.exec(select(Schedule).where(
+            Schedule.date >= month_start_date,
+            Schedule.date < start_date
+        )).all()
+        
+        # Calculate already scheduled hours per employee
+        mtd_hours = {}
+        for s in mtd_schedules:
+            shift = self.session.get(ShiftDefinition, s.shift_def_id)
+            if shift:
+                start_dt = datetime.combine(date.today(), shift.start_time)
+                end_dt = datetime.combine(date.today(), shift.end_time)
+                if end_dt <= start_dt: end_dt += timedelta(days=1)
+                duration = (end_dt - start_dt).total_seconds() / 3600
+                mtd_hours[s.user_id] = mtd_hours.get(s.user_id, 0.0) + duration
 
         req_map = {}
         
@@ -184,6 +202,9 @@ class SolverService:
                         # effectively treating it as "Slots Available".
                         model.Add(sum(relevant_workers) <= min_req)
 
+        # Objective: Maximize preferences & Penalize Overworking
+        objective_terms = []
+
         # C4. Monthly Targets (Hours / Shifts)
         # We are solving for a range [start_date, end_date]. 
         # If this range is shorter than a month, we only enforce proportional or absolute?
@@ -209,15 +230,20 @@ class SolverService:
             if e.target_shifts_per_month is not None:
                 model.Add(sum(employee_vars) <= e.target_shifts_per_month)
                 
-            # Hours Limit
+            # Hours Limit (Soft Penalty)
             if e.target_hours_per_month is not None:
-                # scaled hours <= target * 10
-                model.Add(cp_model.LinearExpr.WeightedSum(employee_vars, employee_hours_coeffs) <= e.target_hours_per_month * 10)
+                already_scheduled = mtd_hours.get(e.id, 0.0)
+                remaining = max(0, e.target_hours_per_month - already_scheduled)
+                target_scaled = int(remaining * 10)
+                assigned_scaled = cp_model.LinearExpr.WeightedSum(employee_vars, employee_hours_coeffs)
+                
+                # Soft penalty for exceeding
+                excess_var = model.NewIntVar(0, sum(employee_hours_coeffs) + 1000, f"excess_hours_{e.id}")
+                model.Add(assigned_scaled - target_scaled <= excess_var)
+                
+                # Penalty 100 per scaled hour (meaning 1000 per full hour)
+                objective_terms.append(excess_var * -100)
 
-
-        # Objective: Maximize preferences & Penalize Overworking
-        objective_terms = []
-        
         # 1. Preferences & Slot Filling Reward
         for key, w_var in work.items():
             e_id, d, s_id, r_id = key
