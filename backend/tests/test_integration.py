@@ -23,74 +23,85 @@ class TestFullWorkflow:
         return f"integration_test_{uuid.uuid4().hex[:8]}"
     
     def test_01_register_manager(self, client, unique_username):
-        """Step 1: Register a new manager"""
-        response = client.post("/auth/register", headers={"X-Integrity-Key": "planner-v2-integration-test"}, json={
-            "username": unique_username,
-            "password": "securepass123",
-            "full_name": "Integration Test Manager",
-            "role_system": "MANAGER",
-            "manager_pin": "1234"
-        })
-        if response.status_code != 200:
-            print(f"Register failed: {response.status_code} - {response.text}")
-        assert response.status_code == 200
-        
-        # Now login to get the token
+        """Step 1: Create a manager directly in DB (registration endpoint is disabled by design)."""
+        from sqlmodel import Session, create_engine, select as sa_select
+        from app.models import User, RoleSystem
+        from app.auth_utils import get_password_hash
+
+        password = "SecurePass1"
+
+        engine = create_engine("sqlite:///./planner.db", connect_args={"check_same_thread": False})
+        with Session(engine) as session:
+            existing = session.exec(
+                sa_select(User).where(User.username == unique_username)
+            ).first()
+            if not existing:
+                user = User(
+                    username=unique_username,
+                    password_hash=get_password_hash(password),
+                    full_name="Integration Test Manager",
+                    role_system=RoleSystem.MANAGER,
+                )
+                session.add(user)
+                session.commit()
+
         login_response = client.post("/auth/token", data={
             "username": unique_username,
-            "password": "securepass123"
+            "password": password,
         })
-        assert login_response.status_code == 200
+        assert login_response.status_code == 200, login_response.text
         token = login_response.json()["access_token"]
-        
-        # Store for subsequent tests
+
         self.__class__.manager_token = token
         self.__class__.auth_headers = {"Authorization": f"Bearer {token}"}
-    
+
     def test_02_create_roles(self, client):
         """Step 2: Manager creates job roles"""
         roles = [
             {"name": "Barista", "color_hex": "#8B4513"},
             {"name": "Cashier", "color_hex": "#228B22"},
         ]
-        
         for role_data in roles:
             response = client.post(
                 "/manager/roles",
                 headers=self.__class__.auth_headers,
-                json=role_data
+                json=role_data,
             )
             assert response.status_code == 200
-    
+
     def test_03_create_shifts(self, client):
         """Step 3: Manager creates shift definitions"""
         shifts = [
             {"name": "Morning", "start_time": "07:00", "end_time": "15:00"},
             {"name": "Evening", "start_time": "15:00", "end_time": "23:00"},
         ]
-        
         for shift_data in shifts:
             response = client.post(
                 "/manager/shifts",
                 headers=self.__class__.auth_headers,
-                json=shift_data
+                json=shift_data,
             )
             # Accept 200 or 400 (duplicate from previous runs)
             assert response.status_code in [200, 400]
-    
+
     def test_04_register_employee(self, client):
-        """Step 4: Register an employee"""
+        """Step 4: Manager creates an employee account via the manager API."""
         employee_username = f"employee_{uuid.uuid4().hex[:8]}"
-        
-        response = client.post("/auth/register", headers={"X-Integrity-Key": "planner-v2-integration-test"}, json={
-            "username": employee_username,
-            "password": "emppass123",
-            "full_name": "Test Employee",
-            "role_system": "EMPLOYEE"
-        })
-        assert response.status_code == 200
+
+        response = client.post(
+            "/manager/users",
+            headers=self.__class__.auth_headers,
+            json={
+                "username": employee_username,
+                "password": "EmpPass123",
+                "full_name": "Test Employee",
+                "role_system": "EMPLOYEE",
+            },
+        )
+        assert response.status_code == 200, response.text
         self.__class__.employee_username = employee_username
-    
+
+
     def test_05_assign_role_to_employee(self, client):
         """Step 5: Manager assigns role to employee"""
         # Get users list

@@ -25,6 +25,7 @@ class ManagerService:
 
         from ..auth_utils import get_password_hash
         hashed_password = get_password_hash(user_in.password)
+        hashed_pin = get_password_hash(user_in.manager_pin) if user_in.manager_pin else None
         
         user = User(
             username=user_in.username,
@@ -33,12 +34,14 @@ class ManagerService:
             full_name=user_in.full_name,
             role_system=user_in.role_system,
             target_hours_per_month=user_in.target_hours_per_month,
-            target_shifts_per_month=user_in.target_shifts_per_month
+            target_shifts_per_month=user_in.target_shifts_per_month,
+            manager_pin=hashed_pin,
         )
         self.session.add(user)
         self.session.commit()
         self.session.refresh(user)
         return user
+
 
     # --- Roles ---
     def create_role(self, role_in: JobRoleCreate) -> JobRole:

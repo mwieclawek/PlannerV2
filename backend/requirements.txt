@@ -14,3 +14,4 @@ httpx
 alembic
 reportlab
 python-dotenv
+slowapi

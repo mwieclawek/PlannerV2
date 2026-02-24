@@ -11,7 +11,7 @@ async def test_create_user_success(client: AsyncClient, manager_token_headers, s
         headers=manager_token_headers,
         json={
             "username": "newuser",
-            "password": "password123",
+            "password": "Password123",
             "full_name": "New User",
             "role_system": "EMPLOYEE",
             "email": "newuser@example.com"
@@ -35,7 +35,7 @@ async def test_create_user_not_manager(client: AsyncClient, employee_token_heade
         headers=employee_token_headers,
         json={
             "username": "hacker",
-            "password": "password123",
+            "password": "Password123",
             "full_name": "Hacker",
             "role_system": "MANAGER"
         }
@@ -59,7 +59,7 @@ async def test_create_user_duplicate_username(client: AsyncClient, manager_token
         headers=manager_token_headers,
         json={
             "username": "existing",
-            "password": "password123",
+            "password": "Password123",
             "full_name": "Duplicate",
             "role_system": "EMPLOYEE"
         }
@@ -86,7 +86,7 @@ async def test_create_user_duplicate_email(client: AsyncClient, manager_token_he
         json={
             "username": "user2",
             "email": "email@example.com",
-            "password": "password123",
+            "password": "Password123",
             "full_name": "User 2",
             "role_system": "EMPLOYEE"
         }

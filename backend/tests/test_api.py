@@ -22,7 +22,7 @@ def get_employee_data():
     return {
         "username": username,
         "email": f"{username}@test.com",
-        "password": "testpass123",
+        "password": "TestPass123",
         "full_name": "Test Employee",
         "role_system": "EMPLOYEE"
     }

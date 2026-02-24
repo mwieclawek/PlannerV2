@@ -408,15 +408,13 @@ class ApiService {
   }
 
   String getAttendanceExportUrl(DateTime startDate, DateTime endDate, {String? status, String? token}) {
-    // baseUrl is now an instance field
     final start = startDate.toIso8601String().split('T')[0];
     final end = endDate.toIso8601String().split('T')[0];
+    // NOTE: Token intentionally NOT added to URL (prevents leaking into server logs / browser history).
+    // The Authorization: Bearer header is injected automatically by Dio interceptor.
     String url = '$baseUrl/manager/attendance/export?start_date=$start&end_date=$end';
     if (status != null) {
       url += '&status=$status';
-    }
-    if (token != null) {
-      url += '&token=$token';
     }
     return url;
   }
