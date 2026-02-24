@@ -715,13 +715,17 @@ class ManagerService:
         from sqlmodel import select
         from ..models import LeaveRequest, LeaveStatus, User
         
-        query = select(LeaveRequest, User).join(User)
+        query = select(LeaveRequest)
         if status:
             query = query.where(LeaveRequest.status == LeaveStatus(status))
         query = query.order_by(LeaveRequest.start_date.desc())
         
         requests = self.session.exec(query).all()
-        return [{"req": r, "user": u} for r, u in requests]
+        result = []
+        for r in requests:
+            user = self.session.get(User, r.user_id)
+            result.append({"req": r, "user": user})
+        return result
 
     def process_leave_request(self, request_id: UUID, approved: bool, manager_id: UUID):
         from sqlmodel import select
@@ -782,7 +786,7 @@ class ManagerService:
         end_date = date(year, month, last_day)
         
         requests = self.session.exec(
-            select(LeaveRequest, User).join(User).where(
+            select(LeaveRequest).where(
                 LeaveRequest.start_date <= end_date,
                 LeaveRequest.end_date >= start_date,
                 LeaveRequest.status == LeaveStatus.APPROVED
@@ -790,7 +794,8 @@ class ManagerService:
         ).all()
         
         entries = []
-        for req, user in requests:
+        for req in requests:
+            user = self.session.get(User, req.user_id)
             entries.append({
                 "user_id": str(req.user_id),
                 "user_name": user.full_name,
