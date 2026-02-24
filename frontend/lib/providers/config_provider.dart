@@ -8,8 +8,8 @@ class ConfigNotifier extends StateNotifier<String?> {
   final ConfigService _configService;
 
   ConfigNotifier(this._configService) : super(
-    (kIsWeb && Uri.base.host.contains('localhost')) 
-        ? 'http://localhost:8000' 
+    (kIsWeb && (Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1')) 
+        ? '${Uri.base.scheme}://${Uri.base.host}:8000' 
         : _configService.baseUrl
   );
   Future<void> setBaseUrl(String url) async {

@@ -139,9 +139,10 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                 isLoading = false;
               });
             }).catchError((e) {
+              // If status endpoint doesn't exist (404), treat as not connected
               setDialogState(() {
                 isLoading = false;
-                error = 'Nie udało się sprawdzić statusu';
+                isConnected = false;
               });
             });
           }
