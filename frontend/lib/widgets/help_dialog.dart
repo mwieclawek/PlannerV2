@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'bug_report_dialog.dart';
+import '../screens/privacy_policy_screen.dart';
 
 class HelpDialog extends StatelessWidget {
   const HelpDialog({super.key});
@@ -22,7 +23,9 @@ class HelpDialog extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(24, 20, 8, 12),
               decoration: BoxDecoration(
                 color: colorScheme.primaryContainer.withOpacity(0.3),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
               ),
               child: Row(
                 children: [
@@ -47,7 +50,10 @@ class HelpDialog extends StatelessWidget {
             // Content
             Flexible(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 shrinkWrap: true,
                 children: [
                   _HelpSection(
@@ -128,9 +134,27 @@ class HelpDialog extends StatelessWidget {
                       label: const Text('Zgłoś błąd'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: colorScheme.error,
-                        side: BorderSide(color: colorScheme.error.withOpacity(0.5)),
+                        side: BorderSide(
+                          color: colorScheme.error.withOpacity(0.5),
+                        ),
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const _PrivacyPolicyRoute(),
+                        ),
+                      );
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: colorScheme.onSurfaceVariant,
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                    child: const Text('Polityka Prywatności'),
                   ),
                 ],
               ),
@@ -158,21 +182,38 @@ class _HelpSection extends StatelessWidget {
     final theme = Theme.of(context);
     return ExpansionTile(
       leading: Icon(icon, size: 20, color: theme.colorScheme.primary),
-      title: Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+      title: Text(
+        title,
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
       tilePadding: const EdgeInsets.symmetric(horizontal: 8),
       childrenPadding: const EdgeInsets.only(left: 52, right: 16, bottom: 12),
-      children: items
-          .map((item) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('• ', style: theme.textTheme.bodyMedium),
-                    Expanded(child: Text(item, style: theme.textTheme.bodyMedium)),
-                  ],
+      children:
+          items
+              .map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('• ', style: theme.textTheme.bodyMedium),
+                      Expanded(
+                        child: Text(item, style: theme.textTheme.bodyMedium),
+                      ),
+                    ],
+                  ),
                 ),
-              ))
-          .toList(),
+              )
+              .toList(),
     );
   }
+}
+
+class _PrivacyPolicyRoute extends StatelessWidget {
+  const _PrivacyPolicyRoute();
+
+  @override
+  Widget build(BuildContext context) => const PrivacyPolicyScreen();
 }
