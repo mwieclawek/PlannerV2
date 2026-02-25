@@ -186,7 +186,9 @@ pipeline {
 
                     sh '''
                         docker exec plannerv2-nginx-dev mkdir -p /var/www/plannerv2/web
+                        docker exec plannerv2-nginx-dev mkdir -p /var/www/plannerv2/static
                         docker cp frontend/build/web/. plannerv2-nginx-dev:/var/www/plannerv2/web/
+                        docker cp nginx/static/. plannerv2-nginx-dev:/var/www/plannerv2/static/
                         docker cp nginx/nginx.conf plannerv2-nginx-dev:/etc/nginx/nginx.conf
                         
                         echo "🔄 Przeładowanie Nginxa..."
@@ -305,7 +307,9 @@ pipeline {
                     
                     sh '''
                         docker exec plannerv2-nginx mkdir -p /var/www/plannerv2/web
+                        docker exec plannerv2-nginx mkdir -p /var/www/plannerv2/static
                         docker cp frontend/build/web/. plannerv2-nginx:/var/www/plannerv2/web/
+                        docker cp nginx/static/. plannerv2-nginx:/var/www/plannerv2/static/
                         docker cp nginx/nginx.conf plannerv2-nginx:/etc/nginx/nginx.conf
                         docker exec plannerv2-nginx nginx -s reload
                     '''
