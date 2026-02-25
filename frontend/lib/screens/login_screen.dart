@@ -183,7 +183,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           onTap:
                               () => launchUrl(
                                 Uri.parse('/privacy'),
-                                mode: LaunchMode.platformDefault,
+                                mode: LaunchMode.externalApplication,
                               ),
                           child: Text(
                             'Polityka Prywatności',
