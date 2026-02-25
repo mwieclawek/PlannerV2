@@ -32,6 +32,7 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./frontend/build/web:/var/www/plannerv2/web:ro
+      - ./nginx/static:/var/www/plannerv2/static:ro
     depends_on:
       - backend
     networks:

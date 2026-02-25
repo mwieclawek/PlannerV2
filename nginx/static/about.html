@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planista – Aplikacja do zarządzania grafikiem w gastronomii</title>
+    <meta name="description"
+        content="Planista to aplikacja do zarządzania grafikiem pracy w restauracjach i lokalach gastronomicznych. Automatyczne planowanie zmian, śledzenie dostępności pracowników i synchronizacja z Google Calendar.">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #f5f5f5;
+            color: #1a1a1a;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1E6B4A 0%, #2d9e6e 100%);
+            color: white;
+            padding: 60px 20px;
+            text-align: center;
+        }
+
+        header .logo {
+            font-size: 2.4rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+        }
+
+        header .tagline {
+            font-size: 1.15rem;
+            opacity: 0.9;
+            margin-top: 12px;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.5;
+        }
+
+        .cta {
+            margin-top: 32px;
+            display: inline-block;
+            background: white;
+            color: #1E6B4A;
+            font-weight: 700;
+            padding: 14px 36px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-size: 1rem;
+            transition: box-shadow .2s;
+        }
+
+        .cta:hover {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        main {
+            max-width: 900px;
+            margin: 48px auto;
+            padding: 0 20px;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            color: #1E6B4A;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+            margin-bottom: 48px;
+        }
+
+        .feature {
+            background: white;
+            border-radius: 12px;
+            padding: 28px 24px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+            text-align: center;
+        }
+
+        .feature .icon {
+            font-size: 2rem;
+            margin-bottom: 12px;
+        }
+
+        .feature h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+        }
+
+        .feature p {
+            font-size: 0.9rem;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .google-section {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+            margin-bottom: 48px;
+        }
+
+        .google-section h2 {
+            text-align: left;
+            margin-bottom: 16px;
+        }
+
+        .google-section p {
+            color: #555;
+            font-size: 0.95rem;
+            line-height: 1.7;
+            margin-bottom: 12px;
+        }
+
+        .google-section a {
+            color: #1E6B4A;
+        }
+
+        footer {
+            background: #1E6B4A;
+            color: rgba(255, 255, 255, 0.85);
+            text-align: center;
+            padding: 24px;
+            font-size: 0.85rem;
+        }
+
+        footer a {
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            margin: 0 8px;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">🌿 Planista</div>
+        <p class="tagline">Inteligentne zarządzanie grafikiem pracy dla restauracji i lokali gastronomicznych</p>
+        <a href="/" class="cta">Zaloguj się →</a>
+    </header>
+
+    <main>
+        <h2>Dlaczego Planista?</h2>
+        <div class="features">
+            <div class="feature">
+                <div class="icon">📅</div>
+                <h3>Automatyczny grafik</h3>
+                <p>System generuje optymalny grafik pracy uwzględniając dyspozycyjność pracowników i wymagania lokalu.
+                </p>
+            </div>
+            <div class="feature">
+                <div class="icon">👥</div>
+                <h3>Zarządzanie zespołem</h3>
+                <p>Przypisuj role, śledź obecności i zarządzaj wnioskami urlopowymi w jednym miejscu.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">🔄</div>
+                <h3>Wymiana zmian</h3>
+                <p>Pracownicy mogą oddawać zmiany, a system automatycznie sugeruje odpowiednich zastępców.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">📆</div>
+                <h3>Google Calendar</h3>
+                <p>Synchronizacja grafiku z Google Calendar — pracownicy widzą swoje zmiany bezpośrednio w kalendarzu.
+                </p>
+            </div>
+            <div class="feature">
+                <div class="icon">📱</div>
+                <h3>Aplikacja mobilna</h3>
+                <p>Dostępna jako aplikacja Android oraz progresywna aplikacja webowa (PWA) na każde urządzenie.</p>
+            </div>
+            <div class="feature">
+                <div class="icon">🔒</div>
+                <h3>Bezpieczeństwo</h3>
+                <p>Dane przechowywane na serwerach europejskich Hetzner, szyfrowane połączenia TLS.</p>
+            </div>
+        </div>
+
+        <div class="google-section">
+            <h2>Integracja z Google Calendar</h2>
+            <p>Aplikacja Planista oferuje opcjonalną integrację z Google Calendar. Po wyrażeniu zgody przez użytkownika,
+                grafik pracy jest automatycznie synchronizowany z jego kontem Google.</p>
+            <p>Zakres uprawnień: <strong>calendar.events</strong> — aplikacja tworzy i aktualizuje wydarzenia w
+                kalendarzu użytkownika odpowiadające przypisanym zmianom.</p>
+            <p>Integracja realizowana jest zgodnie z <a
+                    href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank"
+                    rel="noopener">Polityką danych użytkowników usług API Google</a> i zasadą ograniczonego użycia
+                (Limited Use).</p>
+            <p>Użytkownik może w dowolnym momencie odłączyć integrację z poziomu ustawień profilu w aplikacji.</p>
+        </div>
+    </main>
+
+    <footer>
+        &copy; 2026 Planista — restoplan.pl &nbsp;|&nbsp;
+        <a href="/">Logowanie</a>
+        <a href="/privacy">Polityka Prywatności</a>
+        <a href="/about">O aplikacji</a>
+    </footer>
+
+</body>
+
+</html>

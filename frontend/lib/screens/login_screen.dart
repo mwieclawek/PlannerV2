@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/providers.dart';
 import '../widgets/app_logo.dart';
 
@@ -26,19 +27,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _submit() async {
     if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Wypełnij wszystkie pola')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Wypełnij wszystkie pola')));
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(authProvider.notifier).login(
-            _usernameController.text,
-            _passwordController.text,
-          );
+      await ref
+          .read(authProvider.notifier)
+          .login(_usernameController.text, _passwordController.text);
     } catch (e) {
       if (mounted) {
         String message = 'Wystąpił błąd';
@@ -74,15 +74,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF004D4D), // Darker Teal
-              Color(0xFF006A6A), // Primary Teal
-              Color(0xFF4A6363), // Muted Grey-Green
-            ],
+            colors: [Color(0xFF004D4D), Color(0xFF006A6A), Color(0xFF4A6363)],
           ),
         ),
         child: Center(
@@ -158,19 +154,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            child: _isLoading
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
+                            child:
+                                _isLoading
+                                    ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                    : const Text(
+                                      'Zaloguj',
+                                      style: TextStyle(fontSize: 16),
                                     ),
-                                  )
-                                : const Text(
-                                    'Zaloguj',
-                                    style: TextStyle(fontSize: 16),
-                                  ),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -179,6 +176,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        InkWell(
+                          onTap:
+                              () => launchUrl(
+                                Uri.parse('/privacy'),
+                                mode: LaunchMode.platformDefault,
+                              ),
+                          child: Text(
+                            'Polityka Prywatności',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade400,
+                              decoration: TextDecoration.underline,
+                              decorationColor: Colors.grey.shade400,
+                            ),
                           ),
                         ),
                       ],
