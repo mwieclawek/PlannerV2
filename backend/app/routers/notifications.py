@@ -6,7 +6,7 @@ from ..database import get_session
 from ..models import User, Notification
 from .auth import get_current_user
 
-router = APIRouter(prefix="/notifications", tags=["notifications"])
+router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
 @router.get("")
 def get_user_notifications(

@@ -12,6 +12,7 @@ import 'attendance_tab.dart';
 import 'employee_giveaway_tab.dart';
 import 'leave_requests_tab.dart';
 import '../../widgets/help_dialog.dart';
+import '../../widgets/notification_bell.dart';
 
 class EmployeeDashboard extends ConsumerStatefulWidget {
   const EmployeeDashboard({super.key});
@@ -416,6 +417,7 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         actions: [
+          const NotificationBell(),
           IconButton(
             icon: const Icon(Icons.help_outline),
             tooltip: 'Pomoc',

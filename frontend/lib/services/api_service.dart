@@ -411,14 +411,14 @@ class ApiService {
 
   // Notifications
   Future<List<AppNotification>> getNotifications() async {
-    final response = await _dio.get('/notifications');
+    final response = await _dio.get('/api/notifications');
     return (response.data as List)
         .map((e) => AppNotification.fromJson(e))
         .toList();
   }
 
   Future<void> markNotificationRead(String id) async {
-    await _dio.patch('/notifications/$id/read');
+    await _dio.patch('/api/notifications/$id/read');
   }
 
   // Restaurant Config
