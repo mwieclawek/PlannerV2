@@ -16,7 +16,7 @@ class AuthNotifierListenable extends ChangeNotifier {
       notifyListeners();
     });
   }
-  
+
   final Ref _ref;
 }
 
@@ -26,7 +26,7 @@ final authListenableProvider = Provider<AuthNotifierListenable>((ref) {
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authListenable = ref.watch(authListenableProvider);
-  
+
   return GoRouter(
     initialLocation: '/login',
     refreshListenable: authListenable,
@@ -60,12 +60,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/login';
       }
 
-      if (isLoggedIn && isLoginRoute) {
-        // Redirect based on role
-        if (user.isManager) {
-          return '/manager';
-        } else {
+      if (isLoggedIn) {
+        // Prevent employees from accessing manager routes
+        if (!user.isManager && state.matchedLocation.startsWith('/manager')) {
           return '/employee';
+        }
+
+        if (isLoginRoute) {
+          // Redirect based on role
+          return user.isManager ? '/manager' : '/employee';
         }
       }
 
@@ -76,10 +79,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/setup',
         builder: (context, state) => const ServerSetupScreen(),
       ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/employee',
         builder: (context, state) => const EmployeeDashboard(),
@@ -91,4 +91,3 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
-
