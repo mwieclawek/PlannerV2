@@ -775,6 +775,16 @@ class ManagerService:
                         self.session.add(new_avail)
                 curr_date += timedelta(days=1)
                 
+        # Notify the employee
+        from ..models import Notification
+        status_text = "zaakceptowany" if approved else "odrzucony"
+        notif = Notification(
+            user_id=req.user_id,
+            title="Wniosek urlopowy rozpatrzony",
+            body=f"Twój wniosek urlopowy od {req.start_date} do {req.end_date} został {status_text}.",
+        )
+        self.session.add(notif)
+                
         self.session.commit()
         return req
 

@@ -127,15 +127,23 @@ class LeaveStatus(str, Enum):
 
 class LeaveRequest(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    user_id: UUID = Field(foreign_key="user.id")
+    user_id: UUID = Field(foreign_key="user.id", index=True)
     start_date: date
     end_date: date
-    reason: Optional[str] = Field(default=None)
+    reason: str = Field(max_length=500)
     status: LeaveStatus = Field(default=LeaveStatus.PENDING)
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    reviewed_at: Optional[datetime] = Field(default=None)
+    reviewed_at: Optional[datetime] = None
     reviewed_by: Optional[UUID] = Field(default=None, foreign_key="user.id")
 
     user: User = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[LeaveRequest.user_id]"}
     )
+
+class Notification(SQLModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="user.id", index=True)
+    title: str = Field(max_length=200)
+    body: str = Field(max_length=1000)
+    is_read: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
