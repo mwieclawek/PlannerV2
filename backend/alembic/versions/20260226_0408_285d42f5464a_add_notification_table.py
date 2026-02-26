@@ -32,7 +32,6 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_notification_user_id'), 'notification', ['user_id'], unique=False)
-    op.create_index(op.f('ix_notification_user_id'), 'notification', ['user_id'], unique=False)
     
     with op.batch_alter_table('leaverequest') as batch_op:
         batch_op.alter_column('reason',
