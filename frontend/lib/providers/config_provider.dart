@@ -7,11 +7,13 @@ final configServiceProvider = Provider<ConfigService>((ref) => ConfigService());
 class ConfigNotifier extends StateNotifier<String?> {
   final ConfigService _configService;
 
-  ConfigNotifier(this._configService) : super(
-    (kIsWeb && (Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1')) 
-        ? '${Uri.base.scheme}://${Uri.base.host}:8000' 
-        : _configService.baseUrl
-  );
+  ConfigNotifier(this._configService)
+    : super(
+        (kIsWeb &&
+                (Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1'))
+            ? '${Uri.base.scheme}://127.0.0.1:8000'
+            : _configService.baseUrl,
+      );
   Future<void> setBaseUrl(String url) async {
     await _configService.setBaseUrl(url);
     state = url;

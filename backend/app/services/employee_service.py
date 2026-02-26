@@ -102,8 +102,7 @@ class EmployeeService:
         ).all()
         giveaway_ids = set(str(g) for g in giveaways)
 
-        # Optimization: fetch all schedules for coworkers in this date range once
-        # Or simply fetch per shift. For simplicity, fetch all published schedules in range.
+        # Fetch all published schedules in range (for coworker data)
         all_schedules_in_range = self.session.exec(
             select(Schedule).where(
                 Schedule.date >= start_date,
@@ -112,31 +111,41 @@ class EmployeeService:
             )
         ).all()
         
-        # Map: (date, shift_def_id) -> List[User IDs]
-        shift_workers_map = {}
+        # Map: (date, shift_def_id) -> List[(user_id, role_id)]
+        shift_workers_map: dict = {}
         for s in all_schedules_in_range:
             key = (s.date, s.shift_def_id)
             if key not in shift_workers_map:
                 shift_workers_map[key] = []
-            if s.user_id != user_id: # exclude self
-                shift_workers_map[key].append(s.user_id)
+            if s.user_id != user_id:  # exclude self
+                shift_workers_map[key].append((s.user_id, s.role_id))
 
-        # Fetch all required users to map IDs to names
-        all_user_ids = set()
-        for u_list in shift_workers_map.values():
-            all_user_ids.update(u_list)
-            
-        users_map = {}
+        # Fetch all coworker users
+        all_user_ids = set(uid for entries in shift_workers_map.values() for uid, _ in entries)
+        users_map: dict = {}
         if all_user_ids:
             users = self.session.exec(select(User).where(User.id.in_(all_user_ids))).all()
             users_map = {u.id: u.full_name for u in users}
+
+        # Fetch all role names we might need
+        all_role_ids = set(rid for entries in shift_workers_map.values() for _, rid in entries)
+        roles_map: dict = {}
+        if all_role_ids:
+            roles = self.session.exec(select(JobRole).where(JobRole.id.in_(all_role_ids))).all()
+            roles_map = {r.id: r.name for r in roles}
 
         response = []
         for s in schedules:
             shift = self.session.get(ShiftDefinition, s.shift_def_id)
             
-            coworker_ids = shift_workers_map.get((s.date, s.shift_def_id), [])
-            coworkers = [users_map.get(cid, "Unknown") for cid in coworker_ids]
+            coworker_entries = shift_workers_map.get((s.date, s.shift_def_id), [])
+            coworkers = [
+                {
+                    "name": users_map.get(uid, "Unknown"),
+                    "role_name": roles_map.get(rid, "Unknown"),
+                }
+                for uid, rid in coworker_entries
+            ]
             
             response.append({
                 "id": s.id,
@@ -146,6 +155,7 @@ class EmployeeService:
                 "start_time": shift.start_time.strftime("%H:%M") if shift and shift.start_time else "",
                 "end_time": shift.end_time.strftime("%H:%M") if shift and shift.end_time else "",
                 "is_on_giveaway": str(s.id) in giveaway_ids,
-                "coworkers": coworkers
+                "coworkers": coworkers,
             })
         return response
+

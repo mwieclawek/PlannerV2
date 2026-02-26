@@ -248,6 +248,10 @@ class ScheduleResponse(BaseModel):
     end_time: time
     is_on_giveaway: bool = False
 
+class CoworkerEntry(BaseModel):
+    name: str
+    role_name: str
+
 class EmployeeScheduleResponse(BaseModel):
     id: UUID
     date: date_type
@@ -256,7 +260,7 @@ class EmployeeScheduleResponse(BaseModel):
     start_time: str
     end_time: str
     is_on_giveaway: bool = False
-    coworkers: List[str] = []
+    coworkers: List[CoworkerEntry] = []
 
 # --- Restaurant Config ---
 class ConfigBase(BaseModel):

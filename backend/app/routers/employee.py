@@ -60,6 +60,66 @@ def get_my_schedule(
 ):
     return service.get_schedule(current_user.id, start_date, end_date)
 
+@router.get("/schedule-summary")
+def get_schedule_summary(
+    year: int,
+    month: int,
+    week_start: date,
+    week_end: date,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Return planned hours for the current week and month (published schedule only)."""
+    from datetime import datetime as dt, timedelta
+    from sqlmodel import select
+    from ..models import Schedule, ShiftDefinition
+
+    month_start = date(year, month, 1)
+    # last day of month
+    if month == 12:
+        month_end = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        month_end = date(year, month + 1, 1) - timedelta(days=1)
+
+    def _hours_for_range(start: date, end: date) -> float:
+        schedules = session.exec(
+            select(Schedule).where(
+                Schedule.user_id == current_user.id,
+                Schedule.date >= start,
+                Schedule.date <= end,
+                Schedule.is_published == True,
+            )
+        ).all()
+        total = 0.0
+        for s in schedules:
+            shift = session.get(ShiftDefinition, s.shift_def_id)
+            if shift:
+                start_dt = dt.combine(date.today(), shift.start_time)
+                end_dt = dt.combine(date.today(), shift.end_time)
+                if end_dt < start_dt:
+                    end_dt += timedelta(days=1)
+                total += (end_dt - start_dt).seconds / 3600
+        return round(total, 1)
+
+    # Find last scheduled date in the month
+    last_scheduled = session.exec(
+        select(Schedule).where(
+            Schedule.user_id == current_user.id,
+            Schedule.date >= month_start,
+            Schedule.date <= month_end,
+            Schedule.is_published == True,
+        ).order_by(Schedule.date.desc())  # type: ignore[arg-type]
+    ).first()
+
+    return {
+        "week_hours": _hours_for_range(week_start, week_end),
+        "month_hours": _hours_for_range(month_start, month_end),
+        "last_scheduled_date": last_scheduled.date.isoformat() if last_scheduled else None,
+        "month": month,
+        "year": year,
+    }
+
+
 # Attendance Endpoints
 from datetime import datetime, time
 from sqlmodel import select
@@ -208,6 +268,18 @@ def offer_shift_giveaway(
         offered_by=current_user.id,
     )
     session.add(giveaway)
+    
+    # Notify all managers
+    from ..models import Notification, RoleSystem
+    managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER)).all()
+    for m in managers:
+        notif = Notification(
+            user_id=m.id,
+            title="Nowa zmiana na Giełdzie",
+            body=f"Pracownik {current_user.full_name} oddał zmianę w dniu {schedule.date} na giełdę.",
+        )
+        session.add(notif)
+        
     session.commit()
     session.refresh(giveaway)
     
@@ -269,7 +341,171 @@ def get_my_giveaways(
     
     return result
 
-# Leave Requests Endpoints
+@router.get("/giveaways")
+def get_open_giveaways_for_employee(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Get all open shift giveaways the current employee can potentially claim."""
+    from datetime import datetime, timedelta
+    from ..models import Availability, AvailabilityStatus
+
+    giveaways = session.exec(
+        select(ShiftGiveaway).where(
+            ShiftGiveaway.status == GiveawayStatus.OPEN,
+            ShiftGiveaway.offered_by != current_user.id,
+        )
+    ).all()
+
+    result = []
+    for g in giveaways:
+        schedule = g.schedule
+        if not schedule:
+            continue
+        shift = session.get(ShiftDefinition, schedule.shift_def_id)
+        role = session.get(JobRole, schedule.role_id) if schedule.role_id else None
+        offerer = session.get(User, g.offered_by)
+
+        # Skip past shifts
+        if schedule.date < date.today():
+            continue
+
+        # Conflict detection: does current user already have a shift on this date?
+        my_shifts_on_day = session.exec(
+            select(Schedule).where(
+                Schedule.user_id == current_user.id,
+                Schedule.date == schedule.date,
+                Schedule.is_published == True,
+            )
+        ).all()
+
+        conflict_type = "none"  # none | overlap | same_day
+        if shift:
+            g_start = shift.start_time
+            g_end = shift.end_time
+            for ms in my_shifts_on_day:
+                my_shift = session.get(ShiftDefinition, ms.shift_def_id)
+                if not my_shift:
+                    continue
+                # Check overlap > 30 min
+                from datetime import datetime as dt
+                def to_minutes(t) -> int:
+                    return t.hour * 60 + t.minute
+                overlap_start = max(to_minutes(g_start), to_minutes(my_shift.start_time))
+                overlap_end = min(to_minutes(g_end), to_minutes(my_shift.end_time))
+                overlap = overlap_end - overlap_start
+                if overlap > 30:
+                    conflict_type = "overlap"
+                    break
+                else:
+                    conflict_type = "same_day"
+
+        # Availability hint
+        avail = session.exec(
+            select(Availability).where(
+                Availability.user_id == current_user.id,
+                Availability.date == schedule.date,
+                Availability.shift_def_id == schedule.shift_def_id,
+            )
+        ).first()
+        availability_hint = avail.status.value if avail else None
+
+        result.append({
+            "id": str(g.id),
+            "schedule_id": str(schedule.id),
+            "date": schedule.date.isoformat(),
+            "shift_name": shift.name if shift else None,
+            "role_name": role.name if role else None,
+            "role_id": schedule.role_id,
+            "start_time": shift.start_time.strftime("%H:%M") if shift else None,
+            "end_time": shift.end_time.strftime("%H:%M") if shift else None,
+            "offered_by_name": offerer.full_name if offerer else "Unknown",
+            "conflict_type": conflict_type,
+            "availability_hint": availability_hint,
+            "created_at": g.created_at.isoformat(),
+        })
+
+    return result
+
+
+@router.post("/giveaways/{giveaway_id}/claim")
+def claim_giveaway(
+    giveaway_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Employee claims an open giveaway shift."""
+    giveaway = session.get(ShiftGiveaway, giveaway_id)
+    if not giveaway:
+        raise HTTPException(status_code=404, detail="Giveaway not found")
+    if giveaway.status != GiveawayStatus.OPEN:
+        raise HTTPException(status_code=400, detail="Giveaway is no longer open")
+    if giveaway.offered_by == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot claim your own giveaway")
+
+    schedule = giveaway.schedule
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule entry not found")
+
+    shift = session.get(ShiftDefinition, schedule.shift_def_id)
+
+    # Hard-block: overlap > 30 min
+    if shift:
+        my_shifts_on_day = session.exec(
+            select(Schedule).where(
+                Schedule.user_id == current_user.id,
+                Schedule.date == schedule.date,
+                Schedule.is_published == True,
+            )
+        ).all()
+        def to_minutes(t) -> int:
+            return t.hour * 60 + t.minute
+        for ms in my_shifts_on_day:
+            my_shift = session.get(ShiftDefinition, ms.shift_def_id)
+            if not my_shift:
+                continue
+            overlap_start = max(to_minutes(shift.start_time), to_minutes(my_shift.start_time))
+            overlap_end = min(to_minutes(shift.end_time), to_minutes(my_shift.end_time))
+            if overlap_end - overlap_start > 30:
+                raise HTTPException(
+                    status_code=400,
+                    detail="You already have a shift that overlaps with this one by more than 30 minutes"
+                )
+
+    # Reassign the schedule to the current user
+    schedule.user_id = current_user.id
+    session.add(schedule)
+
+    # Mark giveaway as taken
+    giveaway.status = GiveawayStatus.TAKEN
+    giveaway.taken_by = current_user.id
+    session.add(giveaway)
+    
+    # Notify original employee
+    from ..models import Notification, RoleSystem
+    notif = Notification(
+        user_id=giveaway.offered_by,
+        title="Zmiana przejęta",
+        body=f"Twoja zmiana z dnia {schedule.date} została przejęta przez {current_user.full_name}.",
+    )
+    session.add(notif)
+    
+    # Notify managers
+    managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER)).all()
+    for m in managers:
+        m_notif = Notification(
+            user_id=m.id,
+            title="Zmiana na Giełdzie przejęta",
+            body=f"{current_user.full_name} wziął zmianę pracownika z dnia {schedule.date}.",
+        )
+        session.add(m_notif)
+        
+    session.commit()
+
+    return {"status": "claimed", "schedule_id": str(schedule.id)}
+
+
+
 from typing import Optional
 from ..models import LeaveRequest, LeaveStatus
 from ..schemas import LeaveRequestCreate, LeaveRequestResponse
@@ -303,6 +539,18 @@ def create_leave_request(
         status=LeaveStatus.PENDING
     )
     session.add(new_req)
+    
+    # Notify managers
+    from ..models import Notification, RoleSystem
+    managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER)).all()
+    for m in managers:
+        notif = Notification(
+            user_id=m.id,
+            title="Nowy wniosek urlopowy",
+            body=f"Pracownik {current_user.full_name} złożył wniosek o urlop od {request.start_date} do {request.end_date}.",
+        )
+        session.add(notif)
+        
     session.commit()
     session.refresh(new_req)
 
