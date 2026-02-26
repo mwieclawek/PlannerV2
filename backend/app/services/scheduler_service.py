@@ -86,15 +86,33 @@ class SchedulerService:
         return response
 
     def publish_schedule(self, start_date: date, end_date: date) -> int:
+        from ..models import Notification
+        
         query = select(Schedule).where(
             Schedule.date >= start_date,
             Schedule.date <= end_date
         )
         schedules = self.session.exec(query).all()
+        
+        # Track which users get published schedules to notify them
+        published_user_ids = set()
+        
         count = 0
         for s in schedules:
-            s.is_published = True
-            self.session.add(s)
-            count += 1
+            if not s.is_published:
+                s.is_published = True
+                self.session.add(s)
+                published_user_ids.add(s.user_id)
+                count += 1
+                
+        # Create notifications for affected users
+        for u_id in published_user_ids:
+            notif = Notification(
+                user_id=u_id,
+                title="Nowy grafik opublikowany",
+                body=f"Twój grafik na okres {start_date} - {end_date} został opublikowany.",
+            )
+            self.session.add(notif)
+            
         self.session.commit()
         return count

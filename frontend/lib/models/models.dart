@@ -58,11 +58,7 @@ class JobRole {
   final String name;
   final String colorHex;
 
-  JobRole({
-    required this.id,
-    required this.name,
-    required this.colorHex,
-  });
+  JobRole({required this.id, required this.name, required this.colorHex});
 
   factory JobRole.fromJson(Map<String, dynamic> json) {
     return JobRole(
@@ -73,11 +69,7 @@ class JobRole {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'color_hex': colorHex,
-    };
+    return {'id': id, 'name': name, 'color_hex': colorHex};
   }
 }
 
@@ -336,6 +328,20 @@ class ScheduleEntry {
   }
 }
 
+class CoworkerEntry {
+  final String name;
+  final String roleName;
+
+  CoworkerEntry({required this.name, required this.roleName});
+
+  factory CoworkerEntry.fromJson(Map<String, dynamic> json) {
+    return CoworkerEntry(
+      name: json['name'] ?? 'Unknown',
+      roleName: json['role_name'] ?? 'Unknown',
+    );
+  }
+}
+
 class EmployeeScheduleEntry {
   final String id;
   final DateTime date;
@@ -344,7 +350,7 @@ class EmployeeScheduleEntry {
   final String startTime;
   final String endTime;
   final bool isOnGiveaway;
-  final List<String> coworkers;
+  final List<CoworkerEntry> coworkers;
 
   EmployeeScheduleEntry({
     required this.id,
@@ -366,7 +372,11 @@ class EmployeeScheduleEntry {
       startTime: json['start_time'],
       endTime: json['end_time'],
       isOnGiveaway: json['is_on_giveaway'] ?? false,
-      coworkers: (json['coworkers'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      coworkers:
+          (json['coworkers'] as List?)
+              ?.map((e) => CoworkerEntry.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 }
@@ -374,7 +384,7 @@ class EmployeeScheduleEntry {
 class TeamMember {
   final String id;
   final String username;
-  final String? email;  // Now optional
+  final String? email; // Now optional
   final String fullName;
   final String roleSystem;
   final List<int> jobRoleIds;
@@ -407,7 +417,10 @@ class TeamMember {
       targetHoursPerMonth: json['target_hours_per_month'],
       targetShiftsPerMonth: json['target_shifts_per_month'],
       isActive: json['is_active'] ?? true,
-      nextShift: json['next_shift'] != null ? NextShiftInfo.fromJson(json['next_shift']) : null,
+      nextShift:
+          json['next_shift'] != null
+              ? NextShiftInfo.fromJson(json['next_shift'])
+              : null,
     );
   }
 
@@ -486,13 +499,13 @@ class TeamAvailability {
     return TeamAvailability(
       userId: json['user_id'] as String,
       userName: json['user_name'] as String,
-      entries: (json['entries'] as List)
-          .map((e) => AvailabilityEntry.fromJson(e))
-          .toList(),
+      entries:
+          (json['entries'] as List)
+              .map((e) => AvailabilityEntry.fromJson(e))
+              .toList(),
     );
   }
 }
-
 
 class NextShiftInfo {
   final DateTime date;
@@ -535,7 +548,8 @@ class UserStats {
     return UserStats(
       totalShiftsCompleted: json['total_shifts_completed'],
       totalHoursWorked: (json['total_hours_worked'] as num).toDouble(),
-      monthlyShifts: (json['monthly_shifts'] as List).cast<Map<String, dynamic>>(),
+      monthlyShifts:
+          (json['monthly_shifts'] as List).cast<Map<String, dynamic>>(),
     );
   }
 }
@@ -553,13 +567,17 @@ class DashboardHome {
 
   factory DashboardHome.fromJson(Map<String, dynamic> json) {
     return DashboardHome(
-      workingToday: (json['working_today'] as List)
-          .map((e) => ScheduleEntry.fromJson(e))
-          .toList(),
-      missingConfirmations: (json['missing_confirmations'] as List).cast<Map<String, dynamic>>(),
-      openGiveaways: (json['open_giveaways'] as List?)
-          ?.map((e) => ShiftGiveaway.fromJson(e))
-          .toList() ?? [],
+      workingToday:
+          (json['working_today'] as List)
+              .map((e) => ScheduleEntry.fromJson(e))
+              .toList(),
+      missingConfirmations:
+          (json['missing_confirmations'] as List).cast<Map<String, dynamic>>(),
+      openGiveaways:
+          (json['open_giveaways'] as List?)
+              ?.map((e) => ShiftGiveaway.fromJson(e))
+              .toList() ??
+          [],
     );
   }
 }
@@ -634,9 +652,12 @@ class ShiftGiveaway {
       roleName: json['role_name'] as String?,
       startTime: json['start_time'] as String?,
       endTime: json['end_time'] as String?,
-      suggestions: (json['suggestions'] as List? ?? [])
-          .map((e) => GiveawaySuggestion.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      suggestions:
+          (json['suggestions'] as List? ?? [])
+              .map(
+                (e) => GiveawaySuggestion.fromJson(e as Map<String, dynamic>),
+              )
+              .toList(),
     );
   }
 }
@@ -647,10 +668,10 @@ class LeaveRequest {
   final String id;
   final String userId;
   final String userName;
-  final String startDate;  // "YYYY-MM-DD"
+  final String startDate; // "YYYY-MM-DD"
   final String endDate;
   final String? reason;
-  final String status;     // PENDING, APPROVED, REJECTED, CANCELLED
+  final String status; // PENDING, APPROVED, REJECTED, CANCELLED
   final String createdAt;
   final String? reviewedAt;
 
@@ -729,12 +750,38 @@ class AvailableEmployee {
       userId: json['user_id'],
       fullName: json['full_name'],
       availabilityStatus: json['availability_status'],
-      jobRoles: (json['job_roles'] as List? ?? [])
-          .map((e) => JobRole.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      jobRoles:
+          (json['job_roles'] as List? ?? [])
+              .map((e) => JobRole.fromJson(e as Map<String, dynamic>))
+              .toList(),
       targetHours: json['target_hours']?.toDouble(),
       hoursThisMonth: json['hours_this_month']?.toDouble() ?? 0.0,
     );
   }
 }
 
+class AppNotification {
+  final String id;
+  final String title;
+  final String body;
+  final bool isRead;
+  final DateTime createdAt;
+
+  AppNotification({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.isRead,
+    required this.createdAt,
+  });
+
+  factory AppNotification.fromJson(Map<String, dynamic> json) {
+    return AppNotification(
+      id: json['id'],
+      title: json['title'],
+      body: json['body'],
+      isRead: json['is_read'] ?? false,
+      createdAt: DateTime.parse(json['created_at']),
+    );
+  }
+}

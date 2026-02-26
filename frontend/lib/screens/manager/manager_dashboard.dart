@@ -9,6 +9,7 @@ import 'team_tab.dart';
 import 'attendance_approval_tab.dart';
 
 import '../../widgets/qr_config_dialog.dart';
+import '../../widgets/notification_bell.dart';
 import '../../widgets/help_dialog.dart';
 
 class ManagerDashboard extends ConsumerStatefulWidget {
@@ -54,6 +55,7 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
               );
             },
           ),
+          const NotificationBell(),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
