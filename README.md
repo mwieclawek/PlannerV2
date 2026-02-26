@@ -34,6 +34,12 @@ Aplikacja do automatycznego generowania grafików pracy dla restauracji i lokali
 | CI/CD | Jenkins + Docker |
 | Proxy | Nginx (reverse proxy + static files) |
 
+## CI/CD Deployment Strategy
+
+Aplikacja wykorzystuje Jenkins do automatycznych wdrożeń:
+- **DEV (Development):** Wdrażany automatycznie z gałęzi `main`.
+- **PROD (Produkcja):** Wdrażana automatycznie po utworzeniu taga wersji (np. `v1.0.0`).
+
 ## Szybki Start
 
 ```bash
