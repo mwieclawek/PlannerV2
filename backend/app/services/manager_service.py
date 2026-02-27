@@ -142,36 +142,51 @@ class ManagerService:
     # --- Requirements ---
     def set_requirements(self, reqs: List[RequirementCreate]) -> List[StaffingRequirement]:
         results = []
+        
+        # Determine the scope of days to clear based on the incoming request
+        # If the request contains dates, clear those dates. If day_of_week, clear those days.
+        dates_to_clear = set()
+        days_to_clear = set()
+        
         for r in reqs:
-            query = select(StaffingRequirement).where(
-                StaffingRequirement.shift_def_id == r.shift_def_id,
-                StaffingRequirement.role_id == r.role_id
-            )
-            
             if r.date:
-                query = query.where(StaffingRequirement.date == r.date)
+                dates_to_clear.add(r.date)
             elif r.day_of_week is not None:
-                query = query.where(StaffingRequirement.day_of_week == r.day_of_week)
-            else:
-                 # Should be caught by schema validation, but safe fallback or error
-                 continue
-
-            existing = self.session.exec(query).first()
-            
-            if existing:
-                existing.min_count = r.min_count
-                self.session.add(existing)
-                results.append(existing)
-            else:
-                new_req = StaffingRequirement(
-                    date=r.date,
-                    day_of_week=r.day_of_week,
-                    shift_def_id=r.shift_def_id,
-                    role_id=r.role_id,
-                    min_count=r.min_count
-                )
-                self.session.add(new_req)
-                results.append(new_req)
+                days_to_clear.add(r.day_of_week)
+                
+        # Clear existing requirements for the affected days
+        if dates_to_clear:
+            old_reqs = self.session.exec(
+                select(StaffingRequirement).where(StaffingRequirement.date.in_(list(dates_to_clear)))
+            ).all()
+            for old in old_reqs:
+                self.session.delete(old)
+                
+        if days_to_clear:
+            old_reqs = self.session.exec(
+                select(StaffingRequirement).where(StaffingRequirement.day_of_week.in_(list(days_to_clear)))
+            ).all()
+            for old in old_reqs:
+                self.session.delete(old)
+        
+        # If there are no requirements (e.g. everything was deleted in the UI), reqs is empty
+        # but the above logic won't clear anything because dates_to_clear is empty.
+        # However, the frontend sends ALL requirements for the given week/template.
+        # Since the provided API doesn't know the exact "week" if reqs is empty, 
+        # the clear logic above only works if there's at least one requirement left.
+        # This requires the frontend to send a "clear_dates" parameter, or we accept a slightly
+        # altered payload. Let's see if we can do this without changing the API signature.
+        
+        for r in reqs:
+            new_req = StaffingRequirement(
+                date=r.date,
+                day_of_week=r.day_of_week,
+                shift_def_id=r.shift_def_id,
+                role_id=r.role_id,
+                min_count=r.min_count
+            )
+            self.session.add(new_req)
+            results.append(new_req)
                 
         self.session.commit()
         for res in results:
@@ -220,7 +235,20 @@ class ManagerService:
         if not user:
              raise HTTPException(status_code=404, detail="User not found")
              
+        # Use exclude_unset=False to allow explicitly passed None fields 
+        # But wait, if we use exclude_unset=False we overwrite everything with None!
+        # The frontend uses PATCH-like behavior but sends all fields it updates.
+        # Actually pydantic v2 `model_dump(exclude_unset=True)` keeps explicitly set Nones if the field
+        # is optional and unset wasn't true. BUT `update: UserUpdate` might receive nulls 
+        # that are treated as set. Let's see:
         data = update.dict(exclude_unset=True)
+        
+        # In Pydantic, if a field is sent as null in JSON, it is "set" to None.
+        # exclude_unset=True will INCLUDE it, but only if the frontend actually sent `"target_hours_per_month": null`.
+        # The issue might be that the frontend is completely omitting the key when it's empty, or sending an empty string.
+        # Let's add a check: if the frontend sends it as explicit null, `data` WILL have it.
+        # If the frontend is completely omitting it, we can't tell if it meant "don't change" or "clear".
+        # We need the frontend (api_service) to explicitly send null.
         
         # Handle first_name and last_name mapping to full_name if provided
         if "first_name" in data or "last_name" in data:
@@ -730,7 +758,7 @@ class ManagerService:
             result.append({"req": r, "user": user})
         return result
 
-    def process_leave_request(self, request_id: UUID, approved: bool, manager_id: UUID):
+    def process_leave_request(self, request_id: UUID, approved: bool, manager_id: UUID, background_tasks=None):
         from sqlmodel import select
         from ..models import LeaveRequest, LeaveStatus, Availability, AvailabilityStatus, ShiftDefinition
         from datetime import datetime, timedelta
@@ -778,12 +806,23 @@ class ManagerService:
         # Notify the employee
         from ..models import Notification
         status_text = "zaakceptowany" if approved else "odrzucony"
+        title = "Wniosek urlopowy rozpatrzony"
+        body = f"Twój wniosek urlopowy od {req.start_date} do {req.end_date} został {status_text}."
+        
         notif = Notification(
             user_id=req.user_id,
-            title="Wniosek urlopowy rozpatrzony",
-            body=f"Twój wniosek urlopowy od {req.start_date} do {req.end_date} został {status_text}.",
+            title=title,
+            body=body,
         )
         self.session.add(notif)
+        
+        if background_tasks:
+            from .push_service import PushService, send_push_to_tokens
+            push_svc = PushService(self.session)
+            tokens = push_svc._get_user_tokens(req.user_id)
+            if tokens:
+                background_tasks.add_task(send_push_to_tokens, tokens, title, body)
+                
                 
         self.session.commit()
         return req

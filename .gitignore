@@ -41,6 +41,8 @@ Thumbs.db
 .env
 *.pem
 *.key
+*-firebase-adminsdk-*.json
+firebase*.json
 
 # Testing & Logs
 test-results/

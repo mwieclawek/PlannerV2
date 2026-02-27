@@ -1,6 +1,6 @@
 from typing import List
 from datetime import date
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlmodel import Session
 from ..database import get_session
 from ..models import User, Availability
@@ -234,6 +234,7 @@ from ..models import ShiftGiveaway, GiveawayStatus, JobRole
 @router.post("/giveaway/{schedule_id}")
 def offer_shift_giveaway(
     schedule_id: UUID,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -271,14 +272,53 @@ def offer_shift_giveaway(
     
     # Notify all managers
     from ..models import Notification, RoleSystem
+    from ..services.push_service import PushService, send_push_to_tokens
+    push_svc = PushService(session)
     managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER)).all()
+    
+    # 1. Notify Managers
     for m in managers:
+        title = "Nowa zmiana na Giełdzie"
+        body = f"Pracownik {current_user.full_name} oddał zmianę w dniu {schedule.date} na giełdę."
         notif = Notification(
             user_id=m.id,
-            title="Nowa zmiana na Giełdzie",
-            body=f"Pracownik {current_user.full_name} oddał zmianę w dniu {schedule.date} na giełdę.",
+            title=title,
+            body=body,
         )
         session.add(notif)
+        
+        tokens = push_svc._get_user_tokens(m.id)
+        if tokens:
+            background_tasks.add_task(send_push_to_tokens, tokens, title, body)
+            
+    # 2. Notify Eligible Employees (users with the required role, excluding the offerer)
+    eligible_employees = session.exec(
+        select(User).where(
+            User.role_system == RoleSystem.EMPLOYEE,
+            User.is_active == True,
+            User.id != current_user.id
+        )
+    ).all()
+    
+    # Filter users who have the role required for this shift
+    for emp in eligible_employees:
+        emp_role_ids = [r.id for r in emp.job_roles] if hasattr(emp, 'job_roles') else []
+        if schedule.role_id in emp_role_ids:
+            emp_title = "Nowa zmiana do wzięcia!"
+            emp_body = f"Pracownik {current_user.full_name} wystawił swoją zmianę na giełdę ({schedule.date})."
+            
+            # Create in-app notification
+            emp_notif = Notification(
+                user_id=emp.id,
+                title=emp_title,
+                body=emp_body,
+            )
+            session.add(emp_notif)
+            
+            # Create push notification
+            emp_tokens = push_svc._get_user_tokens(emp.id)
+            if emp_tokens:
+                background_tasks.add_task(send_push_to_tokens, emp_tokens, emp_title, emp_body)
         
     session.commit()
     session.refresh(giveaway)
@@ -431,6 +471,7 @@ def get_open_giveaways_for_employee(
 @router.post("/giveaways/{giveaway_id}/claim")
 def claim_giveaway(
     giveaway_id: UUID,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -481,24 +522,39 @@ def claim_giveaway(
     giveaway.taken_by = current_user.id
     session.add(giveaway)
     
-    # Notify original employee
     from ..models import Notification, RoleSystem
+    from ..services.push_service import PushService, send_push_to_tokens
+    push_svc = PushService(session)
+    
+    # Notify original employee
+    title = "Zmiana przejęta"
+    body = f"Twoja zmiana z dnia {schedule.date} została przejęta przez {current_user.full_name}."
     notif = Notification(
         user_id=giveaway.offered_by,
-        title="Zmiana przejęta",
-        body=f"Twoja zmiana z dnia {schedule.date} została przejęta przez {current_user.full_name}.",
+        title=title,
+        body=body,
     )
     session.add(notif)
+    
+    tokens = push_svc._get_user_tokens(giveaway.offered_by)
+    if tokens:
+        background_tasks.add_task(send_push_to_tokens, tokens, title, body)
     
     # Notify managers
     managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER)).all()
     for m in managers:
+        m_title = "Zmiana na Giełdzie przejęta"
+        m_body = f"{current_user.full_name} wziął zmianę pracownika z dnia {schedule.date}."
         m_notif = Notification(
             user_id=m.id,
-            title="Zmiana na Giełdzie przejęta",
-            body=f"{current_user.full_name} wziął zmianę pracownika z dnia {schedule.date}.",
+            title=m_title,
+            body=m_body,
         )
         session.add(m_notif)
+        
+        m_tokens = push_svc._get_user_tokens(m.id)
+        if m_tokens:
+            background_tasks.add_task(send_push_to_tokens, m_tokens, m_title, m_body)
         
     session.commit()
 
@@ -513,6 +569,7 @@ from ..schemas import LeaveRequestCreate, LeaveRequestResponse
 @router.post("/leave-requests", response_model=LeaveRequestResponse, status_code=201)
 def create_leave_request(
     request: LeaveRequestCreate,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -542,14 +599,22 @@ def create_leave_request(
     
     # Notify managers
     from ..models import Notification, RoleSystem
+    from ..services.push_service import PushService, send_push_to_tokens
+    push_svc = PushService(session)
     managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER)).all()
     for m in managers:
+        title = "Nowy wniosek urlopowy"
+        body = f"Pracownik {current_user.full_name} złożył wniosek o urlop od {request.start_date} do {request.end_date}."
         notif = Notification(
             user_id=m.id,
-            title="Nowy wniosek urlopowy",
-            body=f"Pracownik {current_user.full_name} złożył wniosek o urlop od {request.start_date} do {request.end_date}.",
+            title=title,
+            body=body,
         )
         session.add(notif)
+        
+        tokens = push_svc._get_user_tokens(m.id)
+        if tokens:
+            background_tasks.add_task(send_push_to_tokens, tokens, title, body)
         
     session.commit()
     session.refresh(new_req)

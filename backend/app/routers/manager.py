@@ -2,7 +2,7 @@ from typing import List, Optional
 from uuid import UUID
 from datetime import date, datetime, timedelta
 from io import BytesIO
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -621,21 +621,23 @@ def get_all_leave_requests(
 @router.post("/leave-requests/{request_id}/approve")
 def approve_leave_request(
     request_id: UUID,
+    background_tasks: BackgroundTasks,
     service: ManagerService = Depends(get_manager_service),
     current_user: User = Depends(get_manager_user)
 ):
     """Approve a PENDING request"""
-    service.process_leave_request(request_id, approved=True, manager_id=current_user.id)
+    service.process_leave_request(request_id, approved=True, manager_id=current_user.id, background_tasks=background_tasks)
     return {"status": "approved"}
 
 @router.post("/leave-requests/{request_id}/reject")
 def reject_leave_request(
     request_id: UUID,
+    background_tasks: BackgroundTasks,
     service: ManagerService = Depends(get_manager_service),
     current_user: User = Depends(get_manager_user)
 ):
     """Reject a PENDING request"""
-    service.process_leave_request(request_id, approved=False, manager_id=current_user.id)
+    service.process_leave_request(request_id, approved=False, manager_id=current_user.id, background_tasks=background_tasks)
     return {"status": "rejected"}
 
 @router.get("/leave-requests/calendar")

@@ -273,20 +273,27 @@ class ApiService {
     int? targetHoursPerMonth,
     int? targetShiftsPerMonth,
     bool? isActive,
+    bool clearTargets = false, // New parameter to explicitly clear targets
   }) async {
-    await _dio.put(
-      '/manager/users/$userId',
-      data: {
-        if (fullName != null) 'full_name': fullName,
-        if (email != null) 'email': email,
-        if (roleSystem != null) 'role_system': roleSystem,
-        if (targetHoursPerMonth != null)
-          'target_hours_per_month': targetHoursPerMonth,
-        if (targetShiftsPerMonth != null)
-          'target_shifts_per_month': targetShiftsPerMonth,
-        if (isActive != null) 'is_active': isActive,
-      },
-    );
+    final Map<String, dynamic> data = {};
+    if (fullName != null) data['full_name'] = fullName;
+    if (email != null) data['email'] = email;
+    if (roleSystem != null) data['role_system'] = roleSystem;
+    if (isActive != null) data['is_active'] = isActive;
+
+    if (clearTargets) {
+      data['target_hours_per_month'] = null;
+      data['target_shifts_per_month'] = null;
+    } else {
+      if (targetHoursPerMonth != null) {
+        data['target_hours_per_month'] = targetHoursPerMonth;
+      }
+      if (targetShiftsPerMonth != null) {
+        data['target_shifts_per_month'] = targetShiftsPerMonth;
+      }
+    }
+
+    await _dio.put('/manager/users/$userId', data: data);
   }
 
   Future<void> createUser({
@@ -409,7 +416,26 @@ class ApiService {
     return response.data;
   }
 
-  // Notifications
+  // --- Notifications ---
+  // (FCM Token Registration)
+  Future<void> registerDeviceToken(String token) async {
+    try {
+      await _dio.post('/api/notifications/devices', data: {'token': token});
+    } catch (e) {
+      print('Wystąpił błąd podczas rejestrowania tokena urządzenia: $e');
+      // Non-fatal, dont throw
+    }
+  }
+
+  Future<void> unregisterDeviceToken(String token) async {
+    try {
+      await _dio.delete('/api/notifications/devices/$token');
+    } catch (e) {
+      print('Wystąpił błąd podczas usuwania tokena urządzenia: $e');
+      // Non-fatal
+    }
+  }
+
   Future<List<AppNotification>> getNotifications() async {
     final response = await _dio.get('/api/notifications');
     return (response.data as List)

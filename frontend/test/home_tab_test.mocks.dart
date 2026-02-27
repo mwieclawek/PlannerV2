@@ -287,9 +287,11 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
           as _i5.Future<bool>);
 
   @override
-  _i5.Future<List<_i2.TeamMember>> getUsers({bool includeInactive = false}) =>
+  _i5.Future<List<_i2.TeamMember>> getUsers({bool? includeInactive = false}) =>
       (super.noSuchMethod(
-            Invocation.method(#getUsers, [], {#includeInactive: includeInactive}),
+            Invocation.method(#getUsers, [], {
+              #includeInactive: includeInactive,
+            }),
             returnValue: _i5.Future<List<_i2.TeamMember>>.value(
               <_i2.TeamMember>[],
             ),
@@ -319,10 +321,11 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
     String? userId, {
     String? fullName,
     String? email,
-    bool? isActive,
     String? roleSystem,
     int? targetHoursPerMonth,
     int? targetShiftsPerMonth,
+    bool? isActive,
+    bool? clearTargets = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
@@ -334,6 +337,8 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
                 #roleSystem: roleSystem,
                 #targetHoursPerMonth: targetHoursPerMonth,
                 #targetShiftsPerMonth: targetShiftsPerMonth,
+                #isActive: isActive,
+                #clearTargets: clearTargets,
               },
             ),
             returnValue: _i5.Future<void>.value(),
@@ -454,6 +459,55 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               endTime,
               applicableDays,
             ]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<Map<String, dynamic>> updateAppSettings(
+    Map<String, dynamic>? settings,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#updateAppSettings, [settings]),
+            returnValue: _i5.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i5.Future<Map<String, dynamic>>);
+
+  @override
+  _i5.Future<void> registerDeviceToken(String? token) =>
+      (super.noSuchMethod(
+            Invocation.method(#registerDeviceToken, [token]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> unregisterDeviceToken(String? token) =>
+      (super.noSuchMethod(
+            Invocation.method(#unregisterDeviceToken, [token]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<List<_i2.AppNotification>> getNotifications() =>
+      (super.noSuchMethod(
+            Invocation.method(#getNotifications, []),
+            returnValue: _i5.Future<List<_i2.AppNotification>>.value(
+              <_i2.AppNotification>[],
+            ),
+          )
+          as _i5.Future<List<_i2.AppNotification>>);
+
+  @override
+  _i5.Future<void> markNotificationRead(String? id) =>
+      (super.noSuchMethod(
+            Invocation.method(#markNotificationRead, [id]),
             returnValue: _i5.Future<void>.value(),
             returnValueForMissingStub: _i5.Future<void>.value(),
           )
@@ -671,4 +725,219 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
             ),
           )
           as _i5.Future<_i2.DashboardHome>);
+
+  @override
+  _i5.Future<List<_i2.ShiftGiveaway>> getGiveaways() =>
+      (super.noSuchMethod(
+            Invocation.method(#getGiveaways, []),
+            returnValue: _i5.Future<List<_i2.ShiftGiveaway>>.value(
+              <_i2.ShiftGiveaway>[],
+            ),
+          )
+          as _i5.Future<List<_i2.ShiftGiveaway>>);
+
+  @override
+  _i5.Future<void> reassignGiveaway(String? giveawayId, String? newUserId) =>
+      (super.noSuchMethod(
+            Invocation.method(#reassignGiveaway, [giveawayId, newUserId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> cancelGiveaway(String? giveawayId) =>
+      (super.noSuchMethod(
+            Invocation.method(#cancelGiveaway, [giveawayId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<Map<String, dynamic>> submitBugReport({
+    required String? title,
+    required String? description,
+    String? steps = '',
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#submitBugReport, [], {
+              #title: title,
+              #description: description,
+              #steps: steps,
+            }),
+            returnValue: _i5.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i5.Future<Map<String, dynamic>>);
+
+  @override
+  _i5.Future<void> giveAwayShift(String? scheduleId) =>
+      (super.noSuchMethod(
+            Invocation.method(#giveAwayShift, [scheduleId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<Map<String, dynamic>> getGoogleCalendarStatus() =>
+      (super.noSuchMethod(
+            Invocation.method(#getGoogleCalendarStatus, []),
+            returnValue: _i5.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i5.Future<Map<String, dynamic>>);
+
+  @override
+  _i5.Future<void> connectGoogleCalendar(String? authCode) =>
+      (super.noSuchMethod(
+            Invocation.method(#connectGoogleCalendar, [authCode]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> disconnectGoogleCalendar() =>
+      (super.noSuchMethod(
+            Invocation.method(#disconnectGoogleCalendar, []),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<List<_i2.LeaveRequest>> getMyLeaveRequests({String? status}) =>
+      (super.noSuchMethod(
+            Invocation.method(#getMyLeaveRequests, [], {#status: status}),
+            returnValue: _i5.Future<List<_i2.LeaveRequest>>.value(
+              <_i2.LeaveRequest>[],
+            ),
+          )
+          as _i5.Future<List<_i2.LeaveRequest>>);
+
+  @override
+  _i5.Future<void> createLeaveRequest(
+    DateTime? startDate,
+    DateTime? endDate,
+    String? reason,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#createLeaveRequest, [
+              startDate,
+              endDate,
+              reason,
+            ]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> cancelLeaveRequest(String? requestId) =>
+      (super.noSuchMethod(
+            Invocation.method(#cancelLeaveRequest, [requestId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<List<_i2.LeaveRequest>> getAllLeaveRequests({String? status}) =>
+      (super.noSuchMethod(
+            Invocation.method(#getAllLeaveRequests, [], {#status: status}),
+            returnValue: _i5.Future<List<_i2.LeaveRequest>>.value(
+              <_i2.LeaveRequest>[],
+            ),
+          )
+          as _i5.Future<List<_i2.LeaveRequest>>);
+
+  @override
+  _i5.Future<void> approveLeaveRequest(String? requestId) =>
+      (super.noSuchMethod(
+            Invocation.method(#approveLeaveRequest, [requestId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> rejectLeaveRequest(String? requestId) =>
+      (super.noSuchMethod(
+            Invocation.method(#rejectLeaveRequest, [requestId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<List<_i2.LeaveCalendarEntry>> getLeaveCalendar(
+    int? year,
+    int? month,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getLeaveCalendar, [year, month]),
+            returnValue: _i5.Future<List<_i2.LeaveCalendarEntry>>.value(
+              <_i2.LeaveCalendarEntry>[],
+            ),
+          )
+          as _i5.Future<List<_i2.LeaveCalendarEntry>>);
+
+  @override
+  _i5.Future<List<_i2.AvailableEmployee>> getAvailableEmployeesForShift(
+    DateTime? date,
+    int? shiftDefId,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getAvailableEmployeesForShift, [
+              date,
+              shiftDefId,
+            ]),
+            returnValue: _i5.Future<List<_i2.AvailableEmployee>>.value(
+              <_i2.AvailableEmployee>[],
+            ),
+          )
+          as _i5.Future<List<_i2.AvailableEmployee>>);
+
+  @override
+  _i5.Future<Map<String, dynamic>> getScheduleSummary({
+    required int? year,
+    required int? month,
+    required DateTime? weekStart,
+    required DateTime? weekEnd,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#getScheduleSummary, [], {
+              #year: year,
+              #month: month,
+              #weekStart: weekStart,
+              #weekEnd: weekEnd,
+            }),
+            returnValue: _i5.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i5.Future<Map<String, dynamic>>);
+
+  @override
+  _i5.Future<List<Map<String, dynamic>>> getEmployeeGiveaways() =>
+      (super.noSuchMethod(
+            Invocation.method(#getEmployeeGiveaways, []),
+            returnValue: _i5.Future<List<Map<String, dynamic>>>.value(
+              <Map<String, dynamic>>[],
+            ),
+          )
+          as _i5.Future<List<Map<String, dynamic>>>);
+
+  @override
+  _i5.Future<void> claimGiveaway(String? giveawayId) =>
+      (super.noSuchMethod(
+            Invocation.method(#claimGiveaway, [giveawayId]),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
 }

@@ -15,7 +15,7 @@ void main() {
         'created_at': '2026-01-01T00:00:00Z',
         'job_roles': [1, 2],
       };
-      
+
       final user = User.fromJson(json);
       expect(user.email, 'test@test.com');
       expect(user.isManager, true);
@@ -30,19 +30,15 @@ void main() {
         'created_at': '2026-01-01T00:00:00Z',
         'job_roles': [],
       };
-      
+
       final user = User.fromJson(json);
       expect(user.isEmployee, true);
       expect(user.isManager, false);
     });
 
     test('JobRole parses correctly', () {
-      final json = {
-        'id': 1,
-        'name': 'Barista',
-        'color_hex': '#FF5733',
-      };
-      
+      final json = {'id': 1, 'name': 'Barista', 'color_hex': '#FF5733'};
+
       final role = JobRole.fromJson(json);
       expect(role.name, 'Barista');
       expect(role.colorHex, '#FF5733');
@@ -55,7 +51,7 @@ void main() {
         'start_time': '08:00',
         'end_time': '16:00',
       };
-      
+
       final shift = ShiftDefinition.fromJson(json);
       expect(shift.name, 'Morning');
       expect(shift.startTime, '08:00');
@@ -74,7 +70,7 @@ void main() {
         'role_name': 'Barista',
         'shift_name': 'Morning',
       };
-      
+
       final entry = ScheduleEntry.fromJson(json);
       expect(entry.userName, 'John Doe');
       expect(entry.roleName, 'Barista');
@@ -90,7 +86,7 @@ void main() {
         'role_system': 'EMPLOYEE',
         'job_roles': [1, 2],
       };
-      
+
       final member = TeamMember.fromJson(json);
       expect(member.fullName, 'Team Member');
       expect(member.isEmployee, true);
@@ -106,12 +102,18 @@ void main() {
         'start_time': '08:00',
         'end_time': '16:00',
         'is_on_giveaway': false,
-        'coworkers': ['Anna Kowalska', 'Jan Nowak'],
+        'coworkers': [
+          {'name': 'Anna Kowalska', 'role_name': 'Barista'},
+          {'name': 'Jan Nowak', 'role_name': 'Shift Leader'},
+        ],
       };
 
       final entry = EmployeeScheduleEntry.fromJson(json);
       expect(entry.shiftName, 'Morning');
-      expect(entry.coworkers, ['Anna Kowalska', 'Jan Nowak']);
+      expect(entry.coworkers.map((c) => c.name).toList(), [
+        'Anna Kowalska',
+        'Jan Nowak',
+      ]);
       expect(entry.coworkers.length, 2);
     });
 

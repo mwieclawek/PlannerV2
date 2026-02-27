@@ -15,3 +15,4 @@ alembic
 reportlab
 python-dotenv
 slowapi
+firebase-admin

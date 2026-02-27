@@ -43,6 +43,7 @@ class User(SQLModel, table=True):
     job_roles: List[JobRole] = Relationship(back_populates="users", link_model=UserJobRoleLink)
     availabilities: List["Availability"] = Relationship(back_populates="user")
     schedules: List["Schedule"] = Relationship(back_populates="user")
+    devices: List["UserDevice"] = Relationship(back_populates="user")
 
 class ShiftDefinition(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -147,3 +148,11 @@ class Notification(SQLModel, table=True):
     body: str = Field(max_length=1000)
     is_read: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class UserDevice(SQLModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    user_id: UUID = Field(foreign_key="user.id", index=True)
+    fcm_token: str = Field(unique=True, index=True)
+    last_active: datetime = Field(default_factory=datetime.utcnow)
+    
+    user: User = Relationship(back_populates="devices")

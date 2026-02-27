@@ -85,7 +85,7 @@ class SchedulerService:
             })
         return response
 
-    def publish_schedule(self, start_date: date, end_date: date) -> int:
+    def publish_schedule(self, start_date: date, end_date: date, background_tasks=None) -> int:
         from ..models import Notification
         
         query = select(Schedule).where(
@@ -106,13 +106,24 @@ class SchedulerService:
                 count += 1
                 
         # Create notifications for affected users
+        if background_tasks:
+            from .push_service import PushService, send_push_to_tokens
+            push_svc = PushService(self.session)
+            
         for u_id in published_user_ids:
+            title = "Nowy grafik opublikowany"
+            body = f"Twój grafik na okres {start_date} - {end_date} został opublikowany."
             notif = Notification(
                 user_id=u_id,
-                title="Nowy grafik opublikowany",
-                body=f"Twój grafik na okres {start_date} - {end_date} został opublikowany.",
+                title=title,
+                body=body,
             )
             self.session.add(notif)
+            
+            if background_tasks:
+                tokens = push_svc._get_user_tokens(u_id)
+                if tokens:
+                    background_tasks.add_task(send_push_to_tokens, tokens, title, body)
             
         self.session.commit()
         return count

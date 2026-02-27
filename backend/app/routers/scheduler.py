@@ -1,6 +1,6 @@
 from datetime import date
 from typing import List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlmodel import Session
 from ..database import get_session
 from ..models import User
@@ -50,10 +50,11 @@ def list_schedules(
 def publish_schedule(
     start_date: date,
     end_date: date,
+    background_tasks: BackgroundTasks,
     service: SchedulerService = Depends(get_scheduler_service),
     _: User = Depends(get_manager_user)
 ):
-    count = service.publish_schedule(start_date, end_date)
+    count = service.publish_schedule(start_date, end_date, background_tasks)
     return {"status": "published", "count": count}
 
 @router.post("/assignment")

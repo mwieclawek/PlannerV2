@@ -111,15 +111,18 @@ pipeline {
                     withCredentials([
                         string(credentialsId: 'github-token', variable: 'GH_TOKEN'),
                         string(credentialsId: 'jwt-secret-key', variable: 'JWT_SECRET'),
-                        string(credentialsId: 'manager-pin', variable: 'MGR_PIN')
+                        string(credentialsId: 'manager-pin', variable: 'MGR_PIN'),
+                        file(credentialsId: 'firebase-admin-key', variable: 'FIREBASE_KEY')
                     ]) {
                         sh """
                             docker run -d --name plannerv2-backend-dev --network plannerv2-network \\
+                            -v \${env.FIREBASE_KEY}:/app/firebase-admin-key.json:ro \\
                             -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db \\
-                            -e GITHUB_TOKEN=${env.GH_TOKEN} \\
-                            -e JWT_SECRET_KEY=${env.JWT_SECRET} \\
-                            -e MANAGER_REGISTRATION_PIN=${env.MGR_PIN} \\
+                            -e GITHUB_TOKEN=\${env.GH_TOKEN} \\
+                            -e JWT_SECRET_KEY=\${env.JWT_SECRET} \\
+                            -e MANAGER_REGISTRATION_PIN=\${env.MGR_PIN} \\
                             -e ALLOWED_ORIGINS=http://46.225.49.0:8091 \\
+                            -e GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-admin-key.json \\
                             --restart unless-stopped plannerv2-backend:dev
                         """
                     }
@@ -238,15 +241,18 @@ pipeline {
                     withCredentials([
                         string(credentialsId: 'github-token', variable: 'GH_TOKEN'),
                         string(credentialsId: 'jwt-secret-key', variable: 'JWT_SECRET'),
-                        string(credentialsId: 'manager-pin', variable: 'MGR_PIN')
+                        string(credentialsId: 'manager-pin', variable: 'MGR_PIN'),
+                        file(credentialsId: 'firebase-admin-key', variable: 'FIREBASE_KEY')
                     ]) {
                         sh """
                             docker run -d --name plannerv2-backend --network plannerv2-network \\
+                            -v \${env.FIREBASE_KEY}:/app/firebase-admin-key.json:ro \\
                             -e DATABASE_URL=postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db \\
-                            -e GITHUB_TOKEN=${env.GH_TOKEN} \\
-                            -e JWT_SECRET_KEY=${env.JWT_SECRET} \\
-                            -e MANAGER_REGISTRATION_PIN=${env.MGR_PIN} \\
+                            -e GITHUB_TOKEN=\${env.GH_TOKEN} \\
+                            -e JWT_SECRET_KEY=\${env.JWT_SECRET} \\
+                            -e MANAGER_REGISTRATION_PIN=\${env.MGR_PIN} \\
                             -e ALLOWED_ORIGINS=https://restoplan.pl,http://46.225.49.0 \\
+                            -e GOOGLE_APPLICATION_CREDENTIALS=/app/firebase-admin-key.json \\
                             --restart unless-stopped plannerv2-backend:latest
                         """
                     }
