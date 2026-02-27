@@ -26,17 +26,14 @@ async def lifespan(app: FastAPI):
 
     # Security startup checks
     if not os.getenv("JWT_SECRET_KEY"):
-        logger.warning(
-            "SECURITY WARNING: JWT_SECRET_KEY is not set! "
-            "Using an insecure development default. Set this in production!"
-        )
+        raise ValueError("SECURITY STOP: JWT_SECRET_KEY is not set!")
     if not os.getenv("MANAGER_REGISTRATION_PIN"):
-        logger.warning(
-            "SECURITY WARNING: MANAGER_REGISTRATION_PIN is not set. Using default '1234'."
-        )
+        raise ValueError("SECURITY STOP: MANAGER_REGISTRATION_PIN is not set!")
 
     logger.info("Application startup complete.")
     yield
+    from .database import engine
+    engine.dispose()
     logger.info("Application shutdown.")
 
 

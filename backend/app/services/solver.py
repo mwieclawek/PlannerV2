@@ -82,8 +82,12 @@ class SolverService:
             for d in days:
                 for s in shifts:
                     # Check if shift is applicable for this weekday
-                    weekday = d.weekday()  # 0=Mon, 6=Sun (matches applicable_days format)
-                    applicable_days = [int(x) for x in s.applicable_days.split(",")] if s.applicable_days else list(range(7))
+                    weekday = d.weekday()  # 0=Mon, 6=Sun
+                    if hasattr(s, 'days') and s.days:
+                        applicable_days = [link.day_of_week for link in s.days]
+                    else:
+                        applicable_days = list(range(7))
+                        
                     if weekday not in applicable_days:
                         continue  # Skip this shift for this day
                     

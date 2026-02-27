@@ -13,6 +13,7 @@ from ..auth_utils import (
     ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
 )
 from ..schemas import Token, UserCreate, UserResponse
+from ..main import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ def register(
 
 
 @router.post("/token", response_model=Token)
+@limiter.limit("5/minute")
 def login_for_access_token(
     request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -64,6 +66,7 @@ def login_for_access_token(
 
 
 @router.post("/refresh", response_model=Token)
+@limiter.limit("5/minute")
 def refresh_access_token(
     request: Request,
     session: Session = Depends(get_session),

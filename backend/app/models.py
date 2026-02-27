@@ -37,20 +37,82 @@ class User(SQLModel, table=True):
     target_shifts_per_month: Optional[int] = Field(default=None, sa_column=Column(Integer, nullable=True))
     manager_pin: Optional[str] = Field(default=None)
     is_active: bool = Field(default=True)
-    google_access_token: Optional[str] = Field(default=None)
-    google_refresh_token: Optional[str] = Field(default=None)
+    encrypted_google_access_token: Optional[str] = Field(default=None)
+    encrypted_google_refresh_token: Optional[str] = Field(default=None)
 
     job_roles: List[JobRole] = Relationship(back_populates="users", link_model=UserJobRoleLink)
     availabilities: List["Availability"] = Relationship(back_populates="user")
     schedules: List["Schedule"] = Relationship(back_populates="user")
     devices: List["UserDevice"] = Relationship(back_populates="user")
 
+    @property
+    def google_access_token(self) -> Optional[str]:
+        if not self.encrypted_google_access_token:
+            return None
+        import os
+        from cryptography.fernet import Fernet
+        key = os.getenv("ENCRYPTION_KEY")
+        if not key:
+            return self.encrypted_google_access_token
+        try:
+            f = Fernet(key.encode())
+            return f.decrypt(self.encrypted_google_access_token.encode()).decode()
+        except Exception:
+            return self.encrypted_google_access_token
+
+    @google_access_token.setter
+    def google_access_token(self, value: Optional[str]):
+        if not value:
+            self.encrypted_google_access_token = None
+            return
+        import os
+        from cryptography.fernet import Fernet
+        key = os.getenv("ENCRYPTION_KEY")
+        if not key:
+            self.encrypted_google_access_token = value
+            return
+        f = Fernet(key.encode())
+        self.encrypted_google_access_token = f.encrypt(value.encode()).decode()
+
+    @property
+    def google_refresh_token(self) -> Optional[str]:
+        if not self.encrypted_google_refresh_token:
+            return None
+        import os
+        from cryptography.fernet import Fernet
+        key = os.getenv("ENCRYPTION_KEY")
+        if not key:
+            return self.encrypted_google_refresh_token
+        try:
+            f = Fernet(key.encode())
+            return f.decrypt(self.encrypted_google_refresh_token.encode()).decode()
+        except Exception:
+            return self.encrypted_google_refresh_token
+
+    @google_refresh_token.setter
+    def google_refresh_token(self, value: Optional[str]):
+        if not value:
+            self.encrypted_google_refresh_token = None
+            return
+        import os
+        from cryptography.fernet import Fernet
+        key = os.getenv("ENCRYPTION_KEY")
+        if not key:
+            self.encrypted_google_refresh_token = value
+            return
+        f = Fernet(key.encode())
+        self.encrypted_google_refresh_token = f.encrypt(value.encode()).decode()
+
+class ShiftDefinitionDayLink(SQLModel, table=True):
+    shift_def_id: Optional[int] = Field(default=None, foreign_key="shiftdefinition.id", primary_key=True)
+    day_of_week: int = Field(primary_key=True)
+
 class ShiftDefinition(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     start_time: time
     end_time: time
-    applicable_days: str = Field(default="0,1,2,3,4,5,6")  # Comma-separated: 0=Mon, 6=Sun
+    days: List["ShiftDefinitionDayLink"] = Relationship()
 
 class Availability(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
@@ -80,11 +142,21 @@ class Schedule(SQLModel, table=True):
 
     user: User = Relationship(back_populates="schedules")
 
+class RestaurantOpeningHour(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    config_id: int = Field(foreign_key="restaurantconfig.id")
+    day_of_week: int
+    open_time: time
+    close_time: time
+
+    config: "RestaurantConfig" = Relationship(back_populates="opening_hours")
+
 class RestaurantConfig(SQLModel, table=True):
     id: int = Field(default=1, primary_key=True)
     name: str
-    opening_hours: str = Field(default="{}") # JSON string for flexibility
     address: Optional[str] = None
+    
+    opening_hours: List["RestaurantOpeningHour"] = Relationship(back_populates="config")
 
 class AttendanceStatus(str, Enum):
     PENDING = "PENDING"       # Waiting for manager approval (unscheduled)

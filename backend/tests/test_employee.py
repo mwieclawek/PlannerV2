@@ -205,7 +205,7 @@ class TestEmployeeSchedule:
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
-        assert "Test Coworker" in data[0]["coworkers"]
+        assert any(c.get("name") == "Test Coworker" for c in data[0]["coworkers"])
 
 
 class TestEmployeeUnauthorized:

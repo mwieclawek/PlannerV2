@@ -74,7 +74,8 @@ class TestSolverEdgeCases:
         shift = client.post("/manager/shifts", headers=auth_headers, json={
             "name": f"HardShift_{uuid.uuid4().hex[:4]}",
             "start_time": "08:00",
-            "end_time": "16:00"
+            "end_time": "16:00",
+            "applicable_days": [0, 1, 2, 3, 4, 5, 6]
         })
         if shift.status_code == 400: # Exists
              # Fallback if specific shift exists, try to find it or create another

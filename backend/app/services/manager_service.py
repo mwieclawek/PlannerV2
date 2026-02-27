@@ -87,16 +87,21 @@ class ManagerService:
         if existing:
             raise HTTPException(status_code=400, detail="Shift with these hours already exists")
 
-        # Convert List[int] to comma-separated string
-        applicable_days_str = ",".join(str(d) for d in shift_in.applicable_days)
+        from ..models import ShiftDefinitionDayLink
         
         shift = ShiftDefinition(
             name=shift_in.name, 
             start_time=s_time, 
-            end_time=e_time,
-            applicable_days=applicable_days_str
+            end_time=e_time
         )
         self.session.add(shift)
+        self.session.commit()
+        self.session.refresh(shift)
+        
+        for d in shift_in.applicable_days:
+            link = ShiftDefinitionDayLink(shift_def_id=shift.id, day_of_week=d)
+            self.session.add(link)
+            
         self.session.commit()
         self.session.refresh(shift)
         return shift
@@ -117,13 +122,19 @@ class ManagerService:
         if existing:
             raise HTTPException(status_code=400, detail="Shift with these hours already exists")
 
-        # Convert List[int] to comma-separated string
-        applicable_days_str = ",".join(str(d) for d in shift_in.applicable_days)
-
+        from ..models import ShiftDefinitionDayLink
         shift.name = shift_in.name
         shift.start_time = s_time
         shift.end_time = e_time
-        shift.applicable_days = applicable_days_str
+        
+        old_links = self.session.exec(select(ShiftDefinitionDayLink).where(ShiftDefinitionDayLink.shift_def_id == shift.id)).all()
+        for link in old_links:
+            self.session.delete(link)
+            
+        for d in shift_in.applicable_days:
+            link = ShiftDefinitionDayLink(shift_def_id=shift.id, day_of_week=d)
+            self.session.add(link)
+            
         self.session.add(shift)
         self.session.commit()
         self.session.refresh(shift)
@@ -214,18 +225,46 @@ class ManagerService:
 
     def update_config(self, update: ConfigUpdate) -> RestaurantConfig:
         config = self.session.get(RestaurantConfig, 1)
+        data = update.dict(exclude_unset=True)
+        opening_hours_json = data.pop("opening_hours", None)
+        
         if not config:
-            data = update.dict(exclude_unset=True)
             if "name" not in data:
                  data["name"] = "My Restaurant"
             config = RestaurantConfig(id=1, **data)
             self.session.add(config)
+            self.session.commit()
+            self.session.refresh(config)
         else:
-            data = update.dict(exclude_unset=True)
             for key, value in data.items():
-                setattr(config, key, value)
+                if key != "opening_hours":
+                    setattr(config, key, value)
             self.session.add(config)
-        self.session.commit()
+            self.session.commit()
+            
+        if opening_hours_json is not None:
+            import json
+            from ..models import RestaurantOpeningHour
+            from datetime import datetime
+            
+            old_hours = self.session.exec(select(RestaurantOpeningHour).where(RestaurantOpeningHour.config_id == config.id)).all()
+            for h in old_hours:
+                self.session.delete(h)
+                
+            hours_dict = json.loads(opening_hours_json)
+            for day_str, times in hours_dict.items():
+                day_int = int(day_str)
+                open_t = datetime.strptime(times["open"], "%H:%M").time()
+                close_t = datetime.strptime(times["close"], "%H:%M").time()
+                new_h = RestaurantOpeningHour(
+                    config_id=config.id,
+                    day_of_week=day_int,
+                    open_time=open_t,
+                    close_time=close_t
+                )
+                self.session.add(new_h)
+            self.session.commit()
+            
         self.session.refresh(config)
         return config
 

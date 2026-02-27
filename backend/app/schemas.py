@@ -156,6 +156,17 @@ class ShiftDefResponse(BaseModel):
     end_time: time
     applicable_days: List[int] = [0, 1, 2, 3, 4, 5, 6]
 
+    @model_validator(mode='before')
+    @classmethod
+    def extract_applicable_days(cls, data):
+        if hasattr(data, 'days'):
+            days = [d.day_of_week for d in getattr(data, 'days', [])]
+            if not isinstance(data, dict):
+                data.__dict__['applicable_days'] = days
+        elif isinstance(data, dict) and 'days' in data:
+            data['applicable_days'] = [d.day_of_week if hasattr(d, 'day_of_week') else d.get('day_of_week') for d in data.get('days', [])]
+        return data
+
     @field_validator('applicable_days', mode='before')
     @classmethod
     def parse_applicable_days(cls, v):
@@ -275,6 +286,21 @@ class ConfigUpdate(BaseModel):
 
 class ConfigResponse(ConfigBase):
     id: int
+
+    @model_validator(mode='before')
+    @classmethod
+    def extract_opening_hours(cls, data):
+        if hasattr(data, 'opening_hours') and not isinstance(data.opening_hours, str):
+            import json
+            hours_dict = {}
+            for h in data.opening_hours:
+                hours_dict[str(h.day_of_week)] = {
+                    "open": h.open_time.strftime("%H:%M"),
+                    "close": h.close_time.strftime("%H:%M")
+                }
+            if not isinstance(data, dict):
+                data.__dict__['opening_hours'] = json.dumps(hours_dict)
+        return data
 
     class Config:
         from_attributes = True

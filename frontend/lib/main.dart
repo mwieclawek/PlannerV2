@@ -19,20 +19,21 @@ void main() async {
   await initializeDateFormatting('pl_PL', null);
 
   const environment = String.fromEnvironment('ENV', defaultValue: 'dev');
-  final firebaseOptions = environment == 'prod' 
-      ? prod_options.DefaultFirebaseOptions.currentPlatform
-      : dev_options.DefaultFirebaseOptions.currentPlatform;
+  final firebaseOptions =
+      environment == 'prod'
+          ? prod_options.DefaultFirebaseOptions.currentPlatform
+          : dev_options.DefaultFirebaseOptions.currentPlatform;
 
-  await Firebase.initializeApp(
-    options: firebaseOptions,
-  );
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(options: firebaseOptions);
+  }
 
   if (!kIsWeb) {
     // Pass all uncaught "fatal" errors from the framework to Crashlytics
     FlutterError.onError = (errorDetails) {
       FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
     };
-    
+
     // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
     PlatformDispatcher.instance.onError = (error, stack) {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
@@ -71,10 +72,10 @@ class MyApp extends ConsumerWidget {
       theme: ThemeData(
         colorScheme: colorScheme,
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFFAFDFC), // Ice White background
-        textTheme: GoogleFonts.interTextTheme(
-          ThemeData.light().textTheme,
-        ),
+        scaffoldBackgroundColor: const Color(
+          0xFFFAFDFC,
+        ), // Ice White background
+        textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme),
         // cardTheme removed to fix build error and rely on M3 defaults
         appBarTheme: AppBarTheme(
           centerTitle: false,
@@ -89,7 +90,9 @@ class MyApp extends ConsumerWidget {
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           ),
         ),
@@ -108,7 +111,10 @@ class MyApp extends ConsumerWidget {
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(color: colorScheme.primary, width: 2),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
         chipTheme: ChipThemeData(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),

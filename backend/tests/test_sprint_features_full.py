@@ -47,7 +47,7 @@ class TestSprintFeatures:
     @pytest.mark.anyio
     async def test_partial_config_update(self, client, session, manager_token):
         # Setup initial config
-        session.add(RestaurantConfig(id=1, name="Original", opening_hours="{}"))
+        session.add(RestaurantConfig(id=1, name="Original"))
         session.commit()
 
         # Update only name

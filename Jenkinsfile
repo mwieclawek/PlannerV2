@@ -87,26 +87,27 @@ pipeline {
                 script {
                     sh 'apk add --no-cache curl sed || true'
                     
-                    echo "🧹 AGRESYWNE CZYSZCZENIE DEV..."
-                    sh 'docker stop plannerv2-nginx-dev || true'
-                    sh 'docker rm -f plannerv2-nginx-dev || true'
-                    
-                    sh 'docker stop plannerv2-backend-dev || true'
-                    sh 'docker rm -f plannerv2-backend-dev || true'
-                    
-                    sh 'docker stop plannerv2-db-dev || true'
-                    sh 'docker rm -f plannerv2-db-dev || true'
-                    
+                    echo "🧹 START BAZY DEV (JEŚLI NIE DZIAŁA)..."
                     sh 'docker network create plannerv2-network || true'
                     
-                    echo "🗄️ Start Bazy DEV..."
-                    sh '''docker run -d --name plannerv2-db-dev --network plannerv2-network \
-                          -e POSTGRES_USER=planner_user -e POSTGRES_PASSWORD=planner_password -e POSTGRES_DB=planner_db \
-                          -v plannerv2_postgres_data_dev:/var/lib/postgresql/data --restart unless-stopped postgres:15'''
-                    sh 'sleep 10' 
+                    sh '''
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-db-dev 2>/dev/null)" != "true" ]; then
+                            echo "🗄️ Baza DEV nie działa. Uruchamiam..."
+                            docker rm -f plannerv2-db-dev || true
+                            docker run -d --name plannerv2-db-dev --network plannerv2-network \\
+                              -e POSTGRES_USER=planner_user -e POSTGRES_PASSWORD=planner_password -e POSTGRES_DB=planner_db \\
+                              -v plannerv2_postgres_data_dev:/var/lib/postgresql/data --restart unless-stopped postgres:15
+                            sleep 10
+                        else
+                            echo "✅ Baza DEV już działa. Pomijam uruchamianie."
+                        fi
+                    '''
                     
-                    echo "🐍 Backend DEV..."
+                    echo "🐍 Budowa i uruchamianie nowego Backend DEV (Blue-Green)..."
                     sh 'docker build -t plannerv2-backend:dev ./backend'
+                    
+                    sh 'docker stop plannerv2-backend-dev-new || true'
+                    sh 'docker rm -f plannerv2-backend-dev-new || true'
                     
                     withCredentials([
                         string(credentialsId: 'github-token', variable: 'GH_TOKEN'),
@@ -115,7 +116,7 @@ pipeline {
                         file(credentialsId: 'firebase-admin-key', variable: 'FIREBASE_KEY')
                     ]) {
                         sh """
-                            docker run -d --name plannerv2-backend-dev --network plannerv2-network \\
+                            docker run -d --name plannerv2-backend-dev-new --network plannerv2-network \\
                             -v "\${FIREBASE_KEY}:/app/firebase-admin-key.json:ro" \\
                             -e DATABASE_URL="postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db" \\
                             -e GITHUB_TOKEN="\${GH_TOKEN}" \\
@@ -128,22 +129,21 @@ pipeline {
                     }
                     sh 'sleep 10'
                     
-                    sh '''
-                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev)" = "false" ]; then
-                            echo "❌ Backend DEV padł! Logi:"
-                            docker logs plannerv2-backend-dev
-                            exit 1
-                        fi
-                    '''
-                    
-                    echo "🔍 Weryfikacja migracji bazy danych DEV..."
+                    echo "🔍 Weryfikacja nowego Backendu DEV i Migracji..."
                     sh '''
                         HEALTH_OK=false
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev-new)" = "false" ]; then
+                            echo "❌ Nowy Backend DEV upadł podczas startu! Logi:"
+                            docker logs plannerv2-backend-dev-new
+                            docker rm -f plannerv2-backend-dev-new
+                            exit 1
+                        fi
+
                         for i in 1 2 3 4 5; do
-                            HEALTH=$(docker exec plannerv2-backend-dev curl -sf http://localhost:8000/health 2>/dev/null || echo '{}')
-                            echo "Health response: $HEALTH"
+                            HEALTH=$(docker exec plannerv2-backend-dev-new curl -sf http://localhost:8000/health 2>/dev/null || echo '{}')
+                            echo "Health response from new: $HEALTH"
                             if echo "$HEALTH" | grep -q '"migration_current":true'; then
-                                echo "✅ Migracje bazy DEV aktualne"
+                                echo "✅ Migracje bazy DEV aktualne na nowym kontenerze"
                                 HEALTH_OK=true
                                 break
                             else
@@ -151,19 +151,32 @@ pipeline {
                                 sleep 5
                             fi
                         done
+                        
                         if [ "$HEALTH_OK" = "false" ]; then
-                            echo "❌ BŁĄD: Migracje bazy DEV nie zakończone!"
-                            echo "🔍 Health response: $HEALTH"
-                            docker logs plannerv2-backend-dev
+                            echo "❌ BŁĄD: Nowy kontener Backendu nie wstał poprawnie!"
+                            echo "Zabijam i usuwam nowy kontener, zachowując stary system."
+                            docker logs plannerv2-backend-dev-new
+                            docker rm -f plannerv2-backend-dev-new
                             exit 1
                         fi
+                        
+                        echo "✅ Nowy Backend DEV sprawdzony. Zastępowanie starego..."
+                        docker stop plannerv2-backend-dev || true
+                        docker rm -f plannerv2-backend-dev || true
+                        docker rename plannerv2-backend-dev-new plannerv2-backend-dev
                     '''
                     
                     echo "🔧 Nginx DEV Setup..."
                     sh 'git checkout nginx/nginx.conf || true' 
                     sh "sed -i 's/plannerv2-backend/plannerv2-backend-dev/g' nginx/nginx.conf"
                     
-                    sh 'docker run -d --name plannerv2-nginx-dev --network plannerv2-network -p 8091:80 --restart unless-stopped nginx:alpine'
+                    sh '''
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-nginx-dev 2>/dev/null)" != "true" ]; then
+                             docker rm -f plannerv2-nginx-dev || true
+                             docker run -d --name plannerv2-nginx-dev --network plannerv2-network -p 8091:80 --restart unless-stopped nginx:alpine
+                             sleep 5
+                        fi
+                    '''
                     
                     sh '''
                         echo "⏳ Sprawdzam widoczność Backendu..."
@@ -221,22 +234,26 @@ pipeline {
                     echo "🚀 DEPLOY PRODUKCJI: ${env.TAG_NAME}"
                     sh 'apk add --no-cache curl || true'
                     
-                    echo "🧹 AGRESYWNE CZYSZCZENIE PROD..."
-                    sh 'docker stop plannerv2-nginx || true'
-                    sh 'docker rm -f plannerv2-nginx || true'
-                    sh 'docker stop plannerv2-backend || true'
-                    sh 'docker rm -f plannerv2-backend || true'
-                    sh 'docker stop plannerv2-db || true'
-                    sh 'docker rm -f plannerv2-db || true'
-                    
+                    echo "🧹 START BAZY PROD (JEŚLI NIE DZIAŁA)..."
                     sh 'docker network create plannerv2-network || true'
                     
-                    sh '''docker run -d --name plannerv2-db --network plannerv2-network \
-                          -e POSTGRES_USER=planner_user -e POSTGRES_PASSWORD=planner_password -e POSTGRES_DB=planner_db \
-                          -v plannerv2_postgres_data:/var/lib/postgresql/data --restart unless-stopped postgres:15'''
-                    sh 'sleep 10'
+                    sh '''
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-db 2>/dev/null)" != "true" ]; then
+                            docker rm -f plannerv2-db || true
+                            docker run -d --name plannerv2-db --network plannerv2-network \\
+                              -e POSTGRES_USER=planner_user -e POSTGRES_PASSWORD=planner_password -e POSTGRES_DB=planner_db \\
+                              -v plannerv2_postgres_data:/var/lib/postgresql/data --restart unless-stopped postgres:15
+                            sleep 10
+                        else
+                            echo "✅ Baza PROD już działa. Pomijam uruchamianie."
+                        fi
+                    '''
                     
+                    echo "🐍 Budowa i uruchamianie nowego Backend PROD (Blue-Green)..."
                     sh 'docker build -t plannerv2-backend:latest ./backend'
+                    
+                    sh 'docker stop plannerv2-backend-new || true'
+                    sh 'docker rm -f plannerv2-backend-new || true'
                     
                     withCredentials([
                         string(credentialsId: 'github-token', variable: 'GH_TOKEN'),
@@ -245,7 +262,7 @@ pipeline {
                         file(credentialsId: 'firebase-admin-key', variable: 'FIREBASE_KEY')
                     ]) {
                         sh """
-                            docker run -d --name plannerv2-backend --network plannerv2-network \\
+                            docker run -d --name plannerv2-backend-new --network plannerv2-network \\
                             -v "\${FIREBASE_KEY}:/app/firebase-admin-key.json:ro" \\
                             -e DATABASE_URL="postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db" \\
                             -e GITHUB_TOKEN="\${GH_TOKEN}" \\
@@ -258,22 +275,21 @@ pipeline {
                     }
                     sh 'sleep 10'
                     
-                    sh '''
-                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend)" = "false" ]; then
-                            echo "❌ Backend PROD padł! Logi:"
-                            docker logs plannerv2-backend
-                            exit 1
-                        fi
-                    '''
-                    
-                    echo "🔍 Weryfikacja migracji bazy danych PROD..."
+                    echo "🔍 Weryfikacja nowego Backendu PROD i Migracji..."
                     sh '''
                         HEALTH_OK=false
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-new)" = "false" ]; then
+                            echo "❌ Nowy Backend PROD upadł podczas startu! Logi:"
+                            docker logs plannerv2-backend-new
+                            docker rm -f plannerv2-backend-new
+                            exit 1
+                        fi
+
                         for i in 1 2 3 4 5; do
-                            HEALTH=$(docker exec plannerv2-backend curl -sf http://localhost:8000/health 2>/dev/null || echo '{}')
-                            echo "Health response: $HEALTH"
+                            HEALTH=$(docker exec plannerv2-backend-new curl -sf http://localhost:8000/health 2>/dev/null || echo '{}')
+                            echo "Health response from new: $HEALTH"
                             if echo "$HEALTH" | grep -q '"migration_current":true'; then
-                                echo "✅ Migracje bazy PROD aktualne"
+                                echo "✅ Migracje bazy PROD aktualne na nowym kontenerze"
                                 HEALTH_OK=true
                                 break
                             else
@@ -281,17 +297,30 @@ pipeline {
                                 sleep 5
                             fi
                         done
+                        
                         if [ "$HEALTH_OK" = "false" ]; then
-                            echo "❌ BŁĄD: Migracje bazy PROD nie zakończone!"
-                            echo "🔍 Health response: $HEALTH"
-                            docker logs plannerv2-backend
+                            echo "❌ BŁĄD: Nowy kontener Backendu nie wstał poprawnie!"
+                            echo "Zabijam i usuwam nowy kontener, zachowując stary system."
+                            docker logs plannerv2-backend-new
+                            docker rm -f plannerv2-backend-new
                             exit 1
                         fi
+                        
+                        echo "✅ Nowy Backend PROD sprawdzony. Zastępowanie starego..."
+                        docker stop plannerv2-backend || true
+                        docker rm -f plannerv2-backend || true
+                        docker rename plannerv2-backend-new plannerv2-backend
                     '''
                     
                     sh 'git checkout nginx/nginx.conf || true'
                     
-                    sh 'docker run -d --name plannerv2-nginx --network plannerv2-network -p 8090:80 --restart unless-stopped nginx:alpine'
+                    sh '''
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-nginx 2>/dev/null)" != "true" ]; then
+                             docker rm -f plannerv2-nginx || true
+                             docker run -d --name plannerv2-nginx --network plannerv2-network -p 8090:80 --restart unless-stopped nginx:alpine
+                             sleep 5
+                        fi
+                    '''
                     
                     sh '''
                         echo "⏳ Sprawdzam DNS dla Produkcji..."

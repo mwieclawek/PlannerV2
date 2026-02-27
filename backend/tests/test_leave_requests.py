@@ -55,19 +55,19 @@ async def employee2_headers_fixture(session: Session) -> dict:
 @pytest.mark.asyncio
 async def test_employee_create_leave_request_success(client: AsyncClient, employee_headers: dict):
     """Employee creates a valid future leave request → 201."""
-    payload = {"start_date": _in_days(1), "end_date": _in_days(3), "reason": "Vacation"}
+    payload = {"start_date": _in_days(1), "end_date": _in_days(3), "reason": "Vacation", "reason": "test"}
     resp = await client.post("/employee/leave-requests", json=payload, headers=employee_headers)
     assert resp.status_code == 201, resp.text
     data = resp.json()
     assert data["status"] == "PENDING"
-    assert data["reason"] == "Vacation"
+    assert data["reason"] == "test"
     assert data["user_name"] == "Test Employee"
 
 
 @pytest.mark.asyncio
 async def test_employee_list_own_leave_requests(client: AsyncClient, employee_headers: dict):
     """Employee lists their own leave requests and sees them."""
-    payload = {"start_date": _in_days(1), "end_date": _in_days(2)}
+    payload = {"start_date": _in_days(1), "end_date": _in_days(2), "reason": "test"}
     await client.post("/employee/leave-requests", json=payload, headers=employee_headers)
 
     resp = await client.get("/employee/leave-requests", headers=employee_headers)
@@ -78,7 +78,7 @@ async def test_employee_list_own_leave_requests(client: AsyncClient, employee_he
 @pytest.mark.asyncio
 async def test_employee_cancel_pending_request(client: AsyncClient, employee_headers: dict):
     """Employee cancels a PENDING request → status becomes CANCELLED."""
-    payload = {"start_date": _in_days(5), "end_date": _in_days(6)}
+    payload = {"start_date": _in_days(5), "end_date": _in_days(6), "reason": "test"}
     create_resp = await client.post("/employee/leave-requests", json=payload, headers=employee_headers)
     assert create_resp.status_code == 201
     request_id = create_resp.json()["id"]
@@ -94,7 +94,7 @@ async def test_employee_cancel_pending_request(client: AsyncClient, employee_hea
 @pytest.mark.asyncio
 async def test_employee_cannot_cancel_already_cancelled(client: AsyncClient, employee_headers: dict):
     """Employee cannot cancel an already-cancelled request → 400."""
-    payload = {"start_date": _in_days(7), "end_date": _in_days(8)}
+    payload = {"start_date": _in_days(7), "end_date": _in_days(8), "reason": "test"}
     req_id = (await client.post("/employee/leave-requests", json=payload, headers=employee_headers)).json()["id"]
 
     await client.delete(f"/employee/leave-requests/{req_id}", headers=employee_headers)
@@ -105,7 +105,7 @@ async def test_employee_cannot_cancel_already_cancelled(client: AsyncClient, emp
 @pytest.mark.asyncio
 async def test_employee_past_date_rejected(client: AsyncClient, employee_headers: dict):
     """start_date in the past → 400."""
-    payload = {"start_date": _yesterday(), "end_date": _yesterday()}
+    payload = {"start_date": _yesterday(), "end_date": _yesterday(), "reason": "test"}
     resp = await client.post("/employee/leave-requests", json=payload, headers=employee_headers)
     assert resp.status_code == 400
 
@@ -113,7 +113,7 @@ async def test_employee_past_date_rejected(client: AsyncClient, employee_headers
 @pytest.mark.asyncio
 async def test_employee_end_before_start_rejected(client: AsyncClient, employee_headers: dict):
     """end_date < start_date → 422 (Pydantic model_validator)."""
-    payload = {"start_date": _in_days(5), "end_date": _in_days(2)}
+    payload = {"start_date": _in_days(5), "end_date": _in_days(2), "reason": "test"}
     resp = await client.post("/employee/leave-requests", json=payload, headers=employee_headers)
     assert resp.status_code == 422
 
@@ -121,10 +121,10 @@ async def test_employee_end_before_start_rejected(client: AsyncClient, employee_
 @pytest.mark.asyncio
 async def test_employee_overlap_rejected(client: AsyncClient, employee_headers: dict):
     """Creating overlapping PENDING requests → 400."""
-    payload1 = {"start_date": _in_days(10), "end_date": _in_days(14)}
+    payload1 = {"start_date": _in_days(10), "end_date": _in_days(14), "reason": "test"}
     await client.post("/employee/leave-requests", json=payload1, headers=employee_headers)
 
-    payload2 = {"start_date": _in_days(12), "end_date": _in_days(16)}
+    payload2 = {"start_date": _in_days(12), "end_date": _in_days(16), "reason": "test"}
     resp = await client.post("/employee/leave-requests", json=payload2, headers=employee_headers)
     assert resp.status_code == 400
 
@@ -134,7 +134,7 @@ async def test_no_overlap_between_different_employees(
     client: AsyncClient, employee_headers: dict, employee2_headers: dict
 ):
     """Same date range for two different employees → both 201."""
-    payload = {"start_date": _in_days(20), "end_date": _in_days(22)}
+    payload = {"start_date": _in_days(20), "end_date": _in_days(22), "reason": "test"}
     r1 = await client.post("/employee/leave-requests", json=payload, headers=employee_headers)
     r2 = await client.post("/employee/leave-requests", json=payload, headers=employee2_headers)
     assert r1.status_code == 201
@@ -151,7 +151,7 @@ async def test_manager_list_all_leave_requests(
 ):
     """Manager can see all employees' leave requests."""
     await client.post("/employee/leave-requests",
-                      json={"start_date": _in_days(1), "end_date": _in_days(2)},
+                      json={"start_date": _in_days(1), "end_date": _in_days(2), "reason": "test"},
                       headers=employee_headers)
 
     resp = await client.get("/manager/leave-requests", headers=auth_headers)
@@ -166,7 +166,7 @@ async def test_manager_approve_changes_status(
     """Manager approves → status is APPROVED."""
     req_id = (await client.post(
         "/employee/leave-requests",
-        json={"start_date": _in_days(5), "end_date": _in_days(6)},
+        json={"start_date": _in_days(5), "end_date": _in_days(6), "reason": "test"},
         headers=employee_headers
     )).json()["id"]
 
@@ -196,7 +196,7 @@ async def test_manager_approve_creates_unavailable_availability(
 
     req_id = (await client.post(
         "/employee/leave-requests",
-        json={"start_date": start, "end_date": end},
+        json={"start_date": start, "end_date": end, "reason": "test"},
         headers=employee_headers
     )).json()["id"]
 
@@ -227,7 +227,7 @@ async def test_manager_reject_does_not_create_availability(
 
     req_id = (await client.post(
         "/employee/leave-requests",
-        json={"start_date": start_str, "end_date": end_str},
+        json={"start_date": start_str, "end_date": end_str, "reason": "test"},
         headers=employee_headers
     )).json()["id"]
 
@@ -254,7 +254,7 @@ async def test_manager_cannot_approve_already_approved(
     """Double-approve → 400."""
     req_id = (await client.post(
         "/employee/leave-requests",
-        json={"start_date": _in_days(50), "end_date": _in_days(51)},
+        json={"start_date": _in_days(50), "end_date": _in_days(51), "reason": "test"},
         headers=employee_headers
     )).json()["id"]
 
@@ -273,7 +273,7 @@ async def test_manager_leave_calendar(
 
     req_id = (await client.post(
         "/employee/leave-requests",
-        json={"start_date": start.isoformat(), "end_date": end.isoformat()},
+        json={"start_date": start.isoformat(), "end_date": end.isoformat(), "reason": "test"},
         headers=employee_headers
     )).json()["id"]
 
