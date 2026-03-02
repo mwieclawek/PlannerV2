@@ -103,6 +103,19 @@ pipeline {
                         fi
                     '''
                     
+                    echo "💾 Wykonywanie kopii zapasowej bazy DEV..."
+                    sh '''
+                        mkdir -p db_backups_dev
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-db-dev 2>/dev/null)" == "true" ]; then
+                            BACKUP_FILE="db_backups_dev/backup_dev_$(date +%Y%m%d_%H%M%S).sql"
+                            # Używamy docker exec bez flagi -t i w pełni logujemy ewentualny błąd
+                            docker exec plannerv2-db-dev pg_dump -U planner_user planner_db > "$BACKUP_FILE" || echo "⚠️ Błąd podczas zrzutu bazy DEV"
+                            echo "✅ Kopia zapisana: $BACKUP_FILE"
+                        else
+                            echo "⚠️ Kontener bazy DEV nie działa, pomijam zrzut."
+                        fi
+                    '''
+                    
                     echo "🐍 Budowa i uruchamianie nowego Backend DEV (Blue-Green)..."
                     sh 'docker build -t plannerv2-backend:dev ./backend'
                     
@@ -246,6 +259,19 @@ pipeline {
                             sleep 10
                         else
                             echo "✅ Baza PROD już działa. Pomijam uruchamianie."
+                        fi
+                    '''
+                    
+                    echo "💾 Wykonywanie kopii zapasowej bazy PROD..."
+                    sh '''
+                        mkdir -p db_backups_prod
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-db 2>/dev/null)" == "true" ]; then
+                            BACKUP_FILE="db_backups_prod/backup_prod_$(date +%Y%m%d_%H%M%S).sql"
+                            # Używamy docker exec bez flagi -t i w pełni logujemy ewentualny błąd
+                            docker exec plannerv2-db pg_dump -U planner_user planner_db > "$BACKUP_FILE" || echo "⚠️ Błąd podczas zrzutu bazy PROD"
+                            echo "✅ Kopia zapisana: $BACKUP_FILE"
+                        else
+                            echo "⚠️ Kontener bazy PROD nie działa, pomijam zrzut."
                         fi
                     '''
                     
