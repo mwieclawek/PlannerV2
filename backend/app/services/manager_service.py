@@ -616,17 +616,50 @@ class ManagerService:
                     )
                 ).first()
                 
-                # Check if already scheduled on that date
-                already_scheduled = self.session.exec(
+                # Check other schedules on that date for conflicts
+                other_schedules = self.session.exec(
                     select(Schedule).where(
                         Schedule.user_id == u.id,
                         Schedule.date == schedule.date
                     )
-                ).first()
+                ).all()
                 
                 avail_status = avail.status if avail else "UNKNOWN"
-                if already_scheduled:
-                    avail_status = "ALREADY_SCHEDULED"
+                
+                if other_schedules:
+                    has_conflict = False
+                    start1 = datetime.combine(schedule.date, shift.start_time)
+                    end1 = datetime.combine(schedule.date, shift.end_time)
+                    if end1 <= start1: end1 += timedelta(days=1)
+                    
+                    for osch in other_schedules:
+                        if osch.shift_def_id == schedule.shift_def_id:
+                            has_conflict = True
+                            break
+                            
+                        oshift = self.session.get(ShiftDefinition, osch.shift_def_id)
+                        if not oshift:
+                            continue
+                            
+                        start2 = datetime.combine(schedule.date, oshift.start_time)
+                        end2 = datetime.combine(schedule.date, oshift.end_time)
+                        if end2 <= start2: end2 += timedelta(days=1)
+                        
+                        overlap_start = max(start1, start2)
+                        overlap_end = min(end1, end2)
+                        
+                        if overlap_start < overlap_end:
+                            overlap_duration = (overlap_end - overlap_start).total_seconds() / 60.0
+                            is_enveloped = False
+                            if (start1 <= start2 and end1 >= end2) or (start2 <= start1 and end2 >= end1):
+                                is_enveloped = True
+                            
+                            if overlap_duration > 30 or is_enveloped:
+                                has_conflict = True
+                                break
+                    
+                    if has_conflict:
+                        avail_status = "ALREADY_SCHEDULED"
                 
                 suggestions.append({
                     "user_id": u.id,
@@ -744,19 +777,49 @@ class ManagerService:
                 )
             ).first()
             
-            already_scheduled_other = self.session.exec(
+            other_schedules = self.session.exec(
                 select(Schedule).where(
                     Schedule.user_id == u.id,
                     Schedule.date == date_in,
                     Schedule.shift_def_id != shift_def_id
                 )
-            ).first()
+            ).all()
             
             status = avail.status.value if avail else "UNKNOWN"
+            
             if already_scheduled_this:
                 status = "ALREADY_SCHEDULED_THIS"
-            elif already_scheduled_other:
-                status = "ALREADY_SCHEDULED_OTHER"
+            elif other_schedules:
+                target_shift = shift_map.get(shift_def_id)
+                has_conflict = False
+                if target_shift:
+                    start1 = datetime.combine(date_in, target_shift.start_time)
+                    end1 = datetime.combine(date_in, target_shift.end_time)
+                    if end1 <= start1: end1 += timedelta(days=1)
+                    
+                    for osch in other_schedules:
+                        oshift = shift_map.get(osch.shift_def_id)
+                        if not oshift: continue
+                        
+                        start2 = datetime.combine(date_in, oshift.start_time)
+                        end2 = datetime.combine(date_in, oshift.end_time)
+                        if end2 <= start2: end2 += timedelta(days=1)
+                        
+                        overlap_start = max(start1, start2)
+                        overlap_end = min(end1, end2)
+                        
+                        if overlap_start < overlap_end:
+                            overlap_duration = (overlap_end - overlap_start).total_seconds() / 60.0
+                            is_enveloped = False
+                            if (start1 <= start2 and end1 >= end2) or (start2 <= start1 and end2 >= end1):
+                                is_enveloped = True
+                            
+                            if overlap_duration > 30 or is_enveloped:
+                                has_conflict = True
+                                break
+                
+                if has_conflict:
+                    status = "ALREADY_SCHEDULED_OTHER"
                 
             roles_list = []
             for r in u.job_roles:

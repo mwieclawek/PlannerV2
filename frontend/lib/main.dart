@@ -24,8 +24,16 @@ void main() async {
           ? prod_options.DefaultFirebaseOptions.currentPlatform
           : dev_options.DefaultFirebaseOptions.currentPlatform;
 
-  if (Firebase.apps.isEmpty) {
+  try {
     await Firebase.initializeApp(options: firebaseOptions);
+  } catch (e) {
+    if (e is FirebaseException && e.code == 'duplicate-app') {
+      debugPrint('Firebase already initialized natively.');
+    } else if (e.toString().contains('duplicate-app')) {
+      debugPrint('Firebase already initialized natively.');
+    } else {
+      rethrow;
+    }
   }
 
   if (!kIsWeb) {

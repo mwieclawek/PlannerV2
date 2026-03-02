@@ -227,11 +227,14 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               (e) => ['AVAILABLE', 'UNKNOWN'].contains(e.availabilityStatus),
             )
             .toList();
-    final unavailable =
+    final unavailableButSelectable =
+        availableEmployees
+            .where((e) => e.availabilityStatus == 'UNAVAILABLE')
+            .toList();
+    final alreadyScheduled =
         availableEmployees
             .where(
               (e) => [
-                'UNAVAILABLE',
                 'ALREADY_SCHEDULED_THIS',
                 'ALREADY_SCHEDULED_OTHER',
               ].contains(e.availabilityStatus),
@@ -306,20 +309,41 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                                     ),
                                   ),
                                 ],
-                                if (unavailable.isNotEmpty) ...[
+                                if (unavailableButSelectable.isNotEmpty) ...[
                                   const SizedBox(height: 8),
                                   _buildSectionHeader(
-                                    'Niedostępni / Przypisani',
-                                    unavailable.length,
+                                    'Niedostępni',
+                                    unavailableButSelectable.length,
+                                    Colors.orange,
+                                  ),
+                                  ...unavailableButSelectable.map(
+                                    (e) => _buildEmployeeTile(
+                                      e,
+                                      selectedUserId,
+                                      (id) => setDialogState(
+                                        () => selectedUserId = id,
+                                      ),
+                                      context,
+                                      isSelectable: true,
+                                      showWarning: true,
+                                    ),
+                                  ),
+                                ],
+                                if (alreadyScheduled.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  _buildSectionHeader(
+                                    'Mają już zmianę',
+                                    alreadyScheduled.length,
                                     Colors.red,
                                   ),
-                                  ...unavailable.map(
+                                  ...alreadyScheduled.map(
                                     (e) => _buildEmployeeTile(
                                       e,
                                       selectedUserId,
                                       (id) {},
                                       context,
-                                      isUnavailable: true,
+                                      isSelectable: false,
+                                      showWarning: true,
                                     ),
                                   ),
                                 ],
@@ -402,7 +426,8 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     String? selectedId,
     Function(String) onSelect,
     BuildContext context, {
-    bool isUnavailable = false,
+    bool isSelectable = true,
+    bool showWarning = false,
   }) {
     final isSelected = emp.userId == selectedId;
     final hoursText =
@@ -414,9 +439,9 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         emp.targetHours != null && emp.hoursThisMonth >= emp.targetHours!;
 
     return Opacity(
-      opacity: isUnavailable ? 0.5 : 1.0,
+      opacity: isSelectable ? 1.0 : 0.5,
       child: InkWell(
-        onTap: isUnavailable ? null : () => onSelect(emp.userId),
+        onTap: isSelectable ? () => onSelect(emp.userId) : null,
         borderRadius: BorderRadius.circular(8),
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 2),
@@ -441,7 +466,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
             children: [
               if (emp.availabilityStatus == 'PREFERRED')
                 const Icon(Icons.star, size: 16, color: Colors.amber)
-              else if (isUnavailable)
+              else if (showWarning)
                 const Icon(Icons.block, size: 16, color: Colors.red),
               const SizedBox(width: 8),
               Expanded(
@@ -454,7 +479,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                         fontWeight:
                             isSelected ? FontWeight.bold : FontWeight.w500,
                         decoration:
-                            isUnavailable ? TextDecoration.lineThrough : null,
+                            !isSelectable ? TextDecoration.lineThrough : null,
                       ),
                     ),
                     const SizedBox(height: 4),
