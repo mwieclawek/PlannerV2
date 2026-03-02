@@ -607,11 +607,12 @@ class ManagerService:
                 if schedule.role_id not in [r.id for r in u.job_roles]:
                     continue
                 
-                # Check availability for the date
+                # Check availability for the date AND shift ID
                 avail = self.session.exec(
                     select(Availability).where(
                         Availability.user_id == u.id,
-                        Availability.date == schedule.date
+                        Availability.date == schedule.date,
+                        Availability.shift_def_id == schedule.shift_def_id
                     )
                 ).first()
                 

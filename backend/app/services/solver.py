@@ -172,7 +172,7 @@ class SolverService:
         # C2. Availability Constraints
         for key, w_var in work.items():
             e_id, d, s_id, r_id = key
-            status = avail_map.get((str(e_id), d.isoformat(), s_id), "UNAVAILABLE") 
+            status = avail_map.get((str(e_id), d.isoformat(), s_id), "UNKNOWN") 
             
             if status == "UNAVAILABLE":
                 # logger.debug(f"Forcing w_var=0 for {e_id} on {d} due to UNAVAILABLE")
@@ -258,7 +258,7 @@ class SolverService:
         # 1. Preferences & Slot Filling Reward
         for key, w_var in work.items():
             e_id, d, s_id, r_id = key
-            status = avail_map.get((str(e_id), d.isoformat(), s_id), "UNAVAILABLE")
+            status = avail_map.get((str(e_id), d.isoformat(), s_id), "UNKNOWN")
             
             # High reward for simply filling a requirement
             objective_terms.append(w_var * 100) 
