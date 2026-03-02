@@ -42,23 +42,24 @@ final rolesProvider = FutureProvider<List<JobRole>>((ref) async {
 });
 
 // Shifts Provider
-final shiftsProvider = FutureProvider<List<ShiftDefinition>>((ref) async {
+final shiftsProvider = FutureProvider.autoDispose<List<ShiftDefinition>>((
+  ref,
+) async {
   final api = ref.watch(apiServiceProvider);
   return await api.getShifts();
 });
 
 // Availability Provider (for a specific week)
-final availabilityProvider =
-    FutureProvider.family<List<Availability>, DateRange>((
-      ref,
-      dateRange,
-    ) async {
+final availabilityProvider = FutureProvider.autoDispose
+    .family<List<Availability>, DateRange>((ref, dateRange) async {
       final api = ref.watch(apiServiceProvider);
       return await api.getAvailability(dateRange.start, dateRange.end);
     });
 
 // Leave Requests Provider
-final myLeaveRequestsProvider = FutureProvider<List<LeaveRequest>>((ref) async {
+final myLeaveRequestsProvider = FutureProvider.autoDispose<List<LeaveRequest>>((
+  ref,
+) async {
   final api = ref.watch(apiServiceProvider);
   return await api.getMyLeaveRequests();
 });

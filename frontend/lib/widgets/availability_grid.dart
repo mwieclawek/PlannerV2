@@ -157,8 +157,9 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
     for (int i = 0; i < 7; i++) {
       final date = widget.weekStart.add(Duration(days: i));
       final dateStr = date.toIso8601String().split('T')[0];
-      if (_leaveBlockedDates.contains(dateStr))
+      if (_leaveBlockedDates.contains(dateStr)) {
         continue; // Skip saving leave days
+      }
 
       for (final shift in widget.shifts) {
         final status = _getStatus(date, shift.id);

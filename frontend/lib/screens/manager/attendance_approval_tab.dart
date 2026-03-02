@@ -190,8 +190,9 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab>
                                     const Duration(days: 365),
                                   ),
                                 );
-                                if (d != null)
+                                if (d != null) {
                                   setDialogState(() => selectedDate = d);
+                                }
                               },
                             ),
                             const SizedBox(height: 16),

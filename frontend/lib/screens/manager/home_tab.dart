@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
 import '../../models/models.dart';
-import '../../services/api_service.dart';
 
 enum CalendarViewMode { day, week }
 
@@ -29,9 +28,9 @@ class _HomeTabState extends ConsumerState<HomeTab> {
 
   void _refresh() {
     setState(() {
-      _dashboardFuture = ref.read(apiServiceProvider).getDashboardHome(
-        date: DateTime.now(),
-      );
+      _dashboardFuture = ref
+          .read(apiServiceProvider)
+          .getDashboardHome(date: DateTime.now());
     });
     if (_viewMode == CalendarViewMode.week) {
       _loadWeekSchedule();
@@ -44,7 +43,9 @@ class _HomeTabState extends ConsumerState<HomeTab> {
       final now = DateTime.now();
       final weekStart = now.subtract(Duration(days: now.weekday - 1));
       final weekEnd = weekStart.add(const Duration(days: 6));
-      final entries = await ref.read(apiServiceProvider).getManagerSchedule(weekStart, weekEnd);
+      final entries = await ref
+          .read(apiServiceProvider)
+          .getManagerSchedule(weekStart, weekEnd);
       setState(() {
         _weekEntries = entries;
         _weekLoading = false;
@@ -56,7 +57,11 @@ class _HomeTabState extends ConsumerState<HomeTab> {
 
   DateTime get _weekStart {
     final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    return DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: now.weekday - 1));
   }
 
   @override
@@ -108,13 +113,16 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                 selected: {_viewMode},
                 onSelectionChanged: (newSelection) {
                   setState(() => _viewMode = newSelection.first);
-                  if (_viewMode == CalendarViewMode.week && _weekEntries.isEmpty) {
+                  if (_viewMode == CalendarViewMode.week &&
+                      _weekEntries.isEmpty) {
                     _loadWeekSchedule();
                   }
                 },
                 style: ButtonStyle(
                   shape: WidgetStatePropertyAll(
-                    RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
@@ -145,13 +153,19 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                       const SizedBox(height: 12),
                       _buildDayTimeline(data.workingToday),
                       const SizedBox(height: 32),
-                      
-                      _buildSectionTitle('Otwarte oddania zmian', Icons.swap_horiz_rounded),
+
+                      _buildSectionTitle(
+                        'Otwarte oddania zmian',
+                        Icons.swap_horiz_rounded,
+                      ),
                       const SizedBox(height: 12),
                       _buildOpenGiveawaysList(data.openGiveaways),
                       const SizedBox(height: 32),
-                                            
-                      _buildSectionTitle('Zaległe potwierdzenia', Icons.warning_amber_rounded),
+
+                      _buildSectionTitle(
+                        'Zaległe potwierdzenia',
+                        Icons.warning_amber_rounded,
+                      ),
                       const SizedBox(height: 12),
                       _buildMissingConfirmationsList(data.missingConfirmations),
                     ],
@@ -160,10 +174,12 @@ class _HomeTabState extends ConsumerState<HomeTab> {
               ),
             ] else ...[
               if (_weekLoading)
-                const Center(child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(),
-                ))
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
               else
                 _buildWeekView(),
             ],
@@ -215,22 +231,31 @@ class _HomeTabState extends ConsumerState<HomeTab> {
     }
 
     // Parse entries and sort by start time
-    final parsedEntries = entries.map((e) {
-      final startParts = e.startTime.split(':');
-      final endParts = e.endTime.split(':');
-      final startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
-      final endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
-      return _TimelineEntry(
-        entry: e,
-        startMinutes: startMinutes,
-        endMinutes: endMinutes <= startMinutes ? endMinutes + 24 * 60 : endMinutes,
-      );
-    }).toList()
-      ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+    final parsedEntries =
+        entries.map((e) {
+            final startParts = e.startTime.split(':');
+            final endParts = e.endTime.split(':');
+            final startMinutes =
+                int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+            final endMinutes =
+                int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+            return _TimelineEntry(
+              entry: e,
+              startMinutes: startMinutes,
+              endMinutes:
+                  endMinutes <= startMinutes
+                      ? endMinutes + 24 * 60
+                      : endMinutes,
+            );
+          }).toList()
+          ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
 
     // Determine time range to display
     final minHour = (parsedEntries.first.startMinutes ~/ 60).clamp(0, 23);
-    final maxHour = ((parsedEntries.last.endMinutes + 59) ~/ 60).clamp(minHour + 1, 25);
+    final maxHour = ((parsedEntries.last.endMinutes + 59) ~/ 60).clamp(
+      minHour + 1,
+      25,
+    );
     final totalMinutes = (maxHour - minHour) * 60;
     const pixelsPerMinute = 1.2;
     final totalHeight = totalMinutes * pixelsPerMinute;
@@ -259,10 +284,7 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                     ),
                   ),
                   Expanded(
-                    child: Container(
-                      height: 0.5,
-                      color: Colors.grey.shade300,
-                    ),
+                    child: Container(height: 0.5, color: Colors.grey.shade300),
                   ),
                 ],
               ),
@@ -279,15 +301,10 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                   Container(
                     width: 8,
                     height: 8,
-                    decoration: BoxDecoration(
-                      color: colorScheme.error,
-                    ),
+                    decoration: BoxDecoration(color: colorScheme.error),
                   ),
                   Expanded(
-                    child: Container(
-                      height: 1.5,
-                      color: colorScheme.error,
-                    ),
+                    child: Container(height: 1.5, color: colorScheme.error),
                   ),
                 ],
               ),
@@ -312,7 +329,11 @@ class _HomeTabState extends ConsumerState<HomeTab> {
     return minutesSinceStart * pixelsPerMinute;
   }
 
-  List<Widget> _layoutEvents(List<_TimelineEntry> entries, int minHour, double pixelsPerMinute) {
+  List<Widget> _layoutEvents(
+    List<_TimelineEntry> entries,
+    int minHour,
+    double pixelsPerMinute,
+  ) {
     // Simple column layout — group overlapping events into columns
     final widgets = <Widget>[];
     final columns = <List<_TimelineEntry>>[];
@@ -332,12 +353,18 @@ class _HomeTabState extends ConsumerState<HomeTab> {
     }
 
     final totalColumns = columns.length;
-    final availableWidth = MediaQuery.of(context).size.width - 48 - 32 - 16; // padding + time label
+    final availableWidth =
+        MediaQuery.of(context).size.width -
+        48 -
+        32 -
+        16; // padding + time label
 
     for (int colIdx = 0; colIdx < totalColumns; colIdx++) {
       for (final entry in columns[colIdx]) {
         final top = (entry.startMinutes - minHour * 60) * pixelsPerMinute;
-        final height = ((entry.endMinutes - entry.startMinutes) * pixelsPerMinute).clamp(30.0, 9999.0);
+        final height = ((entry.endMinutes - entry.startMinutes) *
+                pixelsPerMinute)
+            .clamp(30.0, 9999.0);
         final colWidth = availableWidth / totalColumns;
         final left = 56.0 + colIdx * colWidth;
 
@@ -355,9 +382,7 @@ class _HomeTabState extends ConsumerState<HomeTab> {
               decoration: BoxDecoration(
                 color: eventColor.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(10),
-                border: Border(
-                  left: BorderSide(color: eventColor, width: 3.5),
-                ),
+                border: Border(left: BorderSide(color: eventColor, width: 3.5)),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               child: Column(
@@ -370,15 +395,24 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                         radius: 11,
                         backgroundColor: eventColor.withOpacity(0.2),
                         child: Text(
-                          entry.entry.userName.isNotEmpty ? entry.entry.userName[0].toUpperCase() : '?',
-                          style: TextStyle(fontSize: 11, color: eventColor, fontWeight: FontWeight.bold),
+                          entry.entry.userName.isNotEmpty
+                              ? entry.entry.userName[0].toUpperCase()
+                              : '?',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: eventColor,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           entry.entry.userName,
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12.5),
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12.5,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -386,14 +420,21 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                   ),
                   const SizedBox(height: 3),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: eventColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       entry.entry.roleName,
-                      style: TextStyle(fontSize: 10, color: eventColor.withOpacity(0.9), fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: eventColor.withOpacity(0.9),
+                        fontWeight: FontWeight.w500,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -401,7 +442,10 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                     const Spacer(),
                     Text(
                       '${entry.entry.startTime.substring(0, 5)} - ${entry.entry.endTime.substring(0, 5)}',
-                      style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ],
@@ -453,40 +497,62 @@ class _HomeTabState extends ConsumerState<HomeTab> {
 
         // Day cards
         ...days.map((day) {
-          final isToday = day.year == today.year && day.month == today.month && day.day == today.day;
-          final dayEntries = _weekEntries.where((e) =>
-            e.date.year == day.year && e.date.month == day.month && e.date.day == day.day
-          ).toList()
-            ..sort((a, b) => a.startTime.compareTo(b.startTime));
+          final isToday =
+              day.year == today.year &&
+              day.month == today.month &&
+              day.day == today.day;
+          final dayEntries =
+              _weekEntries
+                  .where(
+                    (e) =>
+                        e.date.year == day.year &&
+                        e.date.month == day.month &&
+                        e.date.day == day.day,
+                  )
+                  .toList()
+                ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              border: isToday
-                  ? Border.all(color: colorScheme.primary, width: 2)
-                  : Border.all(color: colorScheme.outlineVariant.withOpacity(0.4)),
-              color: isToday
-                  ? colorScheme.primaryContainer.withOpacity(0.15)
-                  : colorScheme.surface,
+              border:
+                  isToday
+                      ? Border.all(color: colorScheme.primary, width: 2)
+                      : Border.all(
+                        color: colorScheme.outlineVariant.withOpacity(0.4),
+                      ),
+              color:
+                  isToday
+                      ? colorScheme.primaryContainer.withOpacity(0.15)
+                      : colorScheme.surface,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Day header
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
-                    color: isToday
-                        ? colorScheme.primary.withOpacity(0.08)
-                        : colorScheme.surfaceContainerLow,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                    color:
+                        isToday
+                            ? colorScheme.primary.withOpacity(0.08)
+                            : colorScheme.surfaceContainerLow,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(12),
+                    ),
                   ),
                   child: Row(
                     children: [
                       if (isToday) ...[
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: colorScheme.primary,
                             borderRadius: BorderRadius.circular(6),
@@ -506,27 +572,36 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                         DateFormat('EEEE, d MMMM', 'pl_PL').format(day),
                         style: GoogleFonts.inter(
                           fontSize: 14,
-                          fontWeight: isToday ? FontWeight.bold : FontWeight.w600,
-                          color: isToday ? colorScheme.primary : colorScheme.onSurface,
+                          fontWeight:
+                              isToday ? FontWeight.bold : FontWeight.w600,
+                          color:
+                              isToday
+                                  ? colorScheme.primary
+                                  : colorScheme.onSurface,
                         ),
                       ),
                       const Spacer(),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
-                          color: dayEntries.isEmpty
-                              ? Colors.grey.shade200
-                              : colorScheme.primaryContainer,
+                          color:
+                              dayEntries.isEmpty
+                                  ? Colors.grey.shade200
+                                  : colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '${dayEntries.length} ${dayEntries.length == 1 ? 'zmiana' : 'zmian'}' ,
+                          '${dayEntries.length} ${dayEntries.length == 1 ? 'zmiana' : 'zmian'}',
                           style: GoogleFonts.inter(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: dayEntries.isEmpty
-                                ? Colors.grey.shade600
-                                : colorScheme.primary,
+                            color:
+                                dayEntries.isEmpty
+                                    ? Colors.grey.shade600
+                                    : colorScheme.primary,
                           ),
                         ),
                       ),
@@ -540,16 +615,24 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                     padding: const EdgeInsets.all(16),
                     child: Text(
                       'Brak zaplanowanych zmian',
-                      style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade500),
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: Colors.grey.shade500,
+                      ),
                     ),
                   )
                 else
                   ...dayEntries.map((entry) {
-                    final hue = (entry.roleName.hashCode % 360).abs().toDouble();
-                    final eventColor = HSLColor.fromAHSL(1.0, hue, 0.55, 0.55).toColor();
+                    final hue =
+                        (entry.roleName.hashCode % 360).abs().toDouble();
+                    final eventColor =
+                        HSLColor.fromAHSL(1.0, hue, 0.55, 0.55).toColor();
 
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       child: Row(
                         children: [
                           // Time
@@ -589,7 +672,10 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                                 Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 1,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: eventColor.withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(4),
@@ -665,25 +751,36 @@ class _HomeTabState extends ConsumerState<HomeTab> {
         return Card(
           elevation: 0,
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.5))),
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: colorScheme.outlineVariant.withOpacity(0.5),
+            ),
+          ),
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
             leading: CircleAvatar(
               backgroundColor: colorScheme.errorContainer,
               child: Icon(Icons.warning, color: colorScheme.error, size: 20),
             ),
-            title: Text(userName, style: const TextStyle(fontWeight: FontWeight.w600)),
+            title: Text(
+              userName,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             subtitle: Text('Brak potwierdzenia obecności z dnia $dateStr'),
             trailing: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                  foregroundColor: colorScheme.primary,
-                  side: BorderSide(color: colorScheme.primary.withOpacity(0.5))),
+                foregroundColor: colorScheme.primary,
+                side: BorderSide(color: colorScheme.primary.withOpacity(0.5)),
+              ),
               onPressed: () {
                 // Navigate to attendance or show details
                 // Ideally this would navigate to a specific attendance resolution screen
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Przejdź do zakładki "Obecności", aby zarządzać')),
+                  const SnackBar(
+                    content: Text(
+                      'Przejdź do zakładki "Obecności", aby zarządzać',
+                    ),
+                  ),
                 );
               },
               child: const Text('Sprawdź'),
@@ -708,7 +805,10 @@ class _HomeTabState extends ConsumerState<HomeTab> {
           padding: const EdgeInsets.all(16.0),
           child: Row(
             children: [
-              Icon(Icons.check_circle_outline, color: colorScheme.primary.withOpacity(0.6)),
+              Icon(
+                Icons.check_circle_outline,
+                color: colorScheme.primary.withOpacity(0.6),
+              ),
               const SizedBox(width: 12),
               Text(
                 'Brak otwartych próśb o oddanie zmiany',
@@ -727,13 +827,15 @@ class _HomeTabState extends ConsumerState<HomeTab> {
       itemBuilder: (context, index) {
         final giveaway = giveaways[index];
         final dateStr = giveaway.date ?? 'Nieznana data';
-        final shiftInfo = '${giveaway.shiftName ?? 'Zmiana'} (${giveaway.startTime} - ${giveaway.endTime})';
+        final shiftInfo =
+            '${giveaway.shiftName ?? 'Zmiana'} (${giveaway.startTime} - ${giveaway.endTime})';
 
         return Card(
           elevation: 0,
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: colorScheme.outlineVariant)),
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: colorScheme.outlineVariant),
+          ),
           margin: const EdgeInsets.only(bottom: 8),
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -745,7 +847,11 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                     CircleAvatar(
                       radius: 16,
                       backgroundColor: colorScheme.secondaryContainer,
-                      child: Icon(Icons.swap_horiz, color: colorScheme.onSecondaryContainer, size: 18),
+                      child: Icon(
+                        Icons.swap_horiz,
+                        color: colorScheme.onSecondaryContainer,
+                        size: 18,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -771,7 +877,10 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: colorScheme.primaryContainer,
                         borderRadius: BorderRadius.circular(8),
@@ -779,33 +888,44 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                       child: Text(
                         giveaway.roleName ?? '',
                         style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.primary),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.primary,
+                        ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Text(shiftInfo,
-                        style:
-                            TextStyle(fontSize: 13, color: colorScheme.onSurface))),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    shiftInfo,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.tonal(
                     onPressed: () {
-                         // Navigation to Schedule Tab or specific Giveaway handling dialog
-                         // For now, remind user where to go
-                         ScaffoldMessenger.of(context).showSnackBar(
-                           const SnackBar(content: Text('Zarządzanie oddaniami dostępne w Grafik -> Oczekujące')),
-                         );
+                      // Navigation to Schedule Tab or specific Giveaway handling dialog
+                      // For now, remind user where to go
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Zarządzanie oddaniami dostępne w Grafik -> Oczekujące',
+                          ),
+                        ),
+                      );
                     },
                     child: const Text('Zarządzaj'),
                   ),
@@ -824,5 +944,9 @@ class _TimelineEntry {
   final int startMinutes;
   final int endMinutes;
 
-  _TimelineEntry({required this.entry, required this.startMinutes, required this.endMinutes});
+  _TimelineEntry({
+    required this.entry,
+    required this.startMinutes,
+    required this.endMinutes,
+  });
 }

@@ -287,3 +287,61 @@ async def test_manager_leave_calendar(
     data = resp.json()
     assert "entries" in data
     assert any(e["status"] == "APPROVED" for e in data["entries"])
+
+@pytest.mark.asyncio
+async def test_manager_approve_does_not_affect_other_employees(
+    client: AsyncClient,
+    employee_headers: dict,
+    employee2_headers: dict,
+    auth_headers: dict,
+    shift_definition,
+    session: Session,
+):
+    """Approval of Employee 1's leave creates UNAVAILABLE records only for Employee 1, not Employee 2."""
+    from sqlmodel import select
+    from app.models import Availability, AvailabilityStatus, User
+    import uuid
+
+    # Get Employee 1 ID
+    resp1 = await client.get("/auth/me", headers=employee_headers)
+    emp1_id = uuid.UUID(resp1.json()["id"])
+
+    # Get Employee 2 ID
+    resp2 = await client.get("/auth/me", headers=employee2_headers)
+    emp2_id = uuid.UUID(resp2.json()["id"])
+
+    start_str = _in_days(70)
+    end_str = _in_days(71)
+
+    req_id = (await client.post(
+        "/employee/leave-requests",
+        json={"start_date": start_str, "end_date": end_str, "reason": "isolation test"},
+        headers=employee_headers
+    )).json()["id"]
+
+    await client.post(f"/manager/leave-requests/{req_id}/approve", headers=auth_headers)
+
+    # Check unavailabilities for Employee 1
+    unavailable_emp1 = session.exec(
+        select(Availability).where(
+            Availability.status == AvailabilityStatus.UNAVAILABLE,
+            Availability.user_id == emp1_id
+        )
+    ).all()
+    assert len(unavailable_emp1) >= 2
+
+    # Check unavailabilities for Employee 2
+    unavailable_emp2 = session.exec(
+        select(Availability).where(
+            Availability.status == AvailabilityStatus.UNAVAILABLE,
+            Availability.user_id == emp2_id
+        )
+    ).all()
+    assert len(unavailable_emp2) == 0
+
+    # Ensure get_my_leave_requests works isolated
+    emp1_leaves = (await client.get("/employee/leave-requests", headers=employee_headers)).json()
+    assert any(r["id"] == req_id for r in emp1_leaves)
+
+    emp2_leaves = (await client.get("/employee/leave-requests", headers=employee2_headers)).json()
+    assert not any(r["id"] == req_id for r in emp2_leaves)

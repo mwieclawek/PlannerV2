@@ -44,7 +44,8 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     });
   }
 
-  DateTime get _selectedWeekEnd => _selectedWeekStart.add(const Duration(days: 6));
+  DateTime get _selectedWeekEnd =>
+      _selectedWeekStart.add(const Duration(days: 6));
 
   void _previousWeek() {
     if (_hasUnsavedChanges) {
@@ -82,21 +83,29 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
   void _showUnsavedChangesWarning(VoidCallback onDiscard) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Niezapisane zmiany'),
-        content: const Text('Masz niezapisane zmiany w grafiku. Czy chcesz je odrzucić?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Anuluj')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.tertiary),
-            onPressed: () {
-              Navigator.pop(ctx);
-              onDiscard();
-            },
-            child: const Text('Odrzuć zmiany'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Niezapisane zmiany'),
+            content: const Text(
+              'Masz niezapisane zmiany w grafiku. Czy chcesz je odrzucić?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Anuluj'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).colorScheme.tertiary,
+                ),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  onDiscard();
+                },
+                child: const Text('Odrzuć zmiany'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -130,11 +139,14 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     _loadEmployeeHours();
     try {
       final api = ref.read(apiServiceProvider);
-      final schedules = await api.getManagerSchedule(_selectedWeekStart, _selectedWeekEnd);
+      final schedules = await api.getManagerSchedule(
+        _selectedWeekStart,
+        _selectedWeekEnd,
+      );
       final shifts = await api.getShifts();
       final roles = await api.getRoles();
       final users = await api.getUsers();
-      
+
       setState(() {
         _scheduleEntries = schedules;
         _originalEntries = List.from(schedules);
@@ -187,11 +199,16 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     List<AvailableEmployee> availableEmployees = [];
     try {
       final api = ref.read(apiServiceProvider);
-      availableEmployees = await api.getAvailableEmployeesForShift(date, shiftId);
+      availableEmployees = await api.getAvailableEmployeesForShift(
+        date,
+        shiftId,
+      );
     } catch (e) {
       if (mounted) {
         Navigator.pop(context); // pop loading
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Błąd: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Błąd: $e')));
       }
       return;
     }
@@ -200,87 +217,163 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     Navigator.pop(context); // pop loading
 
     // Group employees
-    final preferred = availableEmployees.where((e) => e.availabilityStatus == 'PREFERRED').toList();
-    final available = availableEmployees.where((e) => ['AVAILABLE', 'UNKNOWN'].contains(e.availabilityStatus)).toList();
-    final unavailable = availableEmployees.where((e) => ['UNAVAILABLE', 'ALREADY_SCHEDULED_THIS', 'ALREADY_SCHEDULED_OTHER'].contains(e.availabilityStatus)).toList();
+    final preferred =
+        availableEmployees
+            .where((e) => e.availabilityStatus == 'PREFERRED')
+            .toList();
+    final available =
+        availableEmployees
+            .where(
+              (e) => ['AVAILABLE', 'UNKNOWN'].contains(e.availabilityStatus),
+            )
+            .toList();
+    final unavailable =
+        availableEmployees
+            .where(
+              (e) => [
+                'UNAVAILABLE',
+                'ALREADY_SCHEDULED_THIS',
+                'ALREADY_SCHEDULED_OTHER',
+              ].contains(e.availabilityStatus),
+            )
+            .toList();
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Dodaj przypisanie'),
-          content: SizedBox(
-            width: 400,
-            height: 500,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  '${DateFormat('EEEE, d MMM', 'pl_PL').format(date)} - ${shift.name}',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: ListView(
-                      padding: const EdgeInsets.all(8),
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: const Text('Dodaj przypisanie'),
+                  content: SizedBox(
+                    width: 400,
+                    height: 500,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (preferred.isNotEmpty) ...[
-                          _buildSectionHeader('Chcą pracować', preferred.length, Colors.green),
-                          ...preferred.map((e) => _buildEmployeeTile(e, selectedUserId, (id) => setDialogState(() => selectedUserId = id), context)),
-                        ],
-                        if (available.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          _buildSectionHeader('Neutralni / Dostępni', available.length, Colors.blue),
-                          ...available.map((e) => _buildEmployeeTile(e, selectedUserId, (id) => setDialogState(() => selectedUserId = id), context)),
-                        ],
-                        if (unavailable.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          _buildSectionHeader('Niedostępni / Przypisani', unavailable.length, Colors.red),
-                          ...unavailable.map((e) => _buildEmployeeTile(e, selectedUserId, (id) {}, context, isUnavailable: true)),
-                        ],
+                        Text(
+                          '${DateFormat('EEEE, d MMM', 'pl_PL').format(date)} - ${shift.name}',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color:
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.outlineVariant,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: ListView(
+                              padding: const EdgeInsets.all(8),
+                              children: [
+                                if (preferred.isNotEmpty) ...[
+                                  _buildSectionHeader(
+                                    'Chcą pracować',
+                                    preferred.length,
+                                    Colors.green,
+                                  ),
+                                  ...preferred.map(
+                                    (e) => _buildEmployeeTile(
+                                      e,
+                                      selectedUserId,
+                                      (id) => setDialogState(
+                                        () => selectedUserId = id,
+                                      ),
+                                      context,
+                                    ),
+                                  ),
+                                ],
+                                if (available.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  _buildSectionHeader(
+                                    'Neutralni / Dostępni',
+                                    available.length,
+                                    Colors.blue,
+                                  ),
+                                  ...available.map(
+                                    (e) => _buildEmployeeTile(
+                                      e,
+                                      selectedUserId,
+                                      (id) => setDialogState(
+                                        () => selectedUserId = id,
+                                      ),
+                                      context,
+                                    ),
+                                  ),
+                                ],
+                                if (unavailable.isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  _buildSectionHeader(
+                                    'Niedostępni / Przypisani',
+                                    unavailable.length,
+                                    Colors.red,
+                                  ),
+                                  ...unavailable.map(
+                                    (e) => _buildEmployeeTile(
+                                      e,
+                                      selectedUserId,
+                                      (id) {},
+                                      context,
+                                      isUnavailable: true,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<int>(
+                          decoration: InputDecoration(
+                            labelText: 'Rola',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          value: selectedRoleId,
+                          items:
+                              _roles
+                                  .map(
+                                    (r) => DropdownMenuItem(
+                                      value: r.id,
+                                      child: Text(r.name),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged:
+                              (v) => setDialogState(() => selectedRoleId = v),
+                        ),
                       ],
                     ),
                   ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Anuluj'),
+                    ),
+                    FilledButton(
+                      onPressed:
+                          (selectedUserId != null && selectedRoleId != null)
+                              ? () {
+                                Navigator.pop(context);
+                                _addLocalAssignment(
+                                  date,
+                                  shiftId,
+                                  selectedUserId!,
+                                  selectedRoleId!,
+                                );
+                              }
+                              : null,
+                      child: const Text('Dodaj'),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<int>(
-                  decoration: InputDecoration(
-                    labelText: 'Rola',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  value: selectedRoleId,
-                  items: _roles.map((r) => DropdownMenuItem(
-                    value: r.id,
-                    child: Text(r.name),
-                  )).toList(),
-                  onChanged: (v) => setDialogState(() => selectedRoleId = v),
-                ),
-              ],
-            ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Anuluj'),
-            ),
-            FilledButton(
-              onPressed: (selectedUserId != null && selectedRoleId != null)
-                  ? () {
-                      Navigator.pop(context);
-                      _addLocalAssignment(date, shiftId, selectedUserId!, selectedRoleId!);
-                    }
-                  : null,
-              child: const Text('Dodaj'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -293,20 +386,32 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           const SizedBox(width: 8),
           Text(
             '$title ($count)',
-            style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.grey.shade700),
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              color: Colors.grey.shade700,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildEmployeeTile(AvailableEmployee emp, String? selectedId, Function(String) onSelect, BuildContext context, {bool isUnavailable = false}) {
+  Widget _buildEmployeeTile(
+    AvailableEmployee emp,
+    String? selectedId,
+    Function(String) onSelect,
+    BuildContext context, {
+    bool isUnavailable = false,
+  }) {
     final isSelected = emp.userId == selectedId;
-    final hoursText = emp.targetHours != null 
-        ? '${emp.hoursThisMonth}/${emp.targetHours}h'
-        : '${emp.hoursThisMonth}h';
-        
-    final overTarget = emp.targetHours != null && emp.hoursThisMonth >= emp.targetHours!;
+    final hoursText =
+        emp.targetHours != null
+            ? '${emp.hoursThisMonth}/${emp.targetHours}h'
+            : '${emp.hoursThisMonth}h';
+
+    final overTarget =
+        emp.targetHours != null && emp.hoursThisMonth >= emp.targetHours!;
 
     return Opacity(
       opacity: isUnavailable ? 0.5 : 1.0,
@@ -317,9 +422,17 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           margin: const EdgeInsets.symmetric(vertical: 2),
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: isSelected ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5) : Colors.transparent,
+            color:
+                isSelected
+                    ? Theme.of(
+                      context,
+                    ).colorScheme.primaryContainer.withOpacity(0.5)
+                    : Colors.transparent,
             border: Border.all(
-              color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+              color:
+                  isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Colors.transparent,
               width: 2,
             ),
             borderRadius: BorderRadius.circular(8),
@@ -338,8 +451,10 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                     Text(
                       emp.fullName,
                       style: GoogleFonts.inter(
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                        decoration: isUnavailable ? TextDecoration.lineThrough : null,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.w500,
+                        decoration:
+                            isUnavailable ? TextDecoration.lineThrough : null,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -348,27 +463,44 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                       runSpacing: 4,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        ...emp.jobRoles.map((r) => Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Color(int.parse(r.colorHex.replaceFirst('#', '0xFF'))).withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            r.name,
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              color: Color(int.parse(r.colorHex.replaceFirst('#', '0xFF'))),
+                        ...emp.jobRoles.map(
+                          (r) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Color(
+                                int.parse(r.colorHex.replaceFirst('#', '0xFF')),
+                              ).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              r.name,
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                color: Color(
+                                  int.parse(
+                                    r.colorHex.replaceFirst('#', '0xFF'),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
-                        )),
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           '•  $hoursText',
                           style: GoogleFonts.inter(
                             fontSize: 11,
-                            color: overTarget ? Colors.orange.shade800 : Colors.grey.shade600,
-                            fontWeight: overTarget ? FontWeight.bold : FontWeight.normal,
+                            color:
+                                overTarget
+                                    ? Colors.orange.shade800
+                                    : Colors.grey.shade600,
+                            fontWeight:
+                                overTarget
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                           ),
                         ),
                       ],
@@ -383,11 +515,16 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     );
   }
 
-  void _addLocalAssignment(DateTime date, int shiftId, String userId, int roleId) {
+  void _addLocalAssignment(
+    DateTime date,
+    int shiftId,
+    String userId,
+    int roleId,
+  ) {
     final user = _users.firstWhere((u) => u.id == userId);
     final role = _roles.firstWhere((r) => r.id == roleId);
     final shift = _shifts.firstWhere((s) => s.id == shiftId);
-    
+
     final newEntry = ScheduleEntry(
       id: 'local_${_localIdCounter--}',
       date: date,
@@ -401,42 +538,46 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       startTime: shift.startTime,
       endTime: shift.endTime,
     );
-    
+
     // Show info banner on first edit
     if (_isFirstEdit && _originalEntries.isNotEmpty) {
       _isFirstEdit = false;
       showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.info_outline, color: Theme.of(ctx).colorScheme.primary),
-              const SizedBox(width: 8),
-              const Text('Informacja'),
-            ],
-          ),
-          content: const Text(
-            'Edytujesz wygenerowany grafik.\n\n'
-            '• Kliknij "Zapisz zmiany" aby zachować edycje\n'
-            '• Ponowne wygenerowanie grafiku usunie Twoje zmiany\n'
-            '• Możesz dodać wielu pracowników do tej samej zmiany',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Rozumiem'),
+        builder:
+            (ctx) => AlertDialog(
+              title: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Theme.of(ctx).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Informacja'),
+                ],
+              ),
+              content: const Text(
+                'Edytujesz wygenerowany grafik.\n\n'
+                '• Kliknij "Zapisz zmiany" aby zachować edycje\n'
+                '• Ponowne wygenerowanie grafiku usunie Twoje zmiany\n'
+                '• Możesz dodać wielu pracowników do tej samej zmiany',
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Rozumiem'),
+                ),
+              ],
             ),
-          ],
-        ),
       );
     }
-    
+
     setState(() {
       _scheduleEntries.add(newEntry);
       _hasUnsavedChanges = true;
     });
     _updateUnsavedChanges(true);
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -455,39 +596,45 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
   void _showEditAssignmentDialog(ScheduleEntry entry) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Edytuj przypisanie'),
-        content: SizedBox(
-          width: 300,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${DateFormat('EEEE, d MMM', 'pl_PL').format(entry.date)}',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+      builder:
+          (context) => AlertDialog(
+            title: Text('Edytuj przypisanie'),
+            content: SizedBox(
+              width: 300,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    DateFormat('EEEE, d MMM', 'pl_PL').format(entry.date),
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Pracownik: ${entry.userName}'),
+                  Text('Rola: ${entry.roleName}'),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text('Pracownik: ${entry.userName}'),
-              Text('Rola: ${entry.roleName}'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Zamknij'),
+              ),
+              FilledButton.tonal(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                ),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _removeLocalAssignment(entry.id);
+                },
+                child: Text(
+                  'Usuń',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
             ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Zamknij'),
-          ),
-          FilledButton.tonal(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.errorContainer),
-            onPressed: () {
-              Navigator.pop(context);
-              _removeLocalAssignment(entry.id);
-            },
-            child: Text('Usuń', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-          ),
-        ],
-      ),
     );
   }
 
@@ -497,7 +644,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       _hasUnsavedChanges = true;
     });
     _updateUnsavedChanges(true);
-    
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -515,9 +662,9 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
 
   Future<void> _saveChanges() async {
     if (!_hasUnsavedChanges) return;
-    
+
     setState(() => _isSaving = true);
-    
+
     try {
       final api = ref.read(apiServiceProvider);
       await api.saveBatchSchedule(
@@ -525,7 +672,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         _selectedWeekEnd,
         _scheduleEntries,
       );
-      
+
       setState(() {
         _isSaving = false;
         _hasUnsavedChanges = false;
@@ -534,7 +681,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       _updateUnsavedChanges(false);
       _updateUnsavedChanges(false);
       await _loadSchedule(); // Auto-refresh to ensure data consistency
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -547,7 +694,10 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       setState(() => _isSaving = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd zapisu: $e'), backgroundColor: Theme.of(context).colorScheme.error),
+          SnackBar(
+            content: Text('Błąd zapisu: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
         );
       }
     }
@@ -558,27 +708,35 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     if (_hasUnsavedChanges) {
       final proceed = await showDialog<bool>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Uwaga'),
-          content: const Text('Wygenerowanie nowego grafiku usunie Twoje obecne zmiany. Kontynuować?'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Anuluj')),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.tertiary),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Kontynuuj'),
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Uwaga'),
+              content: const Text(
+                'Wygenerowanie nowego grafiku usunie Twoje obecne zmiany. Kontynuować?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Anuluj'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(ctx).colorScheme.tertiary,
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Kontynuuj'),
+                ),
+              ],
             ),
-          ],
-        ),
       );
       if (proceed != true) return;
     }
-    
+
     setState(() => _isGenerating = true);
 
     try {
       final api = ref.read(apiServiceProvider);
-      
+
       // Ensure we have shifts, roles, users loaded (required for display)
       if (_shifts.isEmpty || _roles.isEmpty || _users.isEmpty) {
         final shifts = await api.getShifts();
@@ -590,49 +748,75 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           _users = users.where((u) => u.isEmployee).toList();
         });
       }
-      
+
       final result = await api.generateSchedule(
-            _selectedWeekStart,
-            _selectedWeekEnd,
-          );
+        _selectedWeekStart,
+        _selectedWeekEnd,
+      );
 
       final status = result['status'];
-      
+
       if (status == 'success') {
         // Parse schedules directly from result (draft mode doesn't save to DB)
         final List<dynamic> schedulesJson = result['schedules'] ?? [];
         final List<ScheduleEntry> generatedEntries = [];
-        
+
         for (final s in schedulesJson) {
           // Find matching user, role, shift names
           final userId = s['user_id']?.toString() ?? '';
           final roleId = s['role_id'] as int? ?? 0;
           final shiftDefId = s['shift_def_id'] as int? ?? 0;
-          
-          final user = _users.firstWhere((u) => u.id == userId, orElse: () => TeamMember(id: userId, username: '', fullName: 'Unknown', roleSystem: 'EMPLOYEE', jobRoleIds: []));
-          final role = _roles.firstWhere((r) => r.id == roleId, orElse: () => JobRole(id: roleId, name: 'Unknown', colorHex: '#888888'));
-          final shift = _shifts.firstWhere((sh) => sh.id == shiftDefId, orElse: () => ShiftDefinition(id: shiftDefId, name: 'Unknown', startTime: '00:00', endTime: '00:00'));
-          
-          generatedEntries.add(ScheduleEntry(
-            id: s['id']?.toString() ?? 'gen_${generatedEntries.length}',
-            date: DateTime.parse(s['date'].toString()),
-            shiftDefId: shiftDefId,
-            userId: userId,
-            roleId: roleId,
-            isPublished: false,
-            userName: user.fullName,
-            roleName: role.name,
-            shiftName: shift.name,
-            startTime: shift.startTime,
-            endTime: shift.endTime,
-          ));
+
+          final user = _users.firstWhere(
+            (u) => u.id == userId,
+            orElse:
+                () => TeamMember(
+                  id: userId,
+                  username: '',
+                  fullName: 'Unknown',
+                  roleSystem: 'EMPLOYEE',
+                  jobRoleIds: [],
+                ),
+          );
+          final role = _roles.firstWhere(
+            (r) => r.id == roleId,
+            orElse:
+                () => JobRole(id: roleId, name: 'Unknown', colorHex: '#888888'),
+          );
+          final shift = _shifts.firstWhere(
+            (sh) => sh.id == shiftDefId,
+            orElse:
+                () => ShiftDefinition(
+                  id: shiftDefId,
+                  name: 'Unknown',
+                  startTime: '00:00',
+                  endTime: '00:00',
+                ),
+          );
+
+          generatedEntries.add(
+            ScheduleEntry(
+              id: s['id']?.toString() ?? 'gen_${generatedEntries.length}',
+              date: DateTime.parse(s['date'].toString()),
+              shiftDefId: shiftDefId,
+              userId: userId,
+              roleId: roleId,
+              isPublished: false,
+              userName: user.fullName,
+              roleName: role.name,
+              shiftName: shift.name,
+              startTime: shift.startTime,
+              endTime: shift.endTime,
+            ),
+          );
         }
 
         // Parse warnings from result
         final List<dynamic> warningsJson = result['warnings'] ?? [];
-        final List<StaffingWarning> parsedWarnings = warningsJson
-            .map((w) => StaffingWarning.fromJson(w as Map<String, dynamic>))
-            .toList();
+        final List<StaffingWarning> parsedWarnings =
+            warningsJson
+                .map((w) => StaffingWarning.fromJson(w as Map<String, dynamic>))
+                .toList();
 
         setState(() {
           _scheduleEntries = generatedEntries;
@@ -647,7 +831,9 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✓ Wygenerowano grafik (${result['count']} przypisań)'),
+              content: Text(
+                '✓ Wygenerowano grafik (${result['count']} przypisań)',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -657,11 +843,13 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           _lastResult = result;
           _isGenerating = false;
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('⚠ Nie udało się wygenerować grafiku - sprawdź wymagania i dostępność'),
+              content: Text(
+                '⚠ Nie udało się wygenerować grafiku - sprawdź wymagania i dostępność',
+              ),
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
@@ -673,25 +861,27 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         // Enhanced error handling
         String errorMessage = 'Wystąpił nieoczekiwany błąd.';
         if (e.toString().contains('400')) {
-             errorMessage = 'Nie znaleziono rozwiązania dla podanych wymagań. Spróbuj dodać więcej pracowników lub zmniejszyć wymagania.';
+          errorMessage =
+              'Nie znaleziono rozwiązania dla podanych wymagań. Spróbuj dodać więcej pracowników lub zmniejszyć wymagania.';
         } else if (e.toString().contains('timeout')) {
-             errorMessage = 'Przekroczono czas oczekiwania na solver.';
+          errorMessage = 'Przekroczono czas oczekiwania na solver.';
         } else {
-             errorMessage = 'Błąd generowania: $e';
+          errorMessage = 'Błąd generowania: $e';
         }
 
         showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
+          context: context,
+          builder:
+              (ctx) => AlertDialog(
                 title: const Text('Błąd Generowania'),
                 content: Text(errorMessage),
                 actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: const Text('OK'),
-                    )
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('OK'),
+                  ),
                 ],
-            ),
+              ),
         );
       }
     }
@@ -712,7 +902,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
             ),
           ),
           const SizedBox(height: 16),
-          
+
           // Week Selector
           Card(
             child: Padding(
@@ -745,18 +935,21 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                     height: 50,
                     child: ElevatedButton.icon(
                       onPressed: _isGenerating ? null : _generateSchedule,
-                      icon: _isGenerating
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.auto_awesome),
+                      icon:
+                          _isGenerating
+                              ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                              : const Icon(Icons.auto_awesome),
                       label: Text(
-                        _isGenerating ? 'Generowanie...' : 'Generuj Grafik (AI)',
+                        _isGenerating
+                            ? 'Generowanie...'
+                            : 'Generuj Grafik (AI)',
                         style: const TextStyle(fontSize: 16),
                       ),
                       style: ElevatedButton.styleFrom(
@@ -775,9 +968,9 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                     Text(
                       'Przetwarzanie może potrwać do 30 sekund...',
                       style: GoogleFonts.inter(
-                        fontSize: 12, 
+                        fontSize: 12,
                         color: Colors.grey.shade600,
-                        fontStyle: FontStyle.italic
+                        fontStyle: FontStyle.italic,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -789,22 +982,24 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                       height: 50,
                       child: ElevatedButton.icon(
                         onPressed: _isSaving ? null : _saveChanges,
-                        icon: _isSaving
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.save),
+                        icon:
+                            _isSaving
+                                ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                : const Icon(Icons.save),
                         label: Text(
                           _isSaving ? 'Zapisywanie...' : 'Zapisz zmiany',
                           style: const TextStyle(fontSize: 16),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.secondary,
+                          backgroundColor:
+                              Theme.of(context).colorScheme.secondary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -817,12 +1012,12 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               ),
             ),
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Results / Schedule Display
           if (_scheduleEntries.isNotEmpty && _shifts.isNotEmpty) ...[
-          ScheduleViewer(
+            ScheduleViewer(
               schedules: _scheduleEntries,
               shifts: _shifts,
               roles: _roles,
@@ -831,7 +1026,8 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               onEmptyCellTap: _showAddAssignmentDialog,
               onAssignmentTap: _showEditAssignmentDialog,
             ),
-          ] else if (_lastResult != null && _lastResult!['status'] != 'success') ...[
+          ] else if (_lastResult != null &&
+              _lastResult!['status'] != 'success') ...[
             Text(
               'Wyniki',
               style: GoogleFonts.outfit(
@@ -873,10 +1069,14 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.errorContainer.withOpacity(0.3),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.errorContainer.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Theme.of(context).colorScheme.errorContainer),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.errorContainer,
                         ),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -884,7 +1084,10 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                             'Możliwe przyczyny:',
                             style: GoogleFonts.inter(
                               fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.onErrorContainer,
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onErrorContainer,
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -892,7 +1095,13 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                             '• Za mało pracowników z odpowiednimi rolami\n'
                             '• Zbyt wiele osób niedostępnych\n'
                             '• Wymagania przekraczają dostępność',
-                            style: GoogleFonts.inter(fontSize: 13, color: Theme.of(context).colorScheme.onErrorContainer),
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.onErrorContainer,
+                            ),
                           ),
                         ],
                       ),
@@ -922,12 +1131,14 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               ),
             ),
           ],
-          
+
           const SizedBox(height: 24),
-          
+
           // Instructions
           Card(
-            color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.4),
+            color: Theme.of(
+              context,
+            ).colorScheme.secondaryContainer.withOpacity(0.4),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -935,14 +1146,21 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.info_outline, color: Theme.of(context).colorScheme.onSecondaryContainer),
+                      Icon(
+                        Icons.info_outline,
+                        color:
+                            Theme.of(context).colorScheme.onSecondaryContainer,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'Jak to działa?',
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSecondaryContainer,
+                          color:
+                              Theme.of(
+                                context,
+                              ).colorScheme.onSecondaryContainer,
                         ),
                       ),
                     ],
@@ -958,15 +1176,18 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                       color: Theme.of(context).colorScheme.onSecondaryContainer,
                     ),
                   ),
-
                 ],
               ),
             ),
-            ),
+          ),
 
-          
           if (_isLoadingStats)
-            const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(),
+              ),
+            )
           else if (_employeeHours.isNotEmpty)
             _buildStatsPanel(),
         ],
@@ -1002,8 +1223,10 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _employeeHours.length,
-              separatorBuilder: (ctx, i) => Divider(color: Colors.grey.shade200),
-              itemBuilder: (ctx, i) => _buildEmployeeStatItem(_employeeHours[i]),
+              separatorBuilder:
+                  (ctx, i) => Divider(color: Colors.grey.shade200),
+              itemBuilder:
+                  (ctx, i) => _buildEmployeeStatItem(_employeeHours[i]),
             ),
           ],
         ),
@@ -1012,21 +1235,26 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
   }
 
   Widget _buildEmployeeStatItem(Map<String, dynamic> stat) {
-    final hasAvailability = stat['has_submitted_availability'] as bool? ?? false;
+    final hasAvailability =
+        stat['has_submitted_availability'] as bool? ?? false;
     final totalHours = (stat['total_hours'] as num?)?.toDouble() ?? 0.0;
     final shiftsCount = stat['shift_count'] as int? ?? 0;
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           CircleAvatar(
             radius: 16,
-            backgroundColor: hasAvailability ? Colors.green.shade100 : Colors.grey.shade200,
+            backgroundColor:
+                hasAvailability ? Colors.green.shade100 : Colors.grey.shade200,
             child: Icon(
               hasAvailability ? Icons.check : Icons.question_mark,
               size: 16,
-              color: hasAvailability ? Colors.green.shade700 : Colors.grey.shade500,
+              color:
+                  hasAvailability
+                      ? Colors.green.shade700
+                      : Colors.grey.shade500,
             ),
           ),
           const SizedBox(width: 12),
@@ -1042,7 +1270,10 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                   hasAvailability ? 'Dostępność złożona' : 'Brak dostępności',
                   style: TextStyle(
                     fontSize: 12,
-                    color: hasAvailability ? Colors.green.shade700 : Colors.grey.shade600,
+                    color:
+                        hasAvailability
+                            ? Colors.green.shade700
+                            : Colors.grey.shade600,
                   ),
                 ),
               ],
@@ -1053,11 +1284,17 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
             children: [
               Text(
                 '${totalHours.toStringAsFixed(1)} h',
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 15),
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
               ),
               Text(
                 '$shiftsCount zmian',
-                style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
               ),
             ],
           ),

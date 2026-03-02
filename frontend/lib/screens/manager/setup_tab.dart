@@ -351,15 +351,17 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
           .createRole(_roleNameController.text, _generateRoleColor());
       _roleNameController.clear();
       ref.invalidate(rolesProvider);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('✓ Rola dodana')));
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Błąd: $e')));
+      }
     }
   }
 
@@ -379,15 +381,17 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
       _shiftEndController.clear();
       setState(() => _selectedDays = [0, 1, 2, 3, 4, 5, 6]);
       ref.invalidate(shiftsProvider);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('✓ Zmiana dodana')));
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Błąd: $e')));
+      }
     }
   }
 
@@ -396,10 +400,11 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
       await ref.read(apiServiceProvider).deleteRole(role.id);
       ref.invalidate(rolesProvider);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Błąd: $e')));
+      }
     }
   }
 
@@ -408,10 +413,11 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
       await ref.read(apiServiceProvider).deleteShift(shift.id);
       ref.invalidate(shiftsProvider);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Błąd: $e')));
+      }
     }
   }
 
@@ -707,15 +713,17 @@ class _RequirementsTabState extends ConsumerState<_RequirementsTab> {
       }
 
       await ref.read(apiServiceProvider).setRequirements(updates);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('✓ Zapisano wymagania')));
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Błąd: $e')));
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }

@@ -1,10 +1,8 @@
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/providers.dart';
 import '../../models/models.dart';
-import '../../services/api_service.dart';
 
 class EmployeeDetailDialog extends ConsumerStatefulWidget {
   final TeamMember user;
@@ -23,7 +21,8 @@ class EmployeeDetailDialog extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<EmployeeDetailDialog> createState() => _EmployeeDetailDialogState();
+  ConsumerState<EmployeeDetailDialog> createState() =>
+      _EmployeeDetailDialogState();
 }
 
 class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
@@ -41,7 +40,9 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         width: 500,
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -76,7 +77,9 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
           radius: 32,
           backgroundColor: Theme.of(context).colorScheme.primaryContainer,
           child: Text(
-            widget.user.fullName.isNotEmpty ? widget.user.fullName[0].toUpperCase() : '?',
+            widget.user.fullName.isNotEmpty
+                ? widget.user.fullName[0].toUpperCase()
+                : '?',
             style: GoogleFonts.inter(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -113,7 +116,7 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
                     fontSize: 14,
                   ),
                 ),
-              ]
+              ],
             ],
           ),
         ),
@@ -134,10 +137,21 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
           style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 12),
-        _buildInfoRow(Icons.person, 'Imię i nazwisko', widget.user.fullName, onTap: widget.onEditName),
+        _buildInfoRow(
+          Icons.person,
+          'Imię i nazwisko',
+          widget.user.fullName,
+          onTap: widget.onEditName,
+        ),
         const SizedBox(height: 8),
-        _buildInfoRow(Icons.work_outline, 'Role', 'Kliknij edytuj, aby zarządzać', onTap: widget.onEditRoles),
-        if (widget.user.targetHoursPerMonth != null || widget.user.targetShiftsPerMonth != null) ...[
+        _buildInfoRow(
+          Icons.work_outline,
+          'Role',
+          'Kliknij edytuj, aby zarządzać',
+          onTap: widget.onEditRoles,
+        ),
+        if (widget.user.targetHoursPerMonth != null ||
+            widget.user.targetShiftsPerMonth != null) ...[
           const SizedBox(height: 8),
           _buildInfoRow(
             Icons.track_changes,
@@ -146,12 +160,22 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
           ),
         ],
         const SizedBox(height: 8),
-        _buildInfoRow(Icons.lock_reset, 'Hasło', 'Resetuj hasło', onTap: widget.onResetPassword),
+        _buildInfoRow(
+          Icons.lock_reset,
+          'Hasło',
+          'Resetuj hasło',
+          onTap: widget.onResetPassword,
+        ),
       ],
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value, {VoidCallback? onTap}) {
+  Widget _buildInfoRow(
+    IconData icon,
+    String label,
+    String value, {
+    VoidCallback? onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -173,8 +197,12 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
                     value,
                     style: TextStyle(
                       fontSize: 14,
-                      color: onTap != null ? Theme.of(context).colorScheme.primary : Colors.black87,
-                      fontWeight: onTap != null ? FontWeight.w500 : FontWeight.normal,
+                      color:
+                          onTap != null
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.black87,
+                      fontWeight:
+                          onTap != null ? FontWeight.w500 : FontWeight.normal,
                     ),
                   ),
                 ],
@@ -204,7 +232,10 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
-              return Text('Błąd pobierania statystyk: ${snapshot.error}', style: const TextStyle(color: Colors.red));
+              return Text(
+                'Błąd pobierania statystyk: ${snapshot.error}',
+                style: const TextStyle(color: Colors.red),
+              );
             }
             if (!snapshot.hasData) {
               return const Text('Brak danych');
@@ -237,7 +268,14 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Text('Ostatnie 6 miesięcy', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey.shade700)),
+                Text(
+                  'Ostatnie 6 miesięcy',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Container(
                   height: 150,
@@ -250,30 +288,47 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     crossAxisAlignment: CrossAxisAlignment.end,
-                    children: stats.monthlyShifts.reversed.map((m) {
-                      final count = m['count'] as int;
-                      // Simple bar chart
-                      return Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Text('$count', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Container(
-                            width: 20,
-                            height: (count * 5).clamp(4, 100).toDouble(), // Scale factor
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            (m['month'] as String).substring(5), // Show MM from YYYY-MM
-                            style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-                          ),
-                        ],
-                      );
-                    }).toList(),
+                    children:
+                        stats.monthlyShifts.reversed.map((m) {
+                          final count = m['count'] as int;
+                          // Simple bar chart
+                          return Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Text(
+                                '$count',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                width: 20,
+                                height:
+                                    (count * 5)
+                                        .clamp(4, 100)
+                                        .toDouble(), // Scale factor
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withOpacity(0.7),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                (m['month'] as String).substring(
+                                  5,
+                                ), // Show MM from YYYY-MM
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
                   ),
                 ),
               ],
@@ -284,7 +339,13 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color bg, Color fg) {
+  Widget _buildStatCard(
+    String title,
+    String value,
+    IconData icon,
+    Color bg,
+    Color fg,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -302,7 +363,11 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
               Expanded(
                 child: Text(
                   title,
-                  style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
