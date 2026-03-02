@@ -399,6 +399,8 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
   Widget build(BuildContext context) {
     final userAsync = ref.watch(currentUserProvider);
     final shiftsAsync = ref.watch(shiftsProvider);
+    final openGiveawaysAsync = ref.watch(openGiveawaysCountProvider);
+    final openGiveawaysCount = openGiveawaysAsync.valueOrNull ?? 0;
 
     String appBarTitle = 'Panel Pracownika';
     if (_selectedIndex == 0) appBarTitle = 'Mój Grafik';
@@ -620,20 +622,29 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
             _selectedIndex = index;
           });
         },
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.calendar_month),
             label: 'Mój Grafik',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.event_available),
             label: 'Dostępność',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.access_time),
             label: 'Obecność',
           ),
-          NavigationDestination(icon: Icon(Icons.swap_horiz), label: 'Giełda'),
+          NavigationDestination(
+            icon:
+                openGiveawaysCount > 0
+                    ? Badge(
+                      label: Text(openGiveawaysCount.toString()),
+                      child: const Icon(Icons.swap_horiz),
+                    )
+                    : const Icon(Icons.swap_horiz),
+            label: 'Giełda',
+          ),
         ],
       ),
     );

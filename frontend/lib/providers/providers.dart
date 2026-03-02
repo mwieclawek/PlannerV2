@@ -64,6 +64,17 @@ final myLeaveRequestsProvider = FutureProvider.autoDispose<List<LeaveRequest>>((
   return await api.getMyLeaveRequests();
 });
 
+// Giveaway Provider for Dashboard Badge
+final openGiveawaysCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  final api = ref.watch(apiServiceProvider);
+  try {
+    final giveaways = await api.getEmployeeGiveaways();
+    return giveaways.where((g) => g['status'] == 'OPEN').length;
+  } catch (e) {
+    return 0;
+  }
+});
+
 class DateRange {
   final DateTime start;
   final DateTime end;
