@@ -161,10 +161,15 @@ class ShiftDefResponse(BaseModel):
     def extract_applicable_days(cls, data):
         if hasattr(data, 'days'):
             days = [d.day_of_week for d in getattr(data, 'days', [])]
+            if not days:  # default if no specific days are set
+                days = [0, 1, 2, 3, 4, 5, 6]
             if not isinstance(data, dict):
                 data.__dict__['applicable_days'] = days
         elif isinstance(data, dict) and 'days' in data:
-            data['applicable_days'] = [d.day_of_week if hasattr(d, 'day_of_week') else d.get('day_of_week') for d in data.get('days', [])]
+            days = [d.day_of_week if hasattr(d, 'day_of_week') else d.get('day_of_week') for d in data.get('days', [])]
+            if not days:
+                days = [0, 1, 2, 3, 4, 5, 6]
+            data['applicable_days'] = days
         return data
 
     @field_validator('applicable_days', mode='before')

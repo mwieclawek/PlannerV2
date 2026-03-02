@@ -138,8 +138,12 @@ class SolverService:
                 
                 if latest_start < earliest_end:
                     overlap_duration = (earliest_end - latest_start).total_seconds() / 60 # minutes
-                    # Allow overlap if <= 30 minutes (e.g. handover)
-                    if overlap_duration > 30:
+                    
+                    # Check if one shift is completely enveloped by the other
+                    is_enveloped = (start1 >= start2 and end1 <= end2) or (start2 >= start1 and end2 <= end1)
+                    
+                    # Allow overlap if <= 30 minutes (e.g. handover) AND not enveloped
+                    if overlap_duration > 30 or is_enveloped:
                         shift_overlaps.append((s1.id, s2.id))
 
         # C1. No overlapping shifts per employee per day & Max 1 role per shift

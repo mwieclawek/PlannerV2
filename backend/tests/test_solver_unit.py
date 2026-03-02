@@ -302,6 +302,31 @@ class TestSolverConstraints:
         # Should NOT be allowed (60m overlap > 30m)
         assert len([s for s in result.get("schedules", []) if str(s["user_id"]) == str(user.id)]) <= 1
 
+    def test_solve_overlap_31min_forbidden(self, session: Session, job_role):
+        """Test that exactly > 30 min (e.g. 31 min) overlap is NOT allowed"""
+        from datetime import time
+        # shift1 ends at 15:00, shift2 starts at 14:29 -> 31 min overlap
+        shift1 = ShiftDefinition(name="Shift A", start_time=time(7, 0), end_time=time(15, 0))
+        shift2 = ShiftDefinition(name="Shift B", start_time=time(14, 29), end_time=time(22, 0))
+        session.add(shift1)
+        session.add(shift2)
+        
+        user = User(username="overlap_31m", password_hash=get_password_hash("t"), full_name="X", role_system=RoleSystem.EMPLOYEE)
+        session.add(user)
+        session.add(UserJobRoleLink(user_id=user.id, role_id=job_role.id))
+        session.commit()
+        
+        today = date.today()
+        session.add(StaffingRequirement(date=today, shift_def_id=shift1.id, role_id=job_role.id, min_count=1))
+        session.add(StaffingRequirement(date=today, shift_def_id=shift2.id, role_id=job_role.id, min_count=1))
+        session.commit()
+        
+        service = SolverService(session)
+        result = service.solve(today, today, save=False)
+        
+        # Should NOT be allowed (31m overlap > 30m)
+        assert len([s for s in result.get("schedules", []) if str(s["user_id"]) == str(user.id)]) <= 1
+
     def test_solve_respects_target_hours(self, session: Session, job_role):
         """Test that solver respects target_hours_per_month"""
         from datetime import time

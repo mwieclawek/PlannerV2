@@ -280,6 +280,7 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
   final _shiftStartController = TextEditingController();
   final _shiftEndController = TextEditingController();
   List<int> _selectedDays = [0, 1, 2, 3, 4, 5, 6];
+  int? _editingShiftId;
 
   @override
   void dispose() {
@@ -368,23 +369,43 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
   Future<void> _addShift() async {
     if (_shiftNameController.text.isEmpty) return;
     try {
-      await ref
-          .read(apiServiceProvider)
-          .createShift(
-            _shiftNameController.text,
-            _shiftStartController.text,
-            _shiftEndController.text,
-            applicableDays: _selectedDays,
-          );
+      final isEditing = _editingShiftId != null;
+      if (isEditing) {
+        await ref
+            .read(apiServiceProvider)
+            .updateShift(
+              _editingShiftId!,
+              _shiftNameController.text,
+              _shiftStartController.text,
+              _shiftEndController.text,
+              _selectedDays,
+            );
+      } else {
+        await ref
+            .read(apiServiceProvider)
+            .createShift(
+              _shiftNameController.text,
+              _shiftStartController.text,
+              _shiftEndController.text,
+              applicableDays: _selectedDays,
+            );
+      }
       _shiftNameController.clear();
       _shiftStartController.clear();
       _shiftEndController.clear();
-      setState(() => _selectedDays = [0, 1, 2, 3, 4, 5, 6]);
+      setState(() {
+        _selectedDays = [0, 1, 2, 3, 4, 5, 6];
+        _editingShiftId = null;
+      });
       ref.invalidate(shiftsProvider);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('✓ Zmiana dodana')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isEditing ? '✓ Zmiana zaktualizowana' : '✓ Zmiana dodana',
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -393,6 +414,26 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
         ).showSnackBar(SnackBar(content: Text('Błąd: $e')));
       }
     }
+  }
+
+  void _editShift(ShiftDefinition shift) {
+    setState(() {
+      _editingShiftId = shift.id;
+      _shiftNameController.text = shift.name;
+      _shiftStartController.text = shift.startTime;
+      _shiftEndController.text = shift.endTime;
+      _selectedDays = List.from(shift.applicableDays);
+    });
+  }
+
+  void _cancelEditShift() {
+    setState(() {
+      _editingShiftId = null;
+      _shiftNameController.clear();
+      _shiftStartController.clear();
+      _shiftEndController.clear();
+      _selectedDays = [0, 1, 2, 3, 4, 5, 6];
+    });
   }
 
   Future<void> _deleteRole(JobRole role) async {
@@ -561,13 +602,32 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _addShift,
-                      child: const Text('Dodaj Zmianę'),
+                  if (_editingShiftId != null)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _addShift,
+                            child: const Text('Zapisz'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _cancelEditShift,
+                            child: const Text('Anuluj'),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _addShift,
+                        child: const Text('Dodaj Zmianę'),
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 16),
                   shiftsAsync.when(
                     data:
@@ -580,9 +640,25 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
                                       subtitle: Text(
                                         '${shift.startTime} - ${shift.endTime} (${_formatDays(shift.applicableDays)})',
                                       ),
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.delete),
-                                        onPressed: () => _deleteShift(shift),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.edit,
+                                              color: Colors.blue,
+                                            ),
+                                            onPressed: () => _editShift(shift),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.delete,
+                                              color: Colors.red,
+                                            ),
+                                            onPressed:
+                                                () => _deleteShift(shift),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   )
