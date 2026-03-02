@@ -4,6 +4,9 @@ from uuid import UUID
 from sqlmodel import Session, select
 from ..models import Schedule, User, JobRole, ShiftDefinition
 from ..schemas import BatchSaveRequest, ScheduleResponse
+import logging
+
+logger = logging.getLogger(__name__)
 
 class SchedulerService:
     def __init__(self, session: Session):
@@ -46,6 +49,7 @@ class SchedulerService:
             count += 1
         
         self.session.commit()
+        logger.info(f"Saved batch schedule from {batch.start_date} to {batch.end_date}. Created {count} records.")
         return count
 
     def get_schedule_list(self, start_date: date, end_date: date) -> List[Dict[str, Any]]:
@@ -126,4 +130,5 @@ class SchedulerService:
                     background_tasks.add_task(send_push_to_tokens, tokens, title, body)
             
         self.session.commit()
+        logger.info(f"Published schedules from {start_date} to {end_date}. Affected users: {len(published_user_ids)}")
         return count

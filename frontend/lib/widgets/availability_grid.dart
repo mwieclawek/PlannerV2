@@ -20,8 +20,8 @@ class AvailabilityGrid extends ConsumerStatefulWidget {
 }
 
 class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
-  // Local state: Map of (date, shiftId) -> status
   final Map<String, AvailabilityStatus> _localAvailability = {};
+  final Set<String> _leaveBlockedDates = {};
   bool _hasChanges = false;
   bool _isEditing = false;
   bool _hasExistingData = false;
@@ -43,19 +43,56 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
   void _loadAvailability() async {
     final weekEnd = widget.weekStart.add(const Duration(days: 6));
     final dateRange = DateRange(widget.weekStart, weekEnd);
-    
+
     try {
-      final availabilities = await ref.read(availabilityProvider(dateRange).future);
-      
+      final results = await Future.wait([
+        ref.read(availabilityProvider(dateRange).future),
+        ref.read(myLeaveRequestsProvider.future),
+      ]);
+
+      final availabilities = results[0] as List<Availability>;
+      final leaveRequests = results[1] as List<LeaveRequest>;
+
+      if (!mounted) return;
+
       setState(() {
         _localAvailability.clear();
         for (final avail in availabilities) {
-          final key = '${avail.date.toIso8601String().split('T')[0]}_${avail.shiftDefId}';
+          final key =
+              '${avail.date.toIso8601String().split('T')[0]}_${avail.shiftDefId}';
           _localAvailability[key] = avail.status;
         }
+
+        _leaveBlockedDates.clear();
+        for (final req in leaveRequests) {
+          if (req.status == 'APPROVED' || req.status == 'PENDING') {
+            DateTime curr = DateTime.parse(req.startDate);
+            DateTime end = DateTime.parse(req.endDate);
+            while (curr.isBefore(end) || curr.isAtSameMomentAs(end)) {
+              if (curr.isAfter(
+                    widget.weekStart.subtract(const Duration(days: 1)),
+                  ) &&
+                  curr.isBefore(weekEnd.add(const Duration(days: 1)))) {
+                _leaveBlockedDates.add(curr.toIso8601String().split('T')[0]);
+              }
+              curr = curr.add(const Duration(days: 1));
+            }
+          }
+        }
+
         _hasChanges = false;
-        _hasExistingData = availabilities.isNotEmpty;
-        _isEditing = !_hasExistingData; // Start editable if no data
+
+        int userAvailCount = 0;
+        for (final avail in availabilities) {
+          if (!_leaveBlockedDates.contains(
+            avail.date.toIso8601String().split('T')[0],
+          )) {
+            userAvailCount++;
+          }
+        }
+
+        _hasExistingData = userAvailCount > 0;
+        _isEditing = !_hasExistingData;
       });
     } catch (e) {
       // Handle error
@@ -67,14 +104,18 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
   }
 
   AvailabilityStatus _getStatus(DateTime date, int shiftId) {
-    return _localAvailability[_getKey(date, shiftId)] ?? AvailabilityStatus.unavailable;
+    return _localAvailability[_getKey(date, shiftId)] ??
+        AvailabilityStatus.unavailable;
   }
 
   void _toggleStatus(DateTime date, int shiftId) {
     if (!_isEditing) return; // Block toggles when not editing
+    final dateStr = date.toIso8601String().split('T')[0];
+    if (_leaveBlockedDates.contains(dateStr)) return; // Block on leave days
+
     final key = _getKey(date, shiftId);
     final currentStatus = _getStatus(date, shiftId);
-    
+
     AvailabilityStatus newStatus;
     switch (currentStatus) {
       case AvailabilityStatus.unavailable:
@@ -84,7 +125,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
         newStatus = AvailabilityStatus.unavailable;
         break;
     }
-    
+
     setState(() {
       _localAvailability[key] = newStatus;
       _hasChanges = true;
@@ -95,6 +136,9 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
     setState(() {
       for (int i = 0; i < 7; i++) {
         final date = widget.weekStart.add(Duration(days: i));
+        final dateStr = date.toIso8601String().split('T')[0];
+        if (_leaveBlockedDates.contains(dateStr)) continue;
+
         for (final shift in widget.shifts) {
           final dayIndex = date.weekday - 1;
           if (shift.applicableDays.contains(dayIndex)) {
@@ -109,22 +153,24 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
 
   Future<void> _saveChanges() async {
     final updates = <AvailabilityUpdate>[];
-    
+
     for (int i = 0; i < 7; i++) {
       final date = widget.weekStart.add(Duration(days: i));
+      final dateStr = date.toIso8601String().split('T')[0];
+      if (_leaveBlockedDates.contains(dateStr))
+        continue; // Skip saving leave days
+
       for (final shift in widget.shifts) {
         final status = _getStatus(date, shift.id);
-        updates.add(AvailabilityUpdate(
-          date: date,
-          shiftDefId: shift.id,
-          status: status,
-        ));
+        updates.add(
+          AvailabilityUpdate(date: date, shiftDefId: shift.id, status: status),
+        );
       }
     }
-    
+
     try {
       await ref.read(apiServiceProvider).updateAvailability(updates);
-      
+
       if (mounted) {
         setState(() {
           _hasChanges = false;
@@ -140,9 +186,9 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Błąd: $e')));
       }
     }
   }
@@ -177,7 +223,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-    
+
     // Legend items
     final legendItems = [
       AvailabilityStatus.available,
@@ -193,19 +239,24 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
             spacing: 16,
             runSpacing: 8,
             alignment: WrapAlignment.center,
-            children: legendItems.map((status) {
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(_getStatusIcon(status), color: _getStatusColor(status), size: 20),
-                  const SizedBox(width: 4),
-                  Text(
-                    _getStatusLabel(status),
-                    style: GoogleFonts.inter(fontSize: 12),
-                  ),
-                ],
-              );
-            }).toList(),
+            children:
+                legendItems.map((status) {
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getStatusIcon(status),
+                        color: _getStatusColor(status),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _getStatusLabel(status),
+                        style: GoogleFonts.inter(fontSize: 12),
+                      ),
+                    ],
+                  );
+                }).toList(),
           ),
         ),
 
@@ -240,10 +291,13 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
             ],
           ),
         ),
-        
+
         if (!_isEditing && _hasExistingData)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
             child: Row(
               children: [
                 Icon(Icons.lock_outline, size: 14, color: Colors.grey.shade500),
@@ -251,7 +305,11 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
                 Expanded(
                   child: Text(
                     'Dyspozycyjność jest w trybie podglądu. Kliknij "Edytuj" aby wprowadzić zmiany.',
-                    style: GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade500, fontStyle: FontStyle.italic),
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: Colors.grey.shade500,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ),
               ],
@@ -259,7 +317,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
           ),
 
         const SizedBox(height: 8),
-        
+
         // Grid
         Expanded(
           child: Opacity(
@@ -267,7 +325,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
             child: isMobile ? _buildMobileView() : _buildDesktopView(),
           ),
         ),
-        
+
         // Save Button
         if (_isEditing && _hasChanges)
           Container(
@@ -310,7 +368,51 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
       itemBuilder: (context, dayIndex) {
         final date = widget.weekStart.add(Duration(days: dayIndex));
         final dayName = DateFormat('EEEE, d MMM', 'pl_PL').format(date);
-        
+        final dateStr = date.toIso8601String().split('T')[0];
+
+        if (_leaveBlockedDates.contains(dateStr)) {
+          return Card(
+            margin: const EdgeInsets.only(bottom: 16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    dayName,
+                    style: GoogleFonts.outfit(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.beach_access, color: Colors.grey.shade600),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Dzień zablokowany (Urlop)',
+                            style: GoogleFonts.inter(
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
         return Card(
           margin: const EdgeInsets.only(bottom: 16),
           child: Padding(
@@ -330,7 +432,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
                   // Check if applicable
                   final dayIndex = date.weekday - 1;
                   if (!shift.applicableDays.contains(dayIndex)) {
-                     return const SizedBox.shrink(); // Hide if not applicable
+                    return const SizedBox.shrink(); // Hide if not applicable
                   }
 
                   final status = _getStatus(date, shift.id);
@@ -403,7 +505,11 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
             children: [
               // Header row
               TableRow(
-                decoration: BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3)),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primaryContainer.withOpacity(0.3),
+                ),
                 children: [
                   _buildHeaderCell('Zmiana'),
                   ...List.generate(7, (i) {
@@ -440,10 +546,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
       child: Text(
         text,
         textAlign: TextAlign.center,
-        style: GoogleFonts.outfit(
-          fontWeight: FontWeight.bold,
-          fontSize: 14,
-        ),
+        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14),
       ),
     );
   }
@@ -470,22 +573,46 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
     );
   }
 
-  Widget _buildStatusCell(DateTime date, int shiftId, AvailabilityStatus status) {
+  Widget _buildStatusCell(
+    DateTime date,
+    int shiftId,
+    AvailabilityStatus status,
+  ) {
     // Check if shift is applicable for this day
     final shift = widget.shifts.firstWhere((s) => s.id == shiftId);
     // DateTime.weekday is 1..7 (Mon..Sun), applicableDays is 0..6 (Mon..Sun)
     final dayIndex = date.weekday - 1;
-    
-    if (!shift.applicableDays.contains(dayIndex)) {
-       return Container(
+    final dateStr = date.toIso8601String().split('T')[0];
+
+    if (_leaveBlockedDates.contains(dateStr)) {
+      return Container(
         height: 60,
         color: Colors.grey.shade200,
         child: Center(
-          child: Icon(
-            Icons.block,
-            color: Colors.grey.shade400,
-            size: 20,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.beach_access, color: Colors.grey.shade500, size: 20),
+              Text(
+                'Urlop',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
+        ),
+      );
+    }
+
+    if (!shift.applicableDays.contains(dayIndex)) {
+      return Container(
+        height: 60,
+        color: Colors.grey.shade200,
+        child: Center(
+          child: Icon(Icons.block, color: Colors.grey.shade400, size: 20),
         ),
       );
     }
@@ -496,11 +623,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
         height: 60,
         color: _getStatusColor(status),
         child: Center(
-          child: Icon(
-            _getStatusIcon(status),
-            color: Colors.white,
-            size: 28,
-          ),
+          child: Icon(_getStatusIcon(status), color: Colors.white, size: 28),
         ),
       ),
     );

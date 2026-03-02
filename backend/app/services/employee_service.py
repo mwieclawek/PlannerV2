@@ -4,6 +4,9 @@ from uuid import UUID
 from sqlmodel import Session, select
 from ..models import Availability, Schedule, ShiftDefinition, JobRole
 from ..schemas import AvailabilityUpdate
+import logging
+
+logger = logging.getLogger(__name__)
 
 class EmployeeService:
     def __init__(self, session: Session):
@@ -38,6 +41,7 @@ class EmployeeService:
                 self.session.add(new_avail)
         
         self.session.commit()
+        logger.info(f"Updated availability for user {user_id}: {len(updates)} records changed.")
 
     def link_google_calendar(self, user_id: UUID, auth_code: str):
         import os

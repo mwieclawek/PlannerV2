@@ -3,6 +3,9 @@ from typing import List, Dict, Tuple
 from ortools.sat.python import cp_model
 from sqlmodel import Session, select
 from ..models import User, ShiftDefinition, JobRole, Availability, StaffingRequirement, Schedule, AvailabilityStatus
+import logging
+
+logger = logging.getLogger(__name__)
 
 class SolverService:
     def __init__(self, session: Session):
@@ -18,15 +21,18 @@ class SolverService:
         delta = end_date - start_date
         days = [start_date + timedelta(days=i) for i in range(delta.days + 1)]
         
+        logger.info(f"Starting schedule generation for {start_date} to {end_date}")
+
         # Fetch operational data
         availabilities = self.session.exec(select(Availability).where(
             Availability.date >= start_date, Availability.date <= end_date
         )).all()
         
-        # Map availability: (user_id, date, shift_id) -> status
+        # Map availability: (str(user_id), date, shift_id) -> status string
         avail_map = {}
         for a in availabilities:
-            avail_map[(a.user_id, a.date, a.shift_def_id)] = a.status
+            val = str(a.status.value) if hasattr(a.status, 'value') else str(a.status)
+            avail_map[(str(a.user_id), a.date.isoformat(), a.shift_def_id)] = val
 
         # Fetch specific requirements
         specific_reqs = self.session.exec(select(StaffingRequirement).where(
@@ -162,14 +168,11 @@ class SolverService:
         # C2. Availability Constraints
         for key, w_var in work.items():
             e_id, d, s_id, r_id = key
-            status = avail_map.get((e_id, d, s_id), AvailabilityStatus.UNAVAILABLE) 
+            status = avail_map.get((str(e_id), d.isoformat(), s_id), "UNAVAILABLE") 
             
-            if status == AvailabilityStatus.UNAVAILABLE:
-                # print(f"DEBUG: forcing w_var=0 for {e_id} on {d} due to UNAVAILABLE")
+            if status == "UNAVAILABLE":
+                # logger.debug(f"Forcing w_var=0 for {e_id} on {d} due to UNAVAILABLE")
                 model.Add(w_var == 0)
-            else:
-                # print(f"DEBUG: status {status} for {e_id} on {d} (shift {s_id})")
-                pass
 
         # C3. Staffing Requirements
         for d in days:
@@ -251,12 +254,12 @@ class SolverService:
         # 1. Preferences & Slot Filling Reward
         for key, w_var in work.items():
             e_id, d, s_id, r_id = key
-            status = avail_map.get((e_id, d, s_id), AvailabilityStatus.UNAVAILABLE)
+            status = avail_map.get((str(e_id), d.isoformat(), s_id), "UNAVAILABLE")
             
             # High reward for simply filling a requirement
             objective_terms.append(w_var * 100) 
             
-            if status == AvailabilityStatus.AVAILABLE:
+            if status == "AVAILABLE":
                 # Reward for being available
                 objective_terms.append(w_var * 10)
         
@@ -287,6 +290,7 @@ class SolverService:
         solver = cp_model.CpSolver()
         # Set a time limit in case of complexity
         solver.parameters.max_time_in_seconds = 10.0
+        logger.info("Solving CP model...")
         status = solver.Solve(model)
 
         generated_schedules = []
@@ -369,6 +373,8 @@ class SolverService:
                     "end_time": sh.end_time if sh else None,
                 })
 
+            logger.info(f"Solver found a valid schedule (status={status}), generating {len(generated_schedules)} assignments.")
+
             return {
                 "status": "success", 
                 "count": len(generated_schedules), 
@@ -376,5 +382,5 @@ class SolverService:
                 "warnings": warnings
             }
         else:
+            logger.warning(f"Solver failed to find a feasible schedule. Status: {status}")
             return {"status": "infeasible", "count": 0, "warnings": []}
-

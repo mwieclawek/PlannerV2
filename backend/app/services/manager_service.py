@@ -3,6 +3,10 @@ from uuid import UUID
 from datetime import datetime, date, timedelta
 from sqlmodel import Session, select
 from fastapi import HTTPException
+import logging
+
+logger = logging.getLogger(__name__)
+
 from ..models import JobRole, ShiftDefinition, StaffingRequirement, RestaurantConfig, User, UserJobRoleLink, RoleSystem, AttendanceStatus, Schedule, Attendance
 from ..schemas import JobRoleCreate, ShiftDefCreate, RequirementCreate, ConfigUpdate, UserUpdate, UserCreate
 
@@ -40,6 +44,7 @@ class ManagerService:
         self.session.add(user)
         self.session.commit()
         self.session.refresh(user)
+        logger.info(f"Created new user: {user.username} (ID: {user.id})")
         return user
 
 
@@ -49,6 +54,7 @@ class ManagerService:
         self.session.add(role)
         self.session.commit()
         self.session.refresh(role)
+        logger.info(f"Created new job role: {role.name} (ID: {role.id})")
         return role
 
     def get_roles(self) -> List[JobRole]:
@@ -63,6 +69,7 @@ class ManagerService:
         self.session.add(role)
         self.session.commit()
         self.session.refresh(role)
+        logger.info(f"Updated job role with ID: {role_id}")
         return role
 
     def delete_role(self, role_id: int):
@@ -72,6 +79,7 @@ class ManagerService:
         try:
             self.session.delete(role)
             self.session.commit()
+            logger.info(f"Deleted job role with ID: {role_id}")
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Cannot delete role: {str(e)}")
 
@@ -104,6 +112,7 @@ class ManagerService:
             
         self.session.commit()
         self.session.refresh(shift)
+        logger.info(f"Created new shift definition: {shift.name} (ID: {shift.id})")
         return shift
 
     def update_shift(self, shift_id: int, shift_in: ShiftDefCreate) -> ShiftDefinition:
@@ -138,6 +147,7 @@ class ManagerService:
         self.session.add(shift)
         self.session.commit()
         self.session.refresh(shift)
+        logger.info(f"Updated shift definition with ID: {shift_id}")
         return shift
 
     def delete_shift(self, shift_id: int):
@@ -147,6 +157,7 @@ class ManagerService:
         try:
             self.session.delete(shift)
             self.session.commit()
+            logger.info(f"Deleted shift definition with ID: {shift_id}")
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Cannot delete shift: {str(e)}")
 
@@ -166,12 +177,14 @@ class ManagerService:
                 days_to_clear.add(r.day_of_week)
                 
         # Clear existing requirements for the affected days
+        old_reqs_count = 0
         if dates_to_clear:
             old_reqs = self.session.exec(
                 select(StaffingRequirement).where(StaffingRequirement.date.in_(list(dates_to_clear)))
             ).all()
             for old in old_reqs:
                 self.session.delete(old)
+                old_reqs_count += 1
                 
         if days_to_clear:
             old_reqs = self.session.exec(
@@ -179,6 +192,7 @@ class ManagerService:
             ).all()
             for old in old_reqs:
                 self.session.delete(old)
+                old_reqs_count += 1
         
         # If there are no requirements (e.g. everything was deleted in the UI), reqs is empty
         # but the above logic won't clear anything because dates_to_clear is empty.
@@ -202,6 +216,7 @@ class ManagerService:
         self.session.commit()
         for res in results:
             self.session.refresh(res)
+        logger.info(f"Requirements successfully set/saved. Deleted {old_reqs_count} old reqs and created {len(results)} new ones.")
         return results
 
     def get_requirements(self, start_date: date, end_date: date) -> List[StaffingRequirement]:
@@ -813,6 +828,8 @@ class ManagerService:
         req.reviewed_by = manager_id
         req.reviewed_at = datetime.utcnow()
         self.session.add(req)
+        
+        logger.info(f"Leave request {request_id} processed by {manager_id}. Approved: {approved}")
         
         if approved:
             # Auto-Set Availability on Approval

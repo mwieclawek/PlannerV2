@@ -147,6 +147,61 @@ class TestSolverConstraints:
         assert result["count"] == 0
         # Should have warning about understaffing
         assert len(result.get("warnings", [])) > 0
+
+    def test_solve_strict_unavailability_handling(
+        self, session: Session, job_role, shift_definition
+    ):
+        """Test that an unavailable employee is never chosen, even if it leads to severe understaffing"""
+        user_unavail = User(
+            username="strict_unavail",
+            password_hash=get_password_hash("test"),
+            full_name="Strict Unavailable",
+            role_system=RoleSystem.EMPLOYEE
+        )
+        user_avail = User(
+            username="strict_avail",
+            password_hash=get_password_hash("test"),
+            full_name="Strict Available",
+            role_system=RoleSystem.EMPLOYEE
+        )
+        session.add(user_unavail)
+        session.add(user_avail)
+        session.commit()
+
+        session.add(UserJobRoleLink(user_id=user_unavail.id, role_id=job_role.id))
+        session.add(UserJobRoleLink(user_id=user_avail.id, role_id=job_role.id))
+        session.commit()
+
+        today = date.today()
+
+        # Mark user_unavail as explicitly UNAVAILABLE, and user_avail as AVAILABLE
+        session.add(Availability(
+            user_id=user_unavail.id, date=today,
+            shift_def_id=shift_definition.id, status=AvailabilityStatus.UNAVAILABLE
+        ))
+        session.add(Availability(
+            user_id=user_avail.id, date=today,
+            shift_def_id=shift_definition.id, status=AvailabilityStatus.AVAILABLE
+        ))
+
+        # We need 5 employees! (We only have 1 available, 1 unavailable)
+        req = StaffingRequirement(
+            date=today, shift_def_id=shift_definition.id,
+            role_id=job_role.id, min_count=5
+        )
+        session.add(req)
+        session.commit()
+
+        service = SolverService(session)
+        result = service.solve(today, today, save=False)
+
+        # The solver MUST only assign the available user, ignoring the unavailable one 
+        # despite the high staffing requirement.
+        assert result["count"] == 1
+        assigned_user_ids = [str(s["user_id"]) for s in result.get("schedules", [])]
+        assert str(user_unavail.id) not in assigned_user_ids
+        assert str(user_avail.id) in assigned_user_ids
+        assert len(result.get("warnings", [])) > 0
     
     def test_solve_allows_split_shifts(self, session: Session, job_role):
         """Test that employee CAN get 2 shifts per day if they don't overlap too much"""

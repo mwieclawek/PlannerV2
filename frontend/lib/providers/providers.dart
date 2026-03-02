@@ -57,6 +57,12 @@ final availabilityProvider =
       return await api.getAvailability(dateRange.start, dateRange.end);
     });
 
+// Leave Requests Provider
+final myLeaveRequestsProvider = FutureProvider<List<LeaveRequest>>((ref) async {
+  final api = ref.watch(apiServiceProvider);
+  return await api.getMyLeaveRequests();
+});
+
 class DateRange {
   final DateTime start;
   final DateTime end;
