@@ -12,7 +12,12 @@
           "package_name": "com.example.frontend"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "357153331477-b6512tnr51gi4kslrh9f8tjndhdp74j7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAJ3dUVx3LQiSRowSsEYpZ2-U0fnuJyPVU"
@@ -20,7 +25,41 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "357153331477-b6512tnr51gi4kslrh9f8tjndhdp74j7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:357153331477:android:d08fea249dbeddf5ba711c",
+        "android_client_info": {
+          "package_name": "pl.planista.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "357153331477-b6512tnr51gi4kslrh9f8tjndhdp74j7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJ3dUVx3LQiSRowSsEYpZ2-U0fnuJyPVU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "357153331477-b6512tnr51gi4kslrh9f8tjndhdp74j7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
