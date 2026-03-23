@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 import sqlmodel
 
 
@@ -29,11 +30,19 @@ def upgrade() -> None:
         op.execute("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'menucategory') THEN CREATE TYPE menucategory AS ENUM ('SOUPS', 'MAINS', 'DESSERTS', 'DRINKS'); END IF; END $$;")
         op.execute("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'kitchenorderstatus') THEN CREATE TYPE kitchenorderstatus AS ENUM ('PENDING', 'IN_PROGRESS', 'READY', 'DELIVERED', 'CANCELLED'); END IF; END $$;")
 
+    # Define enum types based on dialect
+    if is_postgres:
+        menucategory_type = postgresql.ENUM('SOUPS', 'MAINS', 'DESSERTS', 'DRINKS', name='menucategory', create_type=False)
+        kitchenorderstatus_type = postgresql.ENUM('PENDING', 'IN_PROGRESS', 'READY', 'DELIVERED', 'CANCELLED', name='kitchenorderstatus', create_type=False)
+    else:
+        menucategory_type = sa.Enum('SOUPS', 'MAINS', 'DESSERTS', 'DRINKS', name='menucategory')
+        kitchenorderstatus_type = sa.Enum('PENDING', 'IN_PROGRESS', 'READY', 'DELIVERED', 'CANCELLED', name='kitchenorderstatus')
+
     op.create_table('menuitem',
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('name', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
     sa.Column('price', sa.Float(), nullable=False),
-    sa.Column('category', sa.Enum('SOUPS', 'MAINS', 'DESSERTS', 'DRINKS', name='menucategory', create_type=not is_postgres), nullable=False),
+    sa.Column('category', menucategory_type, nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
@@ -47,7 +56,7 @@ def upgrade() -> None:
     op.create_table('kitchenorder',
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('table_id', sa.Uuid(), nullable=False),
-    sa.Column('status', sa.Enum('PENDING', 'IN_PROGRESS', 'READY', 'DELIVERED', 'CANCELLED', name='kitchenorderstatus', create_type=not is_postgres), nullable=False),
+    sa.Column('status', kitchenorderstatus_type, nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.Column('updated_at', sa.DateTime(), nullable=False),
     sa.Column('waiter_id', sa.Uuid(), nullable=False),
