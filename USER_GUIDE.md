@@ -49,6 +49,10 @@ Główny ekran — kalendarz z podglądem dziennego grafiku:
 - Kliknij **+** → podaj nazwę (np. „Rano") i godziny (np. 08:00–16:00).
 - Godziny zmian nie powinny konfliktować się dla jednej osoby.
 
+#### Konfiguracja POS (Stoliki i Menu)
+- **Stoliki** — dodawanie stolików (nazwa, status aktywności).
+- **Pozycje Menu** — zarządzanie daniami (nazwa, cena, kategoria typu Zupy/Dania główne, ew. dezaktywacja wysprzedanych potraw).
+
 #### Dane Lokalu
 - Nazwa restauracji, adres, godziny otwarcia.
 
@@ -127,6 +131,19 @@ Rejestruj swój czas pracy:
    - System podpowie domyślne godziny z Twojego grafiku.
 3. Kliknij **"Zapisz"**.
 4. Wpis trafi do systemu. Jeśli nie byłeś zaplanowany, Manager musi zatwierdzić obecność.
+
+### 3.4 Dla Kelnerów (Punkt Sprzedaży - POS)
+
+- **Widok Stolików** – wybierz stolik, aby otworzyć z nim rachunek (Kitchen Order).
+- **Nabijanie Zamówień** – kliknij pozycje z podziałem na kategorie menu. Dodaj notatki do potraw.
+- **Wydawanie dań** – widzisz status zamówień zmieniany przez kuchnię. Kiedy danie jest "Gotowe", możesz je doręczyć i zmienić status na "Wydane".
+
+### 3.5 Dla Kuchni (Ekran Kuchenny - KDS)
+
+- **Podgląd Zamówień** – spływające ticket'y od kelnerów z czasem i numerem stolika.
+- **Zmiana Statusu** – informuj kelnerów na bieżąco o postępach:
+  - *W trakcie (In Progress)* – rozpoczęcie gotowania.
+  - *Gotowe (Ready)* – do odbioru przez kelnera.
 
 ---
 

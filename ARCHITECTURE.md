@@ -107,9 +107,38 @@ erDiagram
         string opening_hours
     }
 
+    MenuItem {
+        UUID id PK
+        string name
+        float price
+        enum category "SOUPS/MAINS/DESSERTS/DRINKS"
+        bool is_active
+    }
+
+    RestaurantTable {
+        UUID id PK
+        string name
+        bool is_active
+    }
+
+    KitchenOrder {
+        UUID id PK
+        enum status "PENDING/IN_PROGRESS/READY/DELIVERED/CANCELLED"
+        datetime created_at
+        datetime updated_at
+    }
+
+    KitchenOrderItem {
+        UUID id PK
+        int quantity
+        float unit_price
+        string notes
+    }
+
     User ||--o{ Availability : "has"
     User ||--o{ Schedule : "assigned to"
     User ||--o{ Attendance : "registers"
+    User ||--o{ KitchenOrder : "creates (waiter)"
     User }o--o{ JobRole : "has roles (M:N via UserJobRoleLink)"
     ShiftDefinition ||--o{ Availability : "for shift"
     ShiftDefinition ||--o{ Schedule : "uses"
@@ -117,6 +146,9 @@ erDiagram
     JobRole ||--o{ StaffingRequirement : "for role"
     JobRole ||--o{ Schedule : "as role"
     Schedule ||--o| ShiftGiveaway : "can be given away"
+    RestaurantTable ||--o{ KitchenOrder : "has"
+    KitchenOrder ||--o{ KitchenOrderItem : "contains"
+    MenuItem ||--o{ KitchenOrderItem : "ordered as"
 ```
 
 ## Warstwa Serwisów
@@ -175,6 +207,26 @@ sequenceDiagram
     M->>F: Klik "Przydziel" (wybór zastępcy)
     F->>B: POST /manager/giveaways/{id}/reassign
     B-->>F: {status: TAKEN}
+```
+
+## Przepływ Zamówień (POS & KDS)
+
+```mermaid
+sequenceDiagram
+    participant K as Kelner (POS)
+    participant B as Backend
+    participant C as Kuchnia (KDS)
+
+    K->>B: Otwiera rachunek na stoliku
+    K->>B: POST /kitchen/orders (z pozycjami menu)
+    B-->>K: Zwraca status PENDING
+    Note over B,C: Kuchnia widzi zamówienie
+    C->>B: GET /kitchen/orders
+    B-->>C: Zwraca nowe tickety
+    C->>B: PUT status na IN_PROGRESS (w trakcie)
+    Note over K,B: Kelner widzi zmianę statusu
+    C->>B: PUT status na READY (gotowe)
+    K->>B: PUT status na DELIVERED (wydane)
 ```
 
 ## Przepływ Integracji Google Calendar

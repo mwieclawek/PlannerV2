@@ -9,7 +9,7 @@ Aplikacja do automatycznego generowania grafików pracy dla restauracji i lokali
 - 🗓️ **Automatyczny generator grafików** — OR-Tools CP-SAT solver z trybem szkicu (Draft → Save → Publish)
 - ✏️ **Edycja grafiku** — ręczne przypisanie/usunięcie pracowników, batch save
 - 👥 **Zarządzanie zespołem** — tworzenie kont, przypisywanie ról, aktywacja/dezaktywacja, reset hasła, cele godzinowe
-- ⚙️ **Konfiguracja restauracji** — role (stanowiska), definicje zmian, wymagania kadrowe, dane lokalu
+- ⚙️ **Konfiguracja restauracji** — role (stanowiska), definicje zmian, wymagania kadrowe, dane lokalu, **konfiguracja stolików i menu**
 - 📋 **Obecności** — ewidencja czasu pracy, zatwierdzanie/odrzucanie, eksport do PDF
 - 🔄 **Oddawanie zmian** — zarządzanie prośbami o oddanie zmiany, sugerowane zastępstwa
 - 🐞 **Zgłaszanie błędów** — integracja z GitHub Issues
@@ -19,6 +19,13 @@ Aplikacja do automatycznego generowania grafików pracy dla restauracji i lokali
 - 📝 **Zgłaszanie dostępności** — preferowane / neutralne / niedostępny
 - ⏰ **Rejestracja obecności** — check-in / check-out
 - 🔄 **Oddawanie zmian** — zgłoszenie oddania, śledzenie statusu
+
+### Kelner (Point of Sale)
+- 🍔 **Zarządzanie Zamówieniami** — przyjmowanie i modyfikacja zamówień od gości, wybór pozycji z menu
+- 📋 **Widok Stolików** — przegląd otwartych rachunków i statusów stolików
+
+### Kuchnia (Kitchen Display System)
+- 👨‍🍳 **Realizacja Zamówień** — podgląd bieżących ticketów, oznaczanie etapów przygotowania (Oczekujące → W trakcie → Gotowe)
 
 ## Tech Stack
 
@@ -66,7 +73,7 @@ PlannerV2/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # FastAPI app + lifespan
-│   │   ├── models.py            # SQLModel entities (12 modeli)
+│   │   ├── models.py            # SQLModel entities
 │   │   ├── schemas.py           # Pydantic schemas
 │   │   ├── database.py          # Konfiguracja bazy danych
 │   │   ├── auth_utils.py        # JWT + password hashing
@@ -75,6 +82,7 @@ PlannerV2/
 │   │   │   ├── manager.py       # CRUD zespołu, ról, zmian, obecności, giveaway
 │   │   │   ├── employee.py      # Grafik, dostępność, obecność, giveaway
 │   │   │   ├── scheduler.py     # Generowanie, save, publish, assignment
+│   │   │   ├── kitchen.py       # Endpointy POS i KDS (stoliki, menu, zamówienia)
 │   │   │   ├── health.py        # Health check z weryfikacją migracji
 │   │   │   └── bug_report.py    # Proxy do GitHub Issues API
 │   │   └── services/
@@ -83,14 +91,15 @@ PlannerV2/
 │   │       ├── employee_service.py
 │   │       └── scheduler_service.py
 │   ├── alembic/                 # Migracje bazy danych
-│   └── tests/                   # 19 plików testów (pytest)
+│   └── tests/                   # Testy (pytest)
 ├── frontend/
 │   └── lib/
 │       ├── screens/
 │       │   ├── login_screen.dart
 │       │   ├── server_setup_screen.dart
 │       │   ├── manager/         # Dashboard + 6 zakładek
-│       │   └── employee/        # Dashboard + 3 ekrany
+│       │   ├── employee/        # Dashboard + 3 ekrany
+│       │   └── pos/             # Ekrany Kelnera (POS) i Kuchni (KDS)
 │       ├── widgets/             # Reużywalne komponenty
 │       ├── providers/           # Riverpod state management
 │       ├── services/            # ApiService (Dio) + ConfigService
@@ -158,6 +167,15 @@ PlannerV2/
 | `POST` | `/scheduler/publish` | Opublikuj grafik |
 | `POST` | `/scheduler/assignment` | Ręczne przypisanie |
 | `DELETE` | `/scheduler/assignment/{id}` | Usuń przypisanie |
+
+### Kuchnia / POS (`/kitchen`)
+| Metoda | Endpoint | Opis |
+|--------|----------|------|
+| `GET/POST/PUT/DELETE` | `/kitchen/tables` | Zarządzanie stolikami |
+| `GET/POST/PUT/DELETE` | `/kitchen/menu` | Zarządzanie pozycjami menu |
+| `GET/POST/PUT/DELETE` | `/kitchen/orders` | Zarządzanie zamówieniami kelnerskimi |
+| `POST/PUT/DELETE` | `/kitchen/orders/{id}/items` | Pozycje w zamówieniu |
+| `PUT` | `/kitchen/orders/{id}/status` | Zmiana statusu całego zamówienia |
 
 ### Inne
 | Metoda | Endpoint | Opis |

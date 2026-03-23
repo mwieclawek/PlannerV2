@@ -155,6 +155,15 @@ OR-Tools CP-SAT solver z następującymi regułami:
 | `POST` | `/scheduler/assignment` | Ręczne przypisanie |
 | `DELETE` | `/scheduler/assignment/{id}` | Usuń przypisanie |
 
+### Kuchnia / POS (`/kitchen`)
+| Metoda | Endpoint | Opis |
+|--------|----------|------|
+| `GET/POST/PUT/DELETE` | `/kitchen/tables` | CRUD stolików |
+| `GET/POST/PUT/DELETE` | `/kitchen/menu` | CRUD pozycji menu |
+| `GET/POST/PUT/DELETE` | `/kitchen/orders` | Zarządzanie zamówieniami (odczyt/zapis) |
+| `POST/PUT/DELETE` | `/kitchen/orders/{id}/items` | Pozycje w zamówieniu |
+| `PUT` | `/kitchen/orders/{id}/status` | Zmiana statusu całego zamówienia |
+
 ### Inne
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
