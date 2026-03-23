@@ -62,7 +62,7 @@ async def test_no_disposition_means_unavailable(session: Session):
     # The user should NOT be assigned because they didn't say they are available.
     # Currently (Bug), they default to AVAILABLE and will be assigned to meet requirement.
     
-    assigned_users = [s.user_id for s in result["schedules"]]
+    assigned_users = [s["user_id"] for s in result["schedules"]]
     
     # Expected behavior: User should NOT be in assigned_users
     assert user.id not in assigned_users, "User without disposition was assigned a shift! (Defect: No disposition treated as Available)"

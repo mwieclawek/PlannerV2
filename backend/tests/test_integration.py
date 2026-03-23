@@ -207,7 +207,7 @@ async def test_deactivated_user_cannot_login(client, session: Session):
 
     r = await client.post("/auth/token", data={
         "username": user.username, "password": "TestPass123"
-    })
+    }, headers={"X-Forwarded-For": "127.0.0.99"})
     assert r.status_code == 403
 
 

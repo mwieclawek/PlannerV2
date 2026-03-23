@@ -1,9 +1,10 @@
-from datetime import time, date, datetime, date as date_type
-from typing import Optional, List
 from uuid import UUID, uuid4
-from sqlmodel import Field, SQLModel, Relationship
-from sqlalchemy import Column, Date, Integer
+from datetime import datetime, date, timedelta, time, date as date_type
+from typing import Optional, List
 from enum import Enum
+from pydantic import EmailStr, computed_field
+from sqlmodel import SQLModel, Field, Relationship, col
+from sqlalchemy import Column, Date, Integer
 
 class RoleSystem(str, Enum):
     MANAGER = "MANAGER"
@@ -228,3 +229,76 @@ class UserDevice(SQLModel, table=True):
     last_active: datetime = Field(default_factory=datetime.utcnow)
     
     user: User = Relationship(back_populates="devices")
+
+
+# ── POS & Kitchen ──────────────────────────────────────────────────────────────
+
+class RestaurantTable(SQLModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str = Field(index=True)
+    is_active: bool = Field(default=True)
+
+class MenuCategory(str, Enum):
+    SOUPS = "SOUPS"
+    MAINS = "MAINS"
+    DESSERTS = "DESSERTS"
+    DRINKS = "DRINKS"
+
+class MenuItem(SQLModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    name: str
+    price: float = Field(default=0.0)
+    category: MenuCategory
+    is_active: bool = Field(default=True)
+
+class KitchenOrderStatus(str, Enum):
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"
+    READY = "READY"
+    DELIVERED = "DELIVERED"
+    CANCELLED = "CANCELLED"
+
+class KitchenOrder(SQLModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    table_id: UUID = Field(foreign_key="restauranttable.id")
+    status: KitchenOrderStatus = Field(default=KitchenOrderStatus.PENDING)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    waiter_id: UUID = Field(foreign_key="user.id")
+
+    items: List["KitchenOrderItem"] = Relationship(back_populates="order")
+    table: Optional["RestaurantTable"] = Relationship()
+    waiter: Optional["User"] = Relationship()
+
+    @computed_field
+    @property
+    def table_name(self) -> Optional[str]:
+        return self.table.name if self.table else None
+
+    @computed_field
+    @property
+    def waiter_name(self) -> Optional[str]:
+        return self.waiter.full_name if self.waiter else None
+
+    @computed_field
+    @property
+    def total_amount(self) -> float:
+        return sum(item.unit_price * item.quantity for item in self.items)
+
+class KitchenOrderItem(SQLModel, table=True):
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    order_id: UUID = Field(foreign_key="kitchenorder.id")
+    menu_item_id: UUID = Field(foreign_key="menuitem.id")
+    quantity: int = Field(default=1)
+    notes: Optional[str] = Field(default=None)
+    unit_price: float = Field(default=0.0)
+    menu_item_name_snapshot: Optional[str] = Field(default=None, description="Snapshot of the menu item name at order time.")
+
+    order: KitchenOrder = Relationship(back_populates="items")
+    menu_item: Optional["MenuItem"] = Relationship()
+
+    @computed_field
+    @property
+    def menu_item_name(self) -> Optional[str]:
+        # Fallback to relationship if snapshot is missing (for older rows)
+        return self.menu_item_name_snapshot or (self.menu_item.name if self.menu_item else None)

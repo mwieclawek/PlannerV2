@@ -20,7 +20,9 @@ from backend.app.models import (
     User, JobRole, ShiftDefinition, Availability,
     StaffingRequirement, Schedule, RestaurantConfig, UserJobRoleLink,
     Attendance, AttendanceStatus, ShiftGiveaway, GiveawayStatus,
-    LeaveRequest, LeaveStatus
+    LeaveRequest, LeaveStatus,
+    RestaurantTable, MenuCategory, MenuItem,
+    KitchenOrder, KitchenOrderItem, KitchenOrderStatus
 )
 
 # this is the Alembic Config object

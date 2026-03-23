@@ -30,6 +30,10 @@ import pytest_asyncio
 
 @pytest_asyncio.fixture(name="client")
 async def client_fixture(session: Session) -> AsyncGenerator[AsyncClient, None]:
+    # Disable rate limiter for testing
+    from app.main import limiter
+    limiter.enabled = False
+
     # Override the dependency
     def get_session_override():
         return session

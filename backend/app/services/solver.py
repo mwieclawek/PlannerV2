@@ -174,8 +174,9 @@ class SolverService:
             e_id, d, s_id, r_id = key
             status = avail_map.get((str(e_id), d.isoformat(), s_id), "UNKNOWN") 
             
-            if status == "UNAVAILABLE":
-                # logger.debug(f"Forcing w_var=0 for {e_id} on {d} due to UNAVAILABLE")
+            # Forbid scheduling if they didn't explicitly say they are available
+            if status not in ["AVAILABLE", "PREFERRED"]:
+                # logger.debug(f"Forcing w_var=0 for {e_id} on {d} due to {status}")
                 model.Add(w_var == 0)
 
         # C3. Staffing Requirements
