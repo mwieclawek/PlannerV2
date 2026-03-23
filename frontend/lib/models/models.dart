@@ -785,3 +785,181 @@ class AppNotification {
     );
   }
 }
+
+// ── POS & Kitchen Models ──────────────────────────────────────────────────────
+
+class RestaurantTable {
+  final String id;
+  final String name;
+  final bool isActive;
+
+  RestaurantTable({required this.id, required this.name, this.isActive = true});
+
+  factory RestaurantTable.fromJson(Map<String, dynamic> json) {
+    return RestaurantTable(
+      id: json['id'],
+      name: json['name'],
+      isActive: json['is_active'] ?? true,
+    );
+  }
+}
+
+enum MenuCategory {
+  SOUPS,
+  MAINS,
+  DESSERTS,
+  DRINKS;
+
+  String get label {
+    switch (this) {
+      case MenuCategory.SOUPS:
+        return 'Zupy';
+      case MenuCategory.MAINS:
+        return 'Drugie Dania';
+      case MenuCategory.DESSERTS:
+        return 'Desery';
+      case MenuCategory.DRINKS:
+        return 'Napoje';
+    }
+  }
+
+  static MenuCategory fromString(String value) {
+    return MenuCategory.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => MenuCategory.MAINS,
+    );
+  }
+}
+
+class MenuItem {
+  final String id;
+  final String name;
+  final double price;
+  final MenuCategory category;
+  final bool isActive;
+
+  MenuItem({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.category,
+    this.isActive = true,
+  });
+
+  factory MenuItem.fromJson(Map<String, dynamic> json) {
+    return MenuItem(
+      id: json['id'],
+      name: json['name'],
+      price: (json['price'] as num).toDouble(),
+      category: MenuCategory.fromString(json['category']),
+      isActive: json['is_active'] ?? true,
+    );
+  }
+}
+
+class KitchenOrderItem {
+  final String id;
+  final String orderId;
+  final String menuItemId;
+  final int quantity;
+  final String? notes;
+  final double unitPrice;
+  final String? menuItemName;
+
+  KitchenOrderItem({
+    required this.id,
+    required this.orderId,
+    required this.menuItemId,
+    required this.quantity,
+    this.notes,
+    required this.unitPrice,
+    this.menuItemName,
+  });
+
+  factory KitchenOrderItem.fromJson(Map<String, dynamic> json) {
+    return KitchenOrderItem(
+      id: json['id'],
+      orderId: json['order_id'],
+      menuItemId: json['menu_item_id'],
+      quantity: json['quantity'] ?? 1,
+      notes: json['notes'],
+      unitPrice: (json['unit_price'] as num).toDouble(),
+      menuItemName: json['menu_item_name'],
+    );
+  }
+}
+
+enum KitchenOrderStatus {
+  PENDING,
+  IN_PROGRESS,
+  READY,
+  DELIVERED,
+  CANCELLED;
+
+  String get label {
+    switch (this) {
+      case KitchenOrderStatus.PENDING:
+        return 'Oczekujące';
+      case KitchenOrderStatus.IN_PROGRESS:
+        return 'W trakcie';
+      case KitchenOrderStatus.READY:
+        return 'Gotowe';
+      case KitchenOrderStatus.DELIVERED:
+        return 'Wydane';
+      case KitchenOrderStatus.CANCELLED:
+        return 'Anulowane';
+    }
+  }
+
+  static KitchenOrderStatus fromString(String value) {
+    return KitchenOrderStatus.values.firstWhere(
+      (e) => e.name == value,
+      orElse: () => KitchenOrderStatus.PENDING,
+    );
+  }
+}
+
+class KitchenOrder {
+  final String id;
+  final String tableId;
+  final KitchenOrderStatus status;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String waiterId;
+  final List<KitchenOrderItem> items;
+  final String? tableName;
+  final String? waiterName;
+  final double totalAmount;
+
+  KitchenOrder({
+    required this.id,
+    required this.tableId,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.waiterId,
+    this.items = const [],
+    this.tableName,
+    this.waiterName,
+    this.totalAmount = 0.0,
+  });
+
+  factory KitchenOrder.fromJson(Map<String, dynamic> json) {
+    return KitchenOrder(
+      id: json['id'],
+      tableId: json['table_id'],
+      status: KitchenOrderStatus.fromString(json['status']),
+      createdAt: DateTime.parse(json['created_at']),
+      updatedAt: DateTime.parse(json['updated_at']),
+      waiterId: json['waiter_id'],
+      items:
+          (json['items'] as List?)
+              ?.map((e) => KitchenOrderItem.fromJson(e))
+              .toList() ??
+          [],
+      tableName: json['table_name'],
+      waiterName: json['waiter_name'],
+      totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}

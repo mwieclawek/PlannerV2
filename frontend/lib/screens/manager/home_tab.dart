@@ -16,6 +16,7 @@ class HomeTab extends ConsumerStatefulWidget {
 
 class _HomeTabState extends ConsumerState<HomeTab> {
   late Future<DashboardHome> _dashboardFuture;
+  late Future<List<LeaveRequest>> _pendingLeavesFuture;
   CalendarViewMode _viewMode = CalendarViewMode.day;
   List<ScheduleEntry> _weekEntries = [];
   bool _weekLoading = false;
@@ -23,6 +24,7 @@ class _HomeTabState extends ConsumerState<HomeTab> {
   @override
   void initState() {
     super.initState();
+    _pendingLeavesFuture = Future.value([]);
     _refresh();
   }
 
@@ -31,6 +33,9 @@ class _HomeTabState extends ConsumerState<HomeTab> {
       _dashboardFuture = ref
           .read(apiServiceProvider)
           .getDashboardHome(date: DateTime.now());
+      _pendingLeavesFuture = ref
+          .read(apiServiceProvider)
+          .getAllLeaveRequests(status: 'PENDING');
     });
     if (_viewMode == CalendarViewMode.week) {
       _loadWeekSchedule();
@@ -149,6 +154,27 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ── Priority: Pending Leave Requests ──
+                      FutureBuilder<List<LeaveRequest>>(
+                        future: _pendingLeavesFuture,
+                        builder: (context, leaveSnap) {
+                          final leaves = leaveSnap.data ?? [];
+                          if (leaves.isEmpty) return const SizedBox.shrink();
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildSectionTitle(
+                                'Wnioski urlopowe',
+                                Icons.beach_access_rounded,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildPendingLeavesList(leaves),
+                              const SizedBox(height: 32),
+                            ],
+                          );
+                        },
+                      ),
+
                       _buildSectionTitle('Dzisiaj w pracy', Icons.work_rounded),
                       const SizedBox(height: 12),
                       _buildDayTimeline(data.workingToday),
@@ -784,6 +810,184 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                 );
               },
               child: const Text('Sprawdź'),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ============== PENDING LEAVE REQUESTS ==============
+
+  Widget _buildPendingLeavesList(List<LeaveRequest> leaves) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: leaves.length,
+      itemBuilder: (context, index) {
+        final leave = leaves[index];
+        final dateRange = '${leave.startDate} – ${leave.endDate}';
+        return Card(
+          elevation: 0,
+          margin: const EdgeInsets.only(bottom: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: Colors.orange.shade300,
+              width: 1.5,
+            ),
+          ),
+          color: Colors.orange.shade50,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.orange.shade100,
+                      child: Text(
+                        leave.userName.isNotEmpty
+                            ? leave.userName[0].toUpperCase()
+                            : '?',
+                        style: TextStyle(
+                          color: Colors.orange.shade800,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            leave.userName,
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                          Text(
+                            'Urlop: $dateRange',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          if (leave.reason != null &&
+                              leave.reason!.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              leave.reason!,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontStyle: FontStyle.italic,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'OCZEKUJE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.orange.shade800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        key: Key('reject-leave-${leave.id}'),
+                        onPressed: () async {
+                          try {
+                            await ref
+                                .read(apiServiceProvider)
+                                .rejectLeaveRequest(leave.id);
+                            _refresh();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Wniosek odrzucony'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Błąd: $e')),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.close, size: 16),
+                        label: const Text('Odrzuć'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red.shade700,
+                          side: BorderSide(color: Colors.red.shade300),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton.icon(
+                        key: Key('approve-leave-${leave.id}'),
+                        onPressed: () async {
+                          try {
+                            await ref
+                                .read(apiServiceProvider)
+                                .approveLeaveRequest(leave.id);
+                            _refresh();
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Wniosek zatwierdzony ✓'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Błąd: $e')),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.check, size: 16),
+                        label: const Text('Zatwierdź'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.green.shade600,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         );

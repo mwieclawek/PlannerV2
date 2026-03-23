@@ -17,6 +17,8 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
   bool _isLoading = false;
   List<EmployeeScheduleEntry> _scheduleEntries = [];
   bool _showCoworkers = false;
+  bool _teamLoading = false;
+  List<ScheduleEntry> _teamEntries = [];
   Map<String, dynamic>? _summary;
 
   static DateTime _getMonday(DateTime date) {
@@ -78,6 +80,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     });
     _loadSchedule();
     _loadSummary();
+    if (_showCoworkers) _loadTeamSchedule();
   }
 
   void _nextWeek() {
@@ -86,6 +89,24 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     });
     _loadSchedule();
     _loadSummary();
+    if (_showCoworkers) _loadTeamSchedule();
+  }
+
+  Future<void> _loadTeamSchedule() async {
+    setState(() => _teamLoading = true);
+    try {
+      final entries = await ref
+          .read(apiServiceProvider)
+          .getManagerSchedule(_selectedWeekStart, _selectedWeekEnd);
+      if (mounted) {
+        setState(() {
+          _teamEntries = entries;
+          _teamLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _teamLoading = false);
+    }
   }
 
   Widget _buildSummaryCard() {
@@ -295,8 +316,11 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                           ),
                         ],
                         selected: {_showCoworkers},
-                        onSelectionChanged:
-                            (v) => setState(() => _showCoworkers = v.first),
+                        onSelectionChanged: (v) {
+                          final newVal = v.first;
+                          setState(() => _showCoworkers = newVal);
+                          if (newVal && _teamEntries.isEmpty) _loadTeamSchedule();
+                        },
                         style: SegmentedButton.styleFrom(
                           selectedBackgroundColor:
                               Theme.of(context).colorScheme.primaryContainer,
@@ -308,8 +332,13 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                     const SizedBox(height: 12),
 
                     if (_showCoworkers) ...[
-                      // Manager-style week view
-                      _buildTeamWeekView(),
+                      if (_teamLoading)
+                        const Padding(
+                          padding: EdgeInsets.all(32),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else
+                        _buildTeamWeekView(),
                     ] else ...[
                       // Group by date (original "Moje zmiany" view)
                       ...(_groupByDate(_scheduleEntries).entries.map((entry) {
@@ -714,21 +743,19 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
   Widget _buildTeamWeekView() {
     final colorScheme = Theme.of(context).colorScheme;
     final user = ref.read(authProvider).value;
-    final currentUserName = user?.fullName ?? '';
-    final days = List.generate(
-      7,
-      (i) => _selectedWeekStart.add(Duration(days: i)),
-    );
+    final currentUserId = user?.id ?? '';
+    final days = List.generate(7, (i) => _selectedWeekStart.add(Duration(days: i)));
     final today = DateTime.now();
 
-    // Build a flat list of all people per day+shift from the employee entries
-    // Each EmployeeScheduleEntry is the current user's shift, with coworkers
-    final grouped = _groupByDate(_scheduleEntries);
+    final Map<DateTime, List<ScheduleEntry>> grouped = {};
+    for (final entry in _teamEntries) {
+      final key = DateTime(entry.date.year, entry.date.month, entry.date.day);
+      grouped.putIfAbsent(key, () => []).add(entry);
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Week header
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
@@ -742,109 +769,42 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
               const SizedBox(width: 8),
               Text(
                 '${DateFormat('d MMM', 'pl_PL').format(_selectedWeekStart)} – ${DateFormat('d MMM yyyy', 'pl_PL').format(days.last)}',
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
-                ),
+                style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
               ),
             ],
           ),
         ),
         const SizedBox(height: 16),
-
-        // Day cards
         ...days.map((day) {
-          final isToday =
-              day.year == today.year &&
-              day.month == today.month &&
-              day.day == today.day;
+          final isToday = day.year == today.year && day.month == today.month && day.day == today.day;
           final dateKey = DateTime(day.year, day.month, day.day);
-          final dayShifts = grouped[dateKey] ?? [];
-
-          // Build list of all individual entries (user + coworkers)
-          final List<_TeamEntry> allEntries = [];
-          for (final shift in dayShifts) {
-            // Current user entry
-            allEntries.add(
-              _TeamEntry(
-                userName: currentUserName.isNotEmpty ? currentUserName : 'Ty',
-                roleName: shift.roleName,
-                shiftName: shift.shiftName,
-                startTime: shift.startTime,
-                endTime: shift.endTime,
-                isCurrentUser: true,
-              ),
-            );
-            // Coworker entries — each carries their own role
-            for (final coworker in shift.coworkers) {
-              allEntries.add(
-                _TeamEntry(
-                  userName: coworker.name,
-                  roleName: coworker.roleName,
-                  shiftName: shift.shiftName,
-                  startTime: shift.startTime,
-                  endTime: shift.endTime,
-                  isCurrentUser: false,
-                ),
-              );
-            }
-          }
-          allEntries.sort((a, b) => a.startTime.compareTo(b.startTime));
+          final dayEntries = (grouped[dateKey] ?? [])..sort((a, b) => a.startTime.compareTo(b.startTime));
 
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              border:
-                  isToday
-                      ? Border.all(color: colorScheme.primary, width: 2)
-                      : Border.all(
-                        color: colorScheme.outlineVariant.withOpacity(0.4),
-                      ),
-              color:
-                  isToday
-                      ? colorScheme.primaryContainer.withOpacity(0.15)
-                      : colorScheme.surface,
+              border: isToday
+                  ? Border.all(color: colorScheme.primary, width: 2)
+                  : Border.all(color: colorScheme.outlineVariant.withOpacity(0.4)),
+              color: isToday ? colorScheme.primaryContainer.withOpacity(0.15) : colorScheme.surface,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Day header
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color:
-                        isToday
-                            ? colorScheme.primary.withOpacity(0.08)
-                            : colorScheme.surfaceContainerLow,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(12),
-                    ),
+                    color: isToday ? colorScheme.primary.withOpacity(0.08) : colorScheme.surfaceContainerLow,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                   ),
                   child: Row(
                     children: [
                       if (isToday) ...[
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colorScheme.primary,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'DZIŚ',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: colorScheme.onPrimary,
-                            ),
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: colorScheme.primary, borderRadius: BorderRadius.circular(6)),
+                          child: Text('DZIEŚ', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onPrimary)),
                         ),
                         const SizedBox(width: 8),
                       ],
@@ -852,138 +812,78 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                         DateFormat('EEEE, d MMMM', 'pl_PL').format(day),
                         style: GoogleFonts.inter(
                           fontSize: 14,
-                          fontWeight:
-                              isToday ? FontWeight.bold : FontWeight.w600,
-                          color:
-                              isToday
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurface,
+                          fontWeight: isToday ? FontWeight.bold : FontWeight.w600,
+                          color: isToday ? colorScheme.primary : colorScheme.onSurface,
                         ),
                       ),
                       const Spacer(),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color:
-                              allEntries.isEmpty
-                                  ? Colors.grey.shade200
-                                  : colorScheme.primaryContainer,
+                          color: dayEntries.isEmpty ? Colors.grey.shade200 : colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '${allEntries.length} ${allEntries.length == 1 ? 'zmiana' : 'zmian'}',
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color:
-                                allEntries.isEmpty
-                                    ? Colors.grey.shade600
-                                    : colorScheme.primary,
-                          ),
+                          '${dayEntries.length} ${dayEntries.length == 1 ? 'zmiana' : 'zmian'}',
+                          style: GoogleFonts.inter(fontSize: 11, fontWeight: FontWeight.w600, color: dayEntries.isEmpty ? Colors.grey.shade600 : colorScheme.primary),
                         ),
                       ),
                     ],
                   ),
                 ),
-
-                // Entries
-                if (allEntries.isEmpty)
+                if (dayEntries.isEmpty)
                   Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'Brak zaplanowanych zmian',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
+                    child: Text('Brak zaplanowanych zmian', style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade500)),
                   )
                 else
-                  ...allEntries.map((entry) {
-                    final hue =
-                        (entry.roleName.hashCode % 360).abs().toDouble();
-                    final eventColor =
-                        HSLColor.fromAHSL(1.0, hue, 0.55, 0.55).toColor();
-
+                  ...dayEntries.map((entry) {
+                    final isMe = entry.userId == currentUserId;
+                    final hue = (entry.roleName.hashCode % 360).abs().toDouble();
+                    final roleColor = HSLColor.fromAHSL(1.0, hue, 0.55, 0.55).toColor();
                     return Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       child: Row(
                         children: [
-                          // Time
                           SizedBox(
                             width: 80,
                             child: Text(
                               '${entry.startTime.substring(0, 5)}–${entry.endTime.substring(0, 5)}',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey.shade600,
-                              ),
+                              style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey.shade600),
                             ),
                           ),
-                          // Color bar
                           Container(
-                            width: 3,
+                            width: isMe ? 4 : 3,
                             height: 32,
-                            decoration: BoxDecoration(
-                              color: eventColor,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
+                            decoration: BoxDecoration(color: isMe ? colorScheme.primary : roleColor, borderRadius: BorderRadius.circular(2)),
                           ),
                           const SizedBox(width: 10),
-                          // Name + role
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  entry.userName,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    fontWeight:
-                                        entry.isCurrentUser
-                                            ? FontWeight.w800
-                                            : FontWeight.w600,
-                                    color:
-                                        entry.isCurrentUser
-                                            ? colorScheme.primary
-                                            : null,
-                                  ),
+                                Row(
+                                  children: [
+                                    Text(entry.userName, style: GoogleFonts.inter(fontSize: 13, fontWeight: isMe ? FontWeight.w800 : FontWeight.w600, color: isMe ? colorScheme.primary : null)),
+                                    if (isMe) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(color: colorScheme.primaryContainer, borderRadius: BorderRadius.circular(4)),
+                                        child: Text('TY', style: TextStyle(fontSize: 9, color: colorScheme.primary, fontWeight: FontWeight.w800)),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                                 Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 1,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: eventColor.withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        entry.roleName,
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          color: eventColor,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                      decoration: BoxDecoration(color: roleColor.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
+                                      child: Text(entry.roleName, style: TextStyle(fontSize: 10, color: roleColor, fontWeight: FontWeight.w600)),
                                     ),
                                     const SizedBox(width: 6),
-                                    Text(
-                                      entry.shiftName,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade500,
-                                      ),
-                                    ),
+                                    Text(entry.shiftName, style: GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade500)),
                                   ],
                                 ),
                               ],

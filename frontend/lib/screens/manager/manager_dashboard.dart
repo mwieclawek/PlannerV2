@@ -11,6 +11,7 @@ import 'attendance_approval_tab.dart';
 import '../../widgets/qr_config_dialog.dart';
 import '../../widgets/notification_bell.dart';
 import '../../widgets/help_dialog.dart';
+import '../../providers/module_provider.dart';
 
 class ManagerDashboard extends ConsumerStatefulWidget {
   const ManagerDashboard({super.key});
@@ -56,6 +57,13 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
             },
           ),
           const NotificationBell(),
+          IconButton(
+            icon: const Icon(Icons.restaurant),
+            tooltip: 'Moduł Restauracji/POS',
+            onPressed: () {
+              ref.read(moduleProvider.notifier).switchModule(AppModule.posKds);
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {

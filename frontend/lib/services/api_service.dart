@@ -786,4 +786,102 @@ class ApiService {
   Future<void> claimGiveaway(String giveawayId) async {
     await _dio.post('/employee/giveaways/$giveawayId/claim');
   }
+
+  // ── POS & Kitchen ────────────────────────────────────────────────────────
+
+  // Tables
+  Future<List<RestaurantTable>> getTables({
+    bool includeInactive = false,
+  }) async {
+    final response = await _dio.get(
+      '/kitchen/tables',
+      queryParameters: {if (includeInactive) 'include_inactive': true},
+    );
+    return (response.data as List)
+        .map((e) => RestaurantTable.fromJson(e))
+        .toList();
+  }
+
+  Future<RestaurantTable> createTable(String name) async {
+    final response = await _dio.post('/kitchen/tables', data: {'name': name});
+    return RestaurantTable.fromJson(response.data);
+  }
+
+  Future<void> deleteTable(String tableId) async {
+    await _dio.delete('/kitchen/tables/$tableId');
+  }
+
+  // Menu
+  Future<List<MenuItem>> getMenu({
+    String? category,
+    bool includeInactive = false,
+  }) async {
+    final Map<String, dynamic> params = {};
+    if (category != null) params['category'] = category;
+    if (includeInactive) params['include_inactive'] = true;
+    final response = await _dio.get('/kitchen/menu', queryParameters: params);
+    return (response.data as List).map((e) => MenuItem.fromJson(e)).toList();
+  }
+
+  Future<MenuItem> createMenuItem(
+    String name,
+    double price,
+    String category,
+  ) async {
+    final response = await _dio.post(
+      '/kitchen/menu',
+      data: {'name': name, 'price': price, 'category': category},
+    );
+    return MenuItem.fromJson(response.data);
+  }
+
+  Future<MenuItem> updateMenuItem(
+    String itemId,
+    Map<String, dynamic> data,
+  ) async {
+    final response = await _dio.put('/kitchen/menu/$itemId', data: data);
+    return MenuItem.fromJson(response.data);
+  }
+
+  Future<void> deleteMenuItem(String itemId) async {
+    await _dio.delete('/kitchen/menu/$itemId');
+  }
+
+  // Orders
+  Future<KitchenOrder> createOrder(
+    String tableId,
+    List<Map<String, dynamic>> items,
+  ) async {
+    final response = await _dio.post(
+      '/kitchen/orders',
+      data: {'table_id': tableId, 'items': items},
+    );
+    return KitchenOrder.fromJson(response.data);
+  }
+
+  Future<List<KitchenOrder>> getOrders({
+    String? tableId,
+    String? status,
+  }) async {
+    final Map<String, dynamic> params = {};
+    if (tableId != null) params['table_id'] = tableId;
+    if (status != null) params['status'] = status;
+    final response = await _dio.get('/kitchen/orders', queryParameters: params);
+    return (response.data as List)
+        .map((e) => KitchenOrder.fromJson(e))
+        .toList();
+  }
+
+  Future<KitchenOrder> updateOrderStatus(String orderId, String status) async {
+    final response = await _dio.patch(
+      '/kitchen/orders/$orderId/status',
+      data: {'status': status},
+    );
+    return KitchenOrder.fromJson(response.data);
+  }
+
+  Future<KitchenOrder> cancelOrder(String orderId) async {
+    final response = await _dio.delete('/kitchen/orders/$orderId');
+    return KitchenOrder.fromJson(response.data);
+  }
 }

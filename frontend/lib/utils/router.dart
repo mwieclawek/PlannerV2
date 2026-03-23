@@ -9,10 +9,18 @@ import '../screens/manager/manager_dashboard.dart';
 import '../screens/server_setup_screen.dart';
 import '../providers/config_provider.dart';
 
-/// Listenable that notifies when auth state changes
-class AuthNotifierListenable extends ChangeNotifier {
-  AuthNotifierListenable(this._ref) {
+import '../providers/module_provider.dart';
+import '../screens/pos/manager_setup_screen.dart';
+import '../screens/pos/waiter_tables_screen.dart';
+import '../screens/pos/kds_screen.dart';
+
+/// Listenable that notifies when auth state or module state changes
+class RouterNotifierListenable extends ChangeNotifier {
+  RouterNotifierListenable(this._ref) {
     _ref.listen(authProvider, (_, __) {
+      notifyListeners();
+    });
+    _ref.listen(moduleProvider, (_, __) {
       notifyListeners();
     });
   }
@@ -20,16 +28,16 @@ class AuthNotifierListenable extends ChangeNotifier {
   final Ref _ref;
 }
 
-final authListenableProvider = Provider<AuthNotifierListenable>((ref) {
-  return AuthNotifierListenable(ref);
+final routerListenableProvider = Provider<RouterNotifierListenable>((ref) {
+  return RouterNotifierListenable(ref);
 });
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authListenable = ref.watch(authListenableProvider);
+  final routerListenable = ref.watch(routerListenableProvider);
 
   return GoRouter(
     initialLocation: '/login',
-    refreshListenable: authListenable,
+    refreshListenable: routerListenable,
     observers: [
       FirebaseAnalyticsObserver(analytics: FirebaseAnalytics.instance),
     ],
@@ -61,25 +69,51 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (isLoggedIn) {
-        // Prevent employees from accessing manager routes
-        if (!user.isManager && state.matchedLocation.startsWith('/manager')) {
-          return '/employee';
-        }
+        final activeModule = ref.read(moduleProvider);
 
         if (isLoginRoute) {
-          // Redirect based on role
+          if (activeModule == AppModule.planning) {
+            return user.isManager ? '/manager' : '/employee';
+          } else {
+            return user.isManager ? '/pos/manager' : '/pos/waiter';
+          }
+        }
+
+        // Module isolation redirects
+        final isPosRoute = state.matchedLocation.startsWith('/pos');
+
+        if (activeModule == AppModule.planning && isPosRoute) {
           return user.isManager ? '/manager' : '/employee';
+        }
+
+        if (activeModule == AppModule.posKds && !isPosRoute) {
+          return user.isManager ? '/pos/manager' : '/pos/waiter';
+        }
+
+        // Role isolation redirects within modules
+        if (activeModule == AppModule.planning) {
+          if (!user.isManager && state.matchedLocation.startsWith('/manager')) {
+            return '/employee';
+          }
+        } else {
+          if (!user.isManager &&
+              state.matchedLocation.startsWith('/pos/manager')) {
+            return '/pos/waiter';
+          }
         }
       }
 
       return null;
     },
     routes: [
+      // Common Auth/Setup
       GoRoute(
         path: '/setup',
         builder: (context, state) => const ServerSetupScreen(),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+
+      // Module: Planning
       GoRoute(
         path: '/employee',
         builder: (context, state) => const EmployeeDashboard(),
@@ -88,6 +122,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/manager',
         builder: (context, state) => const ManagerDashboard(),
       ),
+
+      // Module: POS & KDS
+      GoRoute(
+        path: '/pos/manager',
+        builder: (context, state) => const ManagerSetupScreen(),
+      ),
+      GoRoute(
+        path: '/pos/waiter',
+        builder: (context, state) => const WaiterTablesScreen(),
+      ),
+      GoRoute(path: '/pos/kds', builder: (context, state) => const KdsScreen()),
     ],
   );
 });

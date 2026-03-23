@@ -23,6 +23,8 @@ void main() {
     await initializeDateFormatting('pl_PL', null);
     GoogleFonts.config.allowRuntimeFetching = false;
     mockApiService = MockApiService();
+    when(mockApiService.getAllLeaveRequests(status: anyNamed('status'))).thenAnswer((_) async => []);
+    
     final TestWidgetsFlutterBinding binding = TestWidgetsFlutterBinding.ensureInitialized();
     binding.window.physicalSizeTestValue = const Size(1080, 1920);
     binding.window.devicePixelRatioTestValue = 1.0;

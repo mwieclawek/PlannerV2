@@ -11,6 +11,7 @@ import 'employee_giveaway_tab.dart';
 import 'leave_requests_tab.dart';
 import '../../widgets/help_dialog.dart';
 import '../../widgets/notification_bell.dart';
+import '../../providers/module_provider.dart';
 
 class EmployeeDashboard extends ConsumerStatefulWidget {
   const EmployeeDashboard({super.key});
@@ -324,8 +325,6 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                                 scopes: [
                                   'https://www.googleapis.com/auth/calendar.events',
                                 ],
-                                serverClientId:
-                                    '357153331477-b6512tnr51gi4kslrh9f8tjndhdp74j7.apps.googleusercontent.com',
                               );
 
                               final account = await googleSignIn.signIn();
@@ -433,10 +432,22 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                 _showChangePasswordDialog();
               } else if (value == 'google_calendar') {
                 _showGoogleCalendarDialog();
+              } else if (value == 'pos') {
+                ref.read(moduleProvider.notifier).switchModule(AppModule.posKds);
               }
             },
             itemBuilder:
                 (BuildContext context) => <PopupMenuEntry<String>>[
+                  const PopupMenuItem<String>(
+                    value: 'pos',
+                    child: Row(
+                      children: [
+                        Icon(Icons.restaurant, color: Colors.grey),
+                        SizedBox(width: 8),
+                        Text('Moduł Restauracji/POS'),
+                      ],
+                    ),
+                  ),
                   const PopupMenuItem<String>(
                     value: 'google_calendar',
                     child: Row(
