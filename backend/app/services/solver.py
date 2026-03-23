@@ -238,9 +238,12 @@ class SolverService:
                             employee_vars.append(var)
                             employee_hours_coeffs.append(int(shift_durations[s.id] * 10)) # Scaled by 10 for int 
 
-            # Shift Count Limit
+            # Shift Count Limit (Soft Penalty instead of Hard Constraint)
             if e.target_shifts_per_month is not None:
-                model.Add(sum(employee_vars) <= e.target_shifts_per_month)
+                excess_shifts_var = model.NewIntVar(0, len(employee_vars), f"excess_shifts_{e.id}")
+                model.Add(sum(employee_vars) - e.target_shifts_per_month <= excess_shifts_var)
+                # Penalty 2000 per excess shift
+                objective_terms.append(excess_shifts_var * -2000)
                 
             # Hours Limit (Soft Penalty)
             if e.target_hours_per_month is not None:
@@ -261,12 +264,15 @@ class SolverService:
             e_id, d, s_id, r_id = key
             status = avail_map.get((str(e_id), d.isoformat(), s_id), "UNKNOWN")
             
-            # High reward for simply filling a requirement
-            objective_terms.append(w_var * 100) 
+            # CRITICAL: High reward for simply filling a requirement so it outweighs overtime penalties
+            objective_terms.append(w_var * 50000) 
             
-            if status == "AVAILABLE":
+            if status == "PREFERRED":
+                # Reward for PREFERRED
+                objective_terms.append(w_var * 2000)
+            elif status == "AVAILABLE":
                 # Reward for being available
-                objective_terms.append(w_var * 10)
+                objective_terms.append(w_var * 500)
         
         # 2. Penalty for split shifts (working > 1 shift per day)
         # We subtract Penalty * Excess from objective
