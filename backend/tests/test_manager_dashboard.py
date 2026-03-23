@@ -1,8 +1,7 @@
-
 from httpx import AsyncClient
 import pytest
 from sqlmodel import Session, select
-from app.models import User, RoleSystem, ShiftDefinition, JobRole, Schedule, Attendance, AttendanceStatus
+from app.models import User, RoleSystem, ShiftDefinition, JobRole, Schedule, Attendance, AttendanceStatus, LeaveRequest, LeaveStatus
 from datetime import date, timedelta, time, datetime
 from app.auth_utils import create_access_token
 
@@ -103,6 +102,7 @@ async def test_dashboard_home(client: AsyncClient, session: Session, manager_tok
     
     today = date.today()
     yesterday = today - timedelta(days=1)
+    two_days_ago = today - timedelta(days=2)
     
     # Emp1 working today
     s1 = Schedule(date=today, shift_def_id=shift.id, user_id=emp1.id, role_id=role.id, is_published=True)
@@ -120,6 +120,26 @@ async def test_dashboard_home(client: AsyncClient, session: Session, manager_tok
         status=AttendanceStatus.PENDING # Auto-created or manually created but not confirmed
     )
     session.add(att_pending)
+
+    # Add older pending attendance to verify it is fetched
+    att_older_pending = Attendance(
+        user_id=emp1.id,
+        date=two_days_ago,
+        check_in=time(10,0),
+        check_out=time(18,0),
+        status=AttendanceStatus.PENDING
+    )
+    session.add(att_older_pending)
+
+    # Add a pending leave request
+    leave_req = LeaveRequest(
+        user_id=emp2.id,
+        start_date=today + timedelta(days=1),
+        end_date=today + timedelta(days=2),
+        reason="Sick",
+        status=LeaveStatus.PENDING
+    )
+    session.add(leave_req)
     
     session.commit()
     
@@ -130,5 +150,15 @@ async def test_dashboard_home(client: AsyncClient, session: Session, manager_tok
     assert len(data["working_today"]) == 1
     assert data["working_today"][0]["user_name"] == "Working Emp"
     
-    assert len(data["missing_confirmations"]) == 1
-    assert data["missing_confirmations"][0]["user_name"] == "Missing Emp"
+    # Verify both yesterday and two_days_ago are returned
+    assert len(data["missing_confirmations"]) == 2
+    users_with_missing = {a["user_name"] for a in data["missing_confirmations"]}
+    assert "Missing Emp" in users_with_missing
+    assert "Working Emp" in users_with_missing
+
+    # Verify pending leave requests
+    assert "pending_leave_requests" in data
+    assert len(data["pending_leave_requests"]) == 1
+    assert data["pending_leave_requests"][0]["user_name"] == "Missing Emp"
+    assert data["pending_leave_requests"][0]["reason"] == "Sick"
+

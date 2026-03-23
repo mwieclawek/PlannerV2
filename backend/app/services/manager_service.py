@@ -509,12 +509,13 @@ class ManagerService:
                     "end_time": shift.end_time
                 })
                 
-        # 2. Missing confirmations from yesterday
-        # Get actual PENDING records from yesterday
+        # 2. Missing confirmations from past up to yesterday
+        # Get actual PENDING records from yesterday and before
         pending_attendances = self.session.exec(
              select(Attendance)
-             .where(Attendance.date == yesterday)
+             .where(Attendance.date <= yesterday)
              .where(Attendance.status == AttendanceStatus.PENDING)
+             .order_by(Attendance.date.desc())
         ).all()
         
         missing_responses = []
@@ -569,10 +570,34 @@ class ManagerService:
                 "end_time": shift.end_time.strftime("%H:%M") if shift else None,
              })
 
+        # 4. Pending Leave Requests
+        from ..models import LeaveRequest, LeaveStatus
+        pending_leave_reqs_db = self.session.exec(
+            select(LeaveRequest)
+            .where(LeaveRequest.status == LeaveStatus.PENDING)
+            .order_by(LeaveRequest.start_date)
+        ).all()
+        
+        pending_leave_reqs = []
+        for req in pending_leave_reqs_db:
+            user = self.session.get(User, req.user_id)
+            pending_leave_reqs.append({
+                "id": req.id,
+                "user_id": req.user_id,
+                "user_name": user.full_name if user else "Nieznany",
+                "start_date": req.start_date,
+                "end_date": req.end_date,
+                "reason": req.reason,
+                "status": req.status.value,
+                "created_at": req.created_at,
+                "reviewed_at": req.reviewed_at
+            })
+
         return {
             "working_today": working_today,
             "missing_confirmations": missing_responses,
-            "open_giveaways": open_giveaways
+            "open_giveaways": open_giveaways,
+            "pending_leave_requests": pending_leave_reqs
         }
 
     # --- Shift Giveaway ---

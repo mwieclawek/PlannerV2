@@ -134,7 +134,9 @@ OR-Tools CP-SAT solver z następującymi regułami:
 | `GET` | `/employee/availability` | Moja dostępność |
 | `PUT` | `/employee/availability` | Aktualizacja dostępności |
 | `GET` | `/employee/availability/status` | Sprawdzenie statusu wysłania dostępności |
-| `GET` | `/employee/schedule` | Mój grafik |
+| `GET` | `/employee/schedule` | Mój grafik (nieaktualne/przestarzała nazwa w docsach, naprawiona na my-schedule w API) |
+| `GET` | `/employee/my-schedule` | Mój grafik |
+| `GET` | `/employee/schedules/all` | Pełny grafik całego zespołu ("Cała załoga") |
 | `GET` | `/employee/attendance-defaults` | Domyślne godziny z grafiku |
 | `POST` | `/employee/attendance` | Rejestracja obecności |
 | `GET` | `/employee/attendance` | Historia obecności |

@@ -5,7 +5,7 @@ from sqlmodel import Session
 from ..database import get_session
 from ..models import User, Availability
 from ..auth_utils import get_current_user
-from ..schemas import AvailabilityUpdate, EmployeeScheduleResponse, GoogleAuthRequest
+from ..schemas import AvailabilityUpdate, EmployeeScheduleResponse, GoogleAuthRequest, ScheduleResponse
 from ..services.employee_service import EmployeeService
 
 router = APIRouter(prefix="/employee", tags=["employee"])
@@ -59,6 +59,16 @@ def get_my_schedule(
     service: EmployeeService = Depends(get_employee_service)
 ):
     return service.get_schedule(current_user.id, start_date, end_date)
+
+@router.get("/schedules/all", response_model=List[ScheduleResponse])
+def get_schedules_all(
+    start_date: date,
+    end_date: date,
+    current_user: User = Depends(get_current_user),
+    service: EmployeeService = Depends(get_employee_service)
+):
+    """Get the full team schedule for the given date range"""
+    return service.get_team_schedule(start_date, end_date)
 
 @router.get("/schedule-summary")
 def get_schedule_summary(

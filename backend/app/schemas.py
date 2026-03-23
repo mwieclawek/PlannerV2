@@ -2,7 +2,7 @@ from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 from datetime import datetime, date as date_type, time
 from typing import List, Optional
 from uuid import UUID
-from .models import RoleSystem, AvailabilityStatus, AttendanceStatus, GiveawayStatus, LeaveStatus
+from .models import RoleSystem, AvailabilityStatus, AttendanceStatus, GiveawayStatus, LeaveStatus, KitchenOrderStatus, MenuCategory
 
 # ... (Previous imports remain, but need field_validator, ValidationInfo)
 
@@ -394,6 +394,7 @@ class DashboardHomeResponse(BaseModel):
     working_today: List[ScheduleResponse]
     missing_confirmations: List[AttendanceResponse]
     open_giveaways: List["ShiftGiveawayResponse"]
+    pending_leave_requests: List["LeaveRequestResponse"] = []
 
 # --- Leave Requests ---
 class LeaveRequestCreate(BaseModel):
@@ -418,3 +419,82 @@ class LeaveRequestResponse(BaseModel):
     created_at: datetime
     reviewed_at: Optional[datetime]
 
+
+# --- POS & Kitchen ---
+
+class RestaurantTableCreate(BaseModel):
+    name: str
+    is_active: bool = True
+
+class RestaurantTableResponse(BaseModel):
+    id: UUID
+    name: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+class MenuItemCreate(BaseModel):
+    name: str
+    price: float
+    category: MenuCategory
+    is_active: bool = True
+
+class MenuItemUpdate(BaseModel):
+    name: Optional[str] = None
+    price: Optional[float] = None
+    category: Optional[MenuCategory] = None
+    is_active: Optional[bool] = None
+
+class MenuItemResponse(BaseModel):
+    id: UUID
+    name: str
+    price: float
+    category: MenuCategory
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+class KitchenOrderItemCreate(BaseModel):
+    menu_item_id: UUID
+    quantity: int = 1
+    notes: Optional[str] = None
+
+class KitchenOrderItemResponse(BaseModel):
+    id: UUID
+    order_id: UUID
+    menu_item_id: UUID
+    quantity: int
+    notes: Optional[str] = None
+    unit_price: float
+
+    # For convenience on the frontend, returning the menu item name
+    menu_item_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class KitchenOrderCreate(BaseModel):
+    table_id: UUID
+    items: List[KitchenOrderItemCreate]
+
+class KitchenOrderResponse(BaseModel):
+    id: UUID
+    table_id: UUID
+    status: KitchenOrderStatus
+    created_at: datetime
+    updated_at: datetime
+    waiter_id: UUID
+    items: List[KitchenOrderItemResponse] = []
+    
+    # Extra fields for frontend
+    table_name: Optional[str] = None
+    waiter_name: Optional[str] = None
+    total_amount: Optional[float] = 0.0
+
+    class Config:
+        from_attributes = True
+
+class KitchenOrderStatusUpdate(BaseModel):
+    status: KitchenOrderStatus

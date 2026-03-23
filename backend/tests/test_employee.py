@@ -207,6 +207,68 @@ class TestEmployeeSchedule:
         assert len(data) == 1
         assert any(c.get("name") == "Test Coworker" for c in data[0]["coworkers"])
 
+    @pytest.mark.asyncio
+    async def test_get_schedules_all(
+        self, client: AsyncClient, employee_headers: dict,
+        session, shift_definition, job_role
+    ):
+        """Test getting team schedule returns everyone's shifts"""
+        from app.models import User, RoleSystem, Schedule
+        from app.auth_utils import get_password_hash
+        from sqlmodel import select
+        
+        user = session.exec(select(User).where(User.email == "employee@test.com")).first()
+        
+        # Create coworker
+        coworker = User(
+            username="coworker_team_test",
+            email="coworker_team@test.com",
+            password_hash=get_password_hash("secret"),
+            full_name="Team Coworker",
+            role_system=RoleSystem.EMPLOYEE
+        )
+        session.add(coworker)
+        session.commit()
+        session.refresh(coworker)
+        
+        today = date.today()
+
+        # Schedule for main user
+        schedule1 = Schedule(
+            date=today,
+            shift_def_id=shift_definition.id,
+            user_id=user.id,
+            role_id=job_role.id,
+            is_published=True
+        )
+        session.add(schedule1)
+        
+        # Schedule for coworker
+        schedule2 = Schedule(
+            date=today,
+            shift_def_id=shift_definition.id,
+            user_id=coworker.id,
+            role_id=job_role.id,
+            is_published=True
+        )
+        session.add(schedule2)
+        session.commit()
+        
+        response = await client.get(
+            f"/employee/schedules/all?start_date={today}&end_date={today}",
+            headers=employee_headers
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        # Should return 2 entries, one for user and one for coworker
+        assert len(data) == 2
+        
+        usernames = {entry["user_name"] for entry in data}
+        assert user.full_name in usernames
+        assert "Team Coworker" in usernames
+
 
 class TestEmployeeUnauthorized:
     """Tests for unauthorized access"""

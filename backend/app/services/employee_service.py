@@ -163,3 +163,45 @@ class EmployeeService:
             })
         return response
 
+    def get_team_schedule(self, start_date: date, end_date: date) -> List[dict]:
+        from ..models import JobRole, ShiftDefinition, User, ShiftGiveaway, GiveawayStatus
+        
+        statement = select(Schedule).where(
+            Schedule.date >= start_date,
+            Schedule.date <= end_date,
+            Schedule.is_published == True 
+        ).order_by(Schedule.date)
+        schedules = self.session.exec(statement).all()
+        
+        giveaways = self.session.exec(
+            select(ShiftGiveaway.schedule_id).where(
+                ShiftGiveaway.status == GiveawayStatus.OPEN
+            )
+        ).all()
+        giveaway_ids = set(str(g) for g in giveaways)
+
+        response = []
+        for s in schedules:
+            shift = self.session.get(ShiftDefinition, s.shift_def_id)
+            user = self.session.get(User, s.user_id)
+            role = self.session.get(JobRole, s.role_id)
+            
+            if not user or not shift:
+                continue
+
+            response.append({
+                "id": s.id,
+                "date": s.date,
+                "shift_def_id": s.shift_def_id,
+                "user_id": s.user_id,
+                "role_id": s.role_id,
+                "is_published": s.is_published,
+                "user_name": user.full_name,
+                "role_name": role.name if role else "Unknown",
+                "shift_name": shift.name,
+                "start_time": shift.start_time,
+                "end_time": shift.end_time,
+                "is_on_giveaway": str(s.id) in giveaway_ids,
+            })
+        return response
+
