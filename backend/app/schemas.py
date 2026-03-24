@@ -288,9 +288,11 @@ class ConfigUpdate(BaseModel):
     name: Optional[str] = None
     opening_hours: Optional[str] = None
     address: Optional[str] = None
+    pos_enabled: Optional[bool] = None
 
 class ConfigResponse(ConfigBase):
     id: int
+    pos_enabled: bool = False
 
     @model_validator(mode='before')
     @classmethod

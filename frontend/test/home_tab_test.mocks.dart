@@ -527,10 +527,11 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
   _i5.Future<void> saveConfig(
     String? name,
     String? openingHours,
-    String? address,
-  ) =>
+    String? address, {
+    bool? posEnabled,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#saveConfig, [name, openingHours, address]),
+            Invocation.method(#saveConfig, [name, openingHours, address], {#posEnabled: posEnabled}),
             returnValue: _i5.Future<void>.value(),
             returnValueForMissingStub: _i5.Future<void>.value(),
           )

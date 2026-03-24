@@ -455,12 +455,16 @@ class ApiService {
   Future<void> saveConfig(
     String name,
     String openingHours,
-    String? address,
-  ) async {
-    await _dio.post(
-      '/manager/config',
-      data: {'name': name, 'opening_hours': openingHours, 'address': address},
-    );
+    String? address, {
+    bool? posEnabled,
+  }) async {
+    final data = <String, dynamic>{
+      'name': name,
+      'opening_hours': openingHours,
+      'address': address,
+    };
+    if (posEnabled != null) data['pos_enabled'] = posEnabled;
+    await _dio.post('/manager/config', data: data);
   }
 
   // Team Availability (Manager)

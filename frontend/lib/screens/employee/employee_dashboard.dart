@@ -437,7 +437,10 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
               }
             },
             itemBuilder:
-                (BuildContext context) => <PopupMenuEntry<String>>[
+                (BuildContext context) {
+              final posEnabled = ref.watch(posEnabledProvider).valueOrNull ?? false;
+              return <PopupMenuEntry<String>>[
+                if (posEnabled)
                   const PopupMenuItem<String>(
                     value: 'pos',
                     child: Row(
@@ -478,7 +481,8 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                       ],
                     ),
                   ),
-                ],
+                ];
+            },
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: Icon(Icons.person),
