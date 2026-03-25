@@ -499,64 +499,66 @@ Pod listą giełdy widzisz swoje oddawane zmiany i ich statusy (OPEN / TAKEN / C
 
 ---
 
-## 4. Moduł POS / Kitchen Display System
+## 4. Moduł POS v2 / Kitchen Display System (KDS)
 
-System obsługi zamówień restauracyjnych. Dostęp z głównego panelu przez ikonę 🍽️ (Manager) lub menu profilu (Pracownik).
+System obsługi zamówień restauracyjnych z pełną obsługą trybu offline. Dostęp z głównego panelu przez ikonę 🍽️ (Manager) lub menu profilu (Pracownik).
 
-### 4.1 Wymagania wstępne
+### 4.1 Wymagania wstępne (Konfiguracja POS — tylko Manager)
 
-Przed rozpoczęciem pracy z POS, Manager musi:
-1. **Dodać stoliki** — lista stolików restauracji.
-2. **Skonfigurować menu** — pozycje z cenami i kategoriami.
+Przed rozpoczęciem pracy z POS, Manager musi skonfigurować środowisko w panelu **Manager Setup**:
 
-#### Konfiguracja POS (tylko Manager)
+1. **Strefy** — dodaj strefy restauracji (np. „Sala Główna", „Ogródek").
+2. **Stoliki** — dodaj stoliki przypisane do stref z liczbą miejsc.
+3. **Kategorie** — utwórz dynamiczne kategorie menu (np. Przystawki, Dania Główne, Napoje) z kolorami i ikonami.
+4. **Pozycje menu** — dodaj dania z cenami i **czasem przygotowania** (`prep_time_sec`) — kluczowe dla silnika pacingu KDS.
+5. **Grupy modyfikatorów** (opcjonalnie) — np. „Stopień Wysmażenia" z opcjami: Rare, Medium, Well Done.
 
-**Stoliki:**
-- Kliknij **„Dodaj stolik"** → podaj nazwę (np. „Stolik 1", „Stolik VIP", „Bar").
-- Usunięcie stolika to **soft-delete** — znika z listy, ale zamówienia historyczne pozostają.
-
-**Menu:**
-- Kliknij **„Dodaj pozycję"** → podaj:
-
-| Pole | Opis | Wymagane |
-|------|------|----------|
-| Nazwa | np. „Cappuccino", „Burger Classic" | ✅ |
-| Cena | Format liczbowy (np. 14.50) | ✅ |
-| Kategoria | SOUPS / MAINS / DESSERTS / DRINKS | ✅ |
-
-- Menu można filtrować po kategoriach.
-- Usunięcie pozycji to soft-delete — istniejące zamówienia zachowują snapshot nazwy i ceny.
+> **💡 Tip**: Alternatywnie można użyć skryptu `python seed_test_data.py` aby automatycznie wygenerować przykładowe dane testowe.
 
 ### 4.2 Ekran Kelnera (Waiter)
 
 Widok stolików i tworzenie zamówień:
 
-1. **Wybierz stolik** z listy aktywnych stolików.
+1. **Wybierz stolik** z listy (pogrupowane po strefach).
 2. **Dodaj pozycje** z menu:
    - Wybierz kategorię → kliknij pozycję → ustaw ilość.
-   - Opcjonalnie dodaj **notatki** (np. „bez cebuli", „extra sos").
+   - **Kurs (course)** — przypisz pozycje do kursów (1 = przystawki, 2 = dania główne, itd.).
+   - **Modyfikatory** — jeśli pozycja ma grupę modyfikatorów, wybierz opcję (np. „Medium rare").
+   - Opcjonalnie dodaj **notatki** (np. „Bez pomidora").
 3. **Zatwierdź zamówienie** → trafia do kuchni.
 
-Po utworzeniu zamówienia, kelner widzi jego status:
-- 🟡 PENDING → 🔵 IN_PROGRESS → 🟢 READY → ✅ DELIVERED
+Po utworzeniu zamówienia, kelner widzi statusy pozycji:
+- 🟡 NEW → 🟠 ACKNOWLEDGED → 🟢 PREPARING → 🟢 READY → ✅ DELIVERED
 
 > **💡 Tip**: Cena i nazwa pozycji są „zamrożone" (snapshot) w momencie złożenia zamówienia. Nawet jeśli Manager zmieni cenę w menu, istniejące zamówienia zachowają starą cenę.
 
-### 4.3 Kitchen Display System (KDS)
+### 4.3 Kitchen Display System (KDS) — Offline-First
 
-Ekran dla kuchni:
+Ekran dla kuchni (tablet / monitor):
 
-- **Lista zamówień** z wszystkimi pozycjami, ilościami i notatkami.
-- **Numer stolika** widoczny na każdym zamówieniu.
+- **Lista pozycji** z ilościami, notatkami, modyfikatorami i numerem stolika.
+- **Pacing Engine** — system automatycznie oblicza opóźnienia startu przygotowania per-kurs:
+  - Najdłuższa pozycja w kursie = **anchor** (punkt odniesienia).
+  - Pozostałe pozycje dostają `delay_start_sec` — kucharz wie, kiedy je zacząć, żeby wszystko było gotowe jednocześnie.
 - **Zmiana statusu** jednym kliknięciem:
-  - PENDING → **„Zaczynam"** (IN_PROGRESS)
-  - IN_PROGRESS → **„Gotowe"** (READY)
-- **Auto-odświeżanie** co kilka sekund (polling).
+  - NEW → **„Zaczynam"** (PREPARING)
+  - PREPARING → **„Gotowe"** (READY)
+- **Tryb offline** — tablet działa nawet bez Wi-Fi:
+  - Zmiany są buforowane lokalnie.
+  - Po powrocie sieci, **batch sync** wysyła wszystkie zmiany na serwer jednym żądaniem.
+  - Serwer waliduje **monotoniczną kolejność stanów** (wagi: NEW=10 < PREPARING=30 < READY=40) i odrzuca przestarzałe aktualizacje.
 
-#### Anulowanie zamówienia
+#### Anti-Ghosting (VOIDED)
 
-- Zamówienie w statusie PENDING lub IN_PROGRESS może być anulowane.
-- Zamówienie DELIVERED lub CANCELLED nie może być anulowane.
+- Gdy kelner anuluje pozycję, trafia ona do stanu **VOIDED_PENDING_ACK** (waga 98).
+- Tablet KDS musi potwierdzić anulowanie — dopiero wtedy pozycja przechodzi do **VOIDED** (waga 99).
+- Zapobiega to sytuacji, gdy kucharz przygotowuje danie, które zostało już anulowane.
+
+#### Płatności
+
+- Obsługa **split payment** — można dzielić płatność między gotówkę, kartę, voucher i płatność mobilną.
+- System automatycznie śledzi: `total_amount`, `amount_paid`, `amount_due`.
+- Napiwki są rejestrowane per-płatność.
 
 > **💡 Tip**: KDS najlepiej wyświetlić na tablecie lub monitorze w kuchni w trybie pełnoekranowym.
 

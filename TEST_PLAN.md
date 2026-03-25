@@ -34,6 +34,8 @@ backend/tests/
 ├── test_sprint_features.py        # Testy sprint features
 ├── test_sprint_features_full.py   # Pełne testy sprint features
 ├── test_bug_reproduction.py       # Reprodukcja zgłoszonych bugów
+├── test_kds.py                    # KDS: monotonic sync, pacing engine, anti-ghosting
+├── test_kds_api.py                # KDS: integracja endpoint /pos/v2/kds/sync
 └── test_integration.py.disabled   # Testy E2E (wyłączone)
 ```
 
@@ -53,6 +55,9 @@ backend/tests/
 | Solver | `test_solver_unit.py` | CP-SAT: puste dane, brak wymagań, niedostępność, preferencje, dopasowanie ról, ostrzeżenia |
 | Solver Edge | `test_solver_edge_cases.py` | Przypadki brzegowe solvera |
 | PDF | `test_pdf_export.py` | Eksport PDF obecności |
+| **KDS Sync** | `test_kds.py` | **Monotoniczny sync batch: walidacja wag stanów, anti-ghosting VOIDED, audit log KDSEventLog** |
+| **KDS Pacing** | `test_kds.py` | **Anchor-based pacing: obliczanie delay_start_sec per-kurs** |
+| **KDS API** | `test_kds_api.py` | **Integracja POST /pos/v2/kds/sync: izolowana baza SQLite, JWT auth, pełny przepływ sync** |
 
 ### Fixture'y (conftest.py)
 
@@ -108,6 +113,17 @@ flutter test
 2. ✅ Manager widzi prośbę w zakładce Zmiany
 3. ✅ Manager przydziela zastępstwo
 4. ✅ Sprawdź aktualizację grafiku
+
+### Scenariusz 6: POS v2 / KDS
+1. ⬜ Zaloguj się jako manager → utwórz strefy i stoliki w Manager Setup
+2. ⬜ Dodaj kategorie i pozycje menu z `prep_time_sec`
+3. ⬜ Dodaj grupy modyfikatorów (Stopień Wysmażenia)
+4. ⬜ Zaloguj się jako kelner → złóż zamówienie na Stolik 1 (2 kursy)
+5. ⬜ Otwórz widok KDS → sprawdź pacing metadata
+6. ⬜ Zmień stany pozycji: NEW → PREPARING → READY
+7. ⬜ Wyłącz Wi-Fi → spróbuj zmienić stan offline → włącz Wi-Fi → batch sync
+8. ⬜ Sprawdź że stale updates są odrzucane (monotonic validation)
+9. ⬜ Zapłać split payment (gotówka + karta)
 
 ## CI/CD (Jenkins)
 

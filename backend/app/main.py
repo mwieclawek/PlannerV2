@@ -64,7 +64,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from .routers import auth, manager, employee, scheduler, health, bug_report, notifications, kitchen
+from .routers import auth, manager, employee, scheduler, health, bug_report, notifications, kitchen, pos
 app.include_router(auth.router)
 app.include_router(manager.router)
 app.include_router(employee.router)
@@ -73,6 +73,7 @@ app.include_router(health.router)
 app.include_router(bug_report.router)
 app.include_router(notifications.router)
 app.include_router(kitchen.router)
+app.include_router(pos.router)
 
 @app.get("/")
 def read_root():

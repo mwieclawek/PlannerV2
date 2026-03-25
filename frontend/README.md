@@ -34,24 +34,31 @@ flutter run -d web-server --web-hostname=127.0.0.1 --web-port=5000
 - Ręczne wpisanie URL
 - Zapis w `ConfigService` (`SharedPreferences`)
 
-### Manager Dashboard (6 zakładek)
+### Manager Dashboard (taby)
 
 | Zakładka | Plik | Opis |
 |----------|------|------|
 | Home | `home_tab.dart` | Kalendarz dzienny, podgląd grafiku |
 | Grafik | `scheduler_tab.dart` | Generator AI, tryb Draft, batch save, publikacja |
 | Zespół | `team_tab.dart` | CRUD pracowników, przypisywanie ról, aktywacja/dezaktywacja |
-| Ustawienia | `setup_tab.dart` | CRUD ról, zmian, dane restauracji |
+| Ustawienia | `setup_tab.dart` | CRUD ról, zmian, dane restauracji, stoliki, pozycje menu |
 | Obecności | `attendance_approval_tab.dart` | Zatwierdzanie obecności, eksport PDF |
 | Zmiany | `giveaway_tab.dart` | Oddawanie zmian, sugerowane zastępstwa |
 
-### Employee Dashboard (3 zakładki)
+### Employee Dashboard (zakładki pracownicze)
 
 | Zakładka | Plik | Opis |
 |----------|------|------|
 | Grafik | `my_schedule_screen.dart` | Podgląd zmian, oddawanie zmian |
 | Dostępność | (AvailabilityGrid widget) | Grid tygodniowy, tap-to-toggle |
 | Obecność | `attendance_tab.dart` | Rejestracja check-in/check-out |
+
+### Ekosystem Restauracyjny (POS i KDS)
+
+| System | Opis |
+|--------|------|
+| POS (Kelner) | Obsługa stolików. Przechodzenie do szczegółów rachunku, dodawanie dań ze zdefiniowanych kategorii menu i wysyłka do kuchni (wydawanie). |
+| KDS (Kuchnia)| Podgląd zamówień kaskadowo wpadających na kuchnię. Kontrola statusów przygotowywania. |
 
 ### Widgety Reużywalne
 

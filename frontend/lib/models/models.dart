@@ -963,3 +963,346 @@ class KitchenOrder {
     );
   }
 }
+
+// ── POS v2 Models ────────────────────────────────────────────────────────────
+
+enum TableStatus {
+  FREE, OCCUPIED, BILL_PRINTED, DIRTY;
+
+  String get label {
+    switch (this) {
+      case TableStatus.FREE: return 'Wolny';
+      case TableStatus.OCCUPIED: return 'Zajęty';
+      case TableStatus.BILL_PRINTED: return 'Rachunek';
+      case TableStatus.DIRTY: return 'Do sprzątnięcia';
+    }
+  }
+
+  static TableStatus fromString(String v) =>
+      TableStatus.values.firstWhere((e) => e.name == v, orElse: () => TableStatus.FREE);
+}
+
+class TableZone {
+  final String id;
+  final String name;
+  final int sortOrder;
+  final bool isActive;
+
+  TableZone({required this.id, required this.name, this.sortOrder = 0, this.isActive = true});
+
+  factory TableZone.fromJson(Map<String, dynamic> json) => TableZone(
+    id: json['id'], name: json['name'],
+    sortOrder: json['sort_order'] ?? 0, isActive: json['is_active'] ?? true,
+  );
+}
+
+class PosTable {
+  final String id;
+  final String name;
+  final String? zoneId;
+  final int seats;
+  final TableStatus status;
+  final int sortOrder;
+  final bool isActive;
+  final String? zoneName;
+
+  PosTable({
+    required this.id, required this.name, this.zoneId, this.seats = 4,
+    this.status = TableStatus.FREE, this.sortOrder = 0, this.isActive = true,
+    this.zoneName,
+  });
+
+  factory PosTable.fromJson(Map<String, dynamic> json) => PosTable(
+    id: json['id'], name: json['name'], zoneId: json['zone_id'],
+    seats: json['seats'] ?? 4,
+    status: TableStatus.fromString(json['status'] ?? 'FREE'),
+    sortOrder: json['sort_order'] ?? 0, isActive: json['is_active'] ?? true,
+    zoneName: json['zone_name'],
+  );
+}
+
+class PosCategory {
+  final int id;
+  final String name;
+  final String colorHex;
+  final String? iconName;
+  final int sortOrder;
+  final bool isActive;
+
+  PosCategory({
+    required this.id, required this.name, this.colorHex = '#607D8B',
+    this.iconName, this.sortOrder = 0, this.isActive = true,
+  });
+
+  factory PosCategory.fromJson(Map<String, dynamic> json) => PosCategory(
+    id: json['id'], name: json['name'],
+    colorHex: json['color_hex'] ?? '#607D8B', iconName: json['icon_name'],
+    sortOrder: json['sort_order'] ?? 0, isActive: json['is_active'] ?? true,
+  );
+}
+
+class PosMenuItem {
+  final String id;
+  final String name;
+  final String? description;
+  final double price;
+  final int categoryId;
+  final String? categoryName;
+  final double taxRate;
+  final bool kitchenPrint;
+  final bool barPrint;
+  final int sortOrder;
+  final bool isActive;
+
+  PosMenuItem({
+    required this.id, required this.name, this.description, required this.price,
+    required this.categoryId, this.categoryName, this.taxRate = 0.23,
+    this.kitchenPrint = true, this.barPrint = false, this.sortOrder = 0,
+    this.isActive = true,
+  });
+
+  factory PosMenuItem.fromJson(Map<String, dynamic> json) => PosMenuItem(
+    id: json['id'], name: json['name'], description: json['description'],
+    price: (json['price'] as num).toDouble(),
+    categoryId: json['category_id'], categoryName: json['category_name'],
+    taxRate: (json['tax_rate'] as num?)?.toDouble() ?? 0.23,
+    kitchenPrint: json['kitchen_print'] ?? true,
+    barPrint: json['bar_print'] ?? false,
+    sortOrder: json['sort_order'] ?? 0, isActive: json['is_active'] ?? true,
+  );
+}
+
+class PosModifier {
+  final int id;
+  final int groupId;
+  final String name;
+  final double priceOverride;
+  final int sortOrder;
+  final bool isActive;
+
+  PosModifier({
+    required this.id, required this.groupId, required this.name,
+    this.priceOverride = 0.0, this.sortOrder = 0, this.isActive = true,
+  });
+
+  factory PosModifier.fromJson(Map<String, dynamic> json) => PosModifier(
+    id: json['id'], groupId: json['group_id'], name: json['name'],
+    priceOverride: (json['price_override'] as num?)?.toDouble() ?? 0.0,
+    sortOrder: json['sort_order'] ?? 0, isActive: json['is_active'] ?? true,
+  );
+}
+
+class ModifierGroup {
+  final int id;
+  final String name;
+  final int minSelect;
+  final int maxSelect;
+  final bool isActive;
+  final List<PosModifier> modifiers;
+
+  ModifierGroup({
+    required this.id, required this.name, this.minSelect = 0,
+    this.maxSelect = 1, this.isActive = true, this.modifiers = const [],
+  });
+
+  factory ModifierGroup.fromJson(Map<String, dynamic> json) => ModifierGroup(
+    id: json['id'], name: json['name'],
+    minSelect: json['min_select'] ?? 0, maxSelect: json['max_select'] ?? 1,
+    isActive: json['is_active'] ?? true,
+    modifiers: (json['modifiers'] as List? ?? [])
+        .map((e) => PosModifier.fromJson(e)).toList(),
+  );
+}
+
+enum OrderStatus {
+  OPEN, SENT, PARTIALLY_PAID, PAID, CANCELLED;
+
+  String get label {
+    switch (this) {
+      case OrderStatus.OPEN: return 'Otwarte';
+      case OrderStatus.SENT: return 'Wysłane';
+      case OrderStatus.PARTIALLY_PAID: return 'Częściowo opłacone';
+      case OrderStatus.PAID: return 'Opłacone';
+      case OrderStatus.CANCELLED: return 'Anulowane';
+    }
+  }
+
+  static OrderStatus fromString(String v) =>
+      OrderStatus.values.firstWhere((e) => e.name == v, orElse: () => OrderStatus.OPEN);
+}
+
+enum KdsStatus {
+  NEW, ACKNOWLEDGED, PREPARING, READY, DELIVERED, VOIDED_PENDING_ACK, VOIDED;
+
+  String get label {
+    switch (this) {
+      case KdsStatus.NEW: return 'Nowe';
+      case KdsStatus.ACKNOWLEDGED: return 'Przyjęte';
+      case KdsStatus.PREPARING: return 'W przygotowaniu';
+      case KdsStatus.READY: return 'Gotowe';
+      case KdsStatus.DELIVERED: return 'Wydane';
+      case KdsStatus.VOIDED_PENDING_ACK: return 'Anulowane (Oczekuje)';
+      case KdsStatus.VOIDED: return 'Anulowane';
+    }
+  }
+
+  static KdsStatus fromString(String v) =>
+      KdsStatus.values.firstWhere((e) => e.name == v, orElse: () => KdsStatus.NEW);
+}
+
+class OrderItemModifier {
+  final String id;
+  final int modifierId;
+  final String modifierNameSnapshot;
+  final double priceSnapshot;
+
+  OrderItemModifier({
+    required this.id, required this.modifierId,
+    required this.modifierNameSnapshot, this.priceSnapshot = 0.0,
+  });
+
+  factory OrderItemModifier.fromJson(Map<String, dynamic> json) => OrderItemModifier(
+    id: json['id'], modifierId: json['modifier_id'],
+    modifierNameSnapshot: json['modifier_name_snapshot'],
+    priceSnapshot: (json['price_snapshot'] as num?)?.toDouble() ?? 0.0,
+  );
+}
+
+class PosOrderItem {
+  final String id;
+  final String orderId;
+  final String menuItemId;
+  final int quantity;
+  final double unitPriceSnapshot;
+  final String itemNameSnapshot;
+  final int course;
+  final String? notes;
+  final KdsStatus kdsStatus;
+  final DateTime? sentToKitchenAt;
+  final DateTime? readyAt;
+  final String? splitTag;
+  final List<OrderItemModifier> modifiers;
+
+  PosOrderItem({
+    required this.id, required this.orderId, required this.menuItemId,
+    this.quantity = 1, required this.unitPriceSnapshot,
+    required this.itemNameSnapshot, this.course = 1, this.notes,
+    this.kdsStatus = KdsStatus.NEW, this.sentToKitchenAt, this.readyAt,
+    this.splitTag, this.modifiers = const [],
+  });
+
+  double get lineTotal => unitPriceSnapshot * quantity +
+      modifiers.fold(0.0, (sum, m) => sum + m.priceSnapshot);
+
+  factory PosOrderItem.fromJson(Map<String, dynamic> json) => PosOrderItem(
+    id: json['id'], orderId: json['order_id'], menuItemId: json['menu_item_id'],
+    quantity: json['quantity'] ?? 1,
+    unitPriceSnapshot: (json['unit_price_snapshot'] as num).toDouble(),
+    itemNameSnapshot: json['item_name_snapshot'],
+    course: json['course'] ?? 1, notes: json['notes'],
+    kdsStatus: KdsStatus.fromString(json['kds_status'] ?? 'NEW'),
+    sentToKitchenAt: json['sent_to_kitchen_at'] != null
+        ? DateTime.parse(json['sent_to_kitchen_at']) : null,
+    readyAt: json['ready_at'] != null ? DateTime.parse(json['ready_at']) : null,
+    splitTag: json['split_tag'],
+    modifiers: (json['modifiers'] as List? ?? [])
+        .map((e) => OrderItemModifier.fromJson(e)).toList(),
+  );
+}
+
+class PosOrder {
+  final String id;
+  final String tableId;
+  final String waiterId;
+  final OrderStatus status;
+  final int guestCount;
+  final String? notes;
+  final double discountPct;
+  final DateTime createdAt;
+  final DateTime? closedAt;
+  final List<PosOrderItem> items;
+  final String? tableName;
+  final String? waiterName;
+  final double totalAmount;
+  final double amountPaid;
+  final double amountDue;
+
+  PosOrder({
+    required this.id, required this.tableId, required this.waiterId,
+    this.status = OrderStatus.OPEN, this.guestCount = 1, this.notes,
+    this.discountPct = 0.0, required this.createdAt, this.closedAt,
+    this.items = const [], this.tableName, this.waiterName,
+    this.totalAmount = 0.0, this.amountPaid = 0.0, this.amountDue = 0.0,
+  });
+
+  factory PosOrder.fromJson(Map<String, dynamic> json) => PosOrder(
+    id: json['id'], tableId: json['table_id'], waiterId: json['waiter_id'],
+    status: OrderStatus.fromString(json['status'] ?? 'OPEN'),
+    guestCount: json['guest_count'] ?? 1, notes: json['notes'],
+    discountPct: (json['discount_pct'] as num?)?.toDouble() ?? 0.0,
+    createdAt: DateTime.parse(json['created_at']),
+    closedAt: json['closed_at'] != null ? DateTime.parse(json['closed_at']) : null,
+    items: (json['items'] as List? ?? [])
+        .map((e) => PosOrderItem.fromJson(e)).toList(),
+    tableName: json['table_name'], waiterName: json['waiter_name'],
+    totalAmount: (json['total_amount'] as num?)?.toDouble() ?? 0.0,
+    amountPaid: (json['amount_paid'] as num?)?.toDouble() ?? 0.0,
+    amountDue: (json['amount_due'] as num?)?.toDouble() ?? 0.0,
+  );
+}
+
+enum PaymentMethod {
+  CASH, CARD, VOUCHER, MOBILE;
+
+  String get label {
+    switch (this) {
+      case PaymentMethod.CASH: return 'Gotówka';
+      case PaymentMethod.CARD: return 'Karta';
+      case PaymentMethod.VOUCHER: return 'Voucher';
+      case PaymentMethod.MOBILE: return 'Mobilna';
+    }
+  }
+
+  static PaymentMethod fromString(String v) =>
+      PaymentMethod.values.firstWhere((e) => e.name == v, orElse: () => PaymentMethod.CASH);
+}
+
+class PosPayment {
+  final String id;
+  final String orderId;
+  final PaymentMethod method;
+  final double amount;
+  final double tipAmount;
+  final String receivedBy;
+  final DateTime createdAt;
+
+  PosPayment({
+    required this.id, required this.orderId, required this.method,
+    required this.amount, this.tipAmount = 0.0, required this.receivedBy,
+    required this.createdAt,
+  });
+
+  factory PosPayment.fromJson(Map<String, dynamic> json) => PosPayment(
+    id: json['id'], orderId: json['order_id'],
+    method: PaymentMethod.fromString(json['method'] ?? 'CASH'),
+    amount: (json['amount'] as num).toDouble(),
+    tipAmount: (json['tip_amount'] as num?)?.toDouble() ?? 0.0,
+    receivedBy: json['received_by'],
+    createdAt: DateTime.parse(json['created_at']),
+  );
+}
+
+class TipSummary {
+  final double totalTips;
+  final int tipCount;
+  final Map<String, double> tipsByMethod;
+
+  TipSummary({required this.totalTips, required this.tipCount, this.tipsByMethod = const {}});
+
+  factory TipSummary.fromJson(Map<String, dynamic> json) => TipSummary(
+    totalTips: (json['total_tips'] as num).toDouble(),
+    tipCount: json['tip_count'] ?? 0,
+    tipsByMethod: (json['tips_by_method'] as Map<String, dynamic>? ?? {})
+        .map((k, v) => MapEntry(k, (v as num).toDouble())),
+  );
+}

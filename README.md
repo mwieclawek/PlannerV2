@@ -41,14 +41,16 @@
 | 🏖️ **Urlopy** | Składanie wniosków urlopowych, śledzenie statusu |
 | 🔔 **Powiadomienia** | In-app + Push (FCM) o publikacji grafiku, zmianach na giełdzie, urlopach |
 
-### 🍳 Moduł POS / Kitchen Display System
+### 🍳 Moduł POS v2 / Kitchen Display System (KDS)
 | Moduł | Opis |
 |-------|------|
-| 🪑 **Stoły** | CRUD stolików restauracji (Manager) |
-| 📋 **Menu** | Pozycje menu z kategoriami i cenami, soft-delete |
-| 🛒 **Zamówienia (POS)** | Tworzenie zamówień dla stolika, snapshot cen i nazw pozycji |
-| 📺 **Kitchen Display** | Widok kuchni: zamówienia w kolejce, zmiana statusu (PENDING → IN_PROGRESS → READY → DELIVERED) |
-| ❌ **Anulowanie** | Anulowanie zamówień (soft-cancel) |
+| 🏷️ **Strefy i Stoły** | Zarządzanie strefami sali (Sala Główna, Ogródek) i stolikami z pojemnością miejsc |
+| 📋 **Menu v2** | Kategorie dynamiczne, pozycje z `prep_time_sec` (KDS Pacing), grupy modyfikatorów (np. Stopień Wysmażenia) |
+| 🛒 **Zamówienia (POS)** | Tworzenie zamówień per-stolik, snapshot cen/nazw, kursy (course-based), notatki, rabaty |
+| 📺 **KDS Offline-First** | Monotoniczny sync batch (tablet → serwer), stany: NEW → ACKNOWLEDGED → PREPARING → READY → DELIVERED, anti-ghosting (VOIDED_PENDING_ACK) |
+| ⏱️ **Pacing Engine** | Automatyczne obliczanie opóźnień startu przygotowania per-kurs (anchor-based staggering) |
+| 💳 **Płatności** | Multi-method split payments (gotówka, karta, voucher, mobile), napiwki |
+| ❌ **Void / Cancel** | Anulowanie pozycji z potwierdzeniem na tablecie KDS (anti-ghosting) |
 
 ---
 
@@ -61,7 +63,8 @@
 | Solver | Google OR-Tools (CP-SAT) |
 | Database | SQLite (dev) / PostgreSQL (prod) |
 | Migracje | Alembic |
-| Auth | JWT (python-jose) + bcrypt |
+| Auth | JWT (python-jose) + pbkdf2_sha256 |
+| KDS Sync | Monotonic weight state machine (offline-first batch) |
 | Push | Firebase Cloud Messaging (FCM) |
 | Encryption | cryptography (Fernet) — tokeny Google |
 | PDF | ReportLab |
@@ -78,6 +81,7 @@ cd backend
 python -m venv venv && venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 alembic upgrade head
+python seed_test_data.py   # Wygeneruj dane testowe (manager/pracownicy/menu/stoliki)
 uvicorn app.main:app --reload --port 8000
 
 # Frontend
@@ -99,27 +103,34 @@ PlannerV2/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py                # FastAPI app + lifespan
-│   │   ├── models.py              # SQLModel entities (20+ modeli)
-│   │   ├── schemas.py             # Pydantic v2 schemas
+│   │   ├── models.py              # SQLModel entities (30+ modeli)
+│   │   ├── schemas.py             # Pydantic v2 schemas (KDS sync models)
 │   │   ├── database.py            # Konfiguracja bazy danych
-│   │   ├── auth_utils.py          # JWT + password hashing
+│   │   ├── auth_utils.py          # JWT + password hashing (pbkdf2_sha256)
 │   │   ├── routers/
 │   │   │   ├── auth.py            # Login, /me, change-password
 │   │   │   ├── manager.py         # CRUD zespołu, ról, zmian, obecności, urlopy
 │   │   │   ├── employee.py        # Grafik, dostępność, obecność, giełda, urlopy
 │   │   │   ├── scheduler.py       # Generowanie, save, publish, assignment
-│   │   │   ├── kitchen.py         # POS: stoły, menu, zamówienia (KDS)
+│   │   │   ├── pos.py             # POS v2: strefy, stoły, menu, zamówienia, KDS sync
+│   │   │   ├── kitchen.py         # POS v1 (legacy): stoły, menu, zamówienia
 │   │   │   ├── notifications.py   # Powiadomienia in-app + rejestracja FCM
 │   │   │   ├── health.py          # Health check z weryfikacją migracji
 │   │   │   └── bug_report.py      # Proxy do GitHub Issues API
 │   │   └── services/
 │   │       ├── solver.py           # OR-Tools constraint solver
+│   │       ├── pos_service.py      # POS v2 logika biznesowa
+│   │       ├── kds_service.py      # KDS: monotonic sync + pacing engine
 │   │       ├── manager_service.py  # Logika biznesowa managera
 │   │       ├── employee_service.py # Logika biznesowa pracownika
 │   │       ├── scheduler_service.py# Operacje na grafiku
 │   │       └── push_service.py     # Firebase Cloud Messaging
 │   ├── alembic/                    # Migracje bazy danych
-│   └── tests/                      # Testy (pytest)
+│   ├── tests/                      # Testy (pytest)
+│   │   ├── test_kds.py            # Testy jednostkowe KDS (pacing, sync)
+│   │   └── test_kds_api.py        # Testy integracyjne KDS endpoint
+│   ├── seed_test_data.py           # Generator danych testowych
+│   └── reset_db_alembic.py         # Reset bazy + migracje
 ├── frontend/
 │   └── lib/
 │       ├── screens/
@@ -207,16 +218,26 @@ PlannerV2/
 | `POST` | `/scheduler/assignment` | Ręczne przypisanie |
 | `DELETE` | `/scheduler/assignment/{id}` | Usuń przypisanie |
 
-### Kitchen / POS (`/kitchen`)
+### POS v2 (`/pos/v2`)
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
-| `GET/POST/DELETE` | `/kitchen/tables` | CRUD stolików |
-| `GET/POST/PUT/DELETE` | `/kitchen/menu` | CRUD pozycji menu |
-| `POST` | `/kitchen/orders` | Utwórz zamówienie (kelner) |
-| `GET` | `/kitchen/orders` | Lista zamówień (filtr po statusie/stoliku) |
-| `GET` | `/kitchen/orders/{id}` | Szczegóły zamówienia |
-| `PATCH` | `/kitchen/orders/{id}/status` | Zmiana statusu (KDS) |
-| `DELETE` | `/kitchen/orders/{id}` | Anuluj zamówienie |
+| `CRUD` | `/pos/v2/zones` | Strefy restauracji (Sala Główna, Ogródek) |
+| `CRUD` | `/pos/v2/tables` | Stoły ze strefami i pojemnością |
+| `CRUD` | `/pos/v2/categories` | Dynamiczne kategorie menu |
+| `CRUD` | `/pos/v2/menu` | Pozycje menu z `prep_time_sec` i modyfikatorami |
+| `CRUD` | `/pos/v2/modifier-groups` | Grupy modyfikatorów (np. Stopień Wysmażenia) |
+| `POST` | `/pos/v2/orders` | Utwórz zamówienie (kelner, z kursami) |
+| `GET` | `/pos/v2/orders` | Lista zamówień (filtr po statusie/stoliku) |
+| `POST` | `/pos/v2/kds/sync` | **Batch sync KDS** (offline-first, monotonic weights) |
+| `GET` | `/pos/v2/kds/items` | Lista pozycji KDS z metadanymi pacingu |
+| `POST` | `/pos/v2/payments` | Dodaj płatność (multi-method split) |
+
+### Kitchen / POS v1 (`/kitchen`) — Legacy
+| Metoda | Endpoint | Opis |
+|--------|----------|------|
+| `GET/POST/DELETE` | `/kitchen/tables` | CRUD stolików (stary format) |
+| `GET/POST/PUT/DELETE` | `/kitchen/menu` | CRUD pozycji menu (stary format) |
+| `POST` | `/kitchen/orders` | Utwórz zamówienie (stary format) |
 
 ### Notifications (`/api/notifications`)
 | Metoda | Endpoint | Opis |

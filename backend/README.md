@@ -8,26 +8,36 @@ Backend systemu PlannerV2 — FastAPI + SQLModel + PostgreSQL/SQLite.
 backend/
 ├── app/
 │   ├── main.py                 # FastAPI app, CORS, lifespan (auto-init DB)
-│   ├── models.py               # SQLModel entities (12 modeli)
-│   ├── schemas.py              # Pydantic schemas (request/response)
+│   ├── models.py               # SQLModel entities (30+ modeli)
+│   ├── schemas.py              # Pydantic schemas (request/response + KDS sync)
 │   ├── database.py             # Konfiguracja DB (SQLite/PostgreSQL)
-│   ├── auth_utils.py           # JWT creation/verification, password hashing
+│   ├── auth_utils.py           # JWT creation/verification, password hashing (pbkdf2_sha256)
 │   ├── routers/
 │   │   ├── auth.py             # Login, /me, change-password
 │   │   ├── manager.py          # CRUD: role, zmiany, users, obecności, giveaway
 │   │   ├── employee.py         # Grafik, dostępność, obecność, giveaway
 │   │   ├── scheduler.py        # Generowanie, batch save, publish, assignment
+│   │   ├── pos.py              # POS v2: strefy, stoły, menu, zamówienia, KDS sync, płatności
+│   │   ├── kitchen.py          # POS v1 (legacy): stoły, menu, zamówienia
 │   │   ├── health.py           # Health check (DB + Alembic migration status)
+│   │   ├── notifications.py    # Powiadomienia in-app + FCM
 │   │   └── bug_report.py       # Proxy do GitHub Issues API
 │   └── services/
 │       ├── solver.py           # OR-Tools CP-SAT constraint solver
+│       ├── pos_service.py      # POS v2 logika biznesowa
+│       ├── kds_service.py      # KDS: monotonic sync + pacing engine
 │       ├── manager_service.py  # Logika biznesowa managera
 │       ├── employee_service.py # Logika biznesowa pracownika
-│       └── scheduler_service.py # Operacje na grafiku
+│       ├── scheduler_service.py # Operacje na grafiku
+│       └── push_service.py     # Firebase Cloud Messaging
 ├── alembic/                    # Migracje bazy danych
 │   ├── env.py
-│   └── versions/               # Pliki migracji (9 migracji)
-├── tests/                      # Testy automatyczne (19 plików)
+│   └── versions/               # Pliki migracji
+├── tests/                      # Testy automatyczne
+│   ├── test_kds.py            # Testy jednostkowe KDS (pacing, sync)
+│   └── test_kds_api.py        # Testy integracyjne KDS endpoint
+├── seed_test_data.py           # Generator danych testowych
+├── reset_db_alembic.py         # Reset bazy + migracje
 ├── requirements.txt
 ├── alembic.ini
 └── Dockerfile
@@ -48,9 +58,15 @@ pip install -r requirements.txt
 # Uruchom migracje
 alembic upgrade head
 
+# Wygeneruj dane testowe (manager / pracownicy / menu / stoliki / grafiki)
+python seed_test_data.py
+
 # Uruchom serwer
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
+
+> **Domyślne dane logowania**: `manager` / `manager123`
+> Pozostałi pracownicy (anna, piotr, tomasz): hasło `123`.
 
 ### Docker
 
@@ -155,6 +171,26 @@ OR-Tools CP-SAT solver z następującymi regułami:
 | `POST` | `/scheduler/assignment` | Ręczne przypisanie |
 | `DELETE` | `/scheduler/assignment/{id}` | Usuń przypisanie |
 
+### POS v2 (`/pos/v2`)
+| Metoda | Endpoint | Opis |
+|--------|----------|------|
+| `CRUD` | `/pos/v2/zones` | Strefy restauracji |
+| `CRUD` | `/pos/v2/tables` | Stoły ze strefami i pojemnością |
+| `CRUD` | `/pos/v2/categories` | Dynamiczne kategorie menu |
+| `CRUD` | `/pos/v2/menu` | Pozycje menu z `prep_time_sec` i modyfikatorami |
+| `CRUD` | `/pos/v2/modifier-groups` | Grupy modyfikatorów |
+| `POST/GET` | `/pos/v2/orders` | Zamówienia (tworzenie z kursami, lista) |
+| `POST` | `/pos/v2/kds/sync` | **Batch sync KDS** (offline-first, monotonic weight validation) |
+| `GET` | `/pos/v2/kds/items` | Lista pozycji KDS z metadanymi pacingu |
+| `POST` | `/pos/v2/payments` | Płatności (multi-method split) |
+
+### Kuchnia / POS v1 (`/kitchen`) — Legacy
+| Metoda | Endpoint | Opis |
+|--------|----------|------|
+| `GET/POST/PUT/DELETE` | `/kitchen/tables` | CRUD stolików |
+| `GET/POST/PUT/DELETE` | `/kitchen/menu` | CRUD pozycji menu |
+| `GET/POST/PUT/DELETE` | `/kitchen/orders` | Zarządzanie zamówieniami |
+
 ### Inne
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
@@ -171,8 +207,27 @@ python -m pytest tests/ -v
 python -m pytest tests/ -v --junitxml=test-results/backend.xml
 ```
 
-Testy korzystają z in-memory SQLite (konfiguracja w `conftest.py`).
-Szczegóły: [tests/README.md](tests/README.md)
+Testy korzystają z in-memory SQLite (izolowane fixture'y `db_session`).
+
+### KDS Testy
+
+```bash
+# Testy jednostkowe (pacing, sync weights)
+python -m pytest tests/test_kds.py -v
+
+# Testy integracyjne (endpoint /pos/v2/kds/sync)
+python -m pytest tests/test_kds_api.py -v
+```
+
+### Reset i Seed bazy danych
+
+```bash
+# Wykasowanie i odtworzenie schematu
+python reset_db_alembic.py
+
+# Wygenerowanie danych testowych (pracownicy, menu, stoliki, grafiki, zamówienia KDS)
+python seed_test_data.py
+```
 
 ## API Docs (Swagger)
 

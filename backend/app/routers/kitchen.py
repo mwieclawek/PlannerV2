@@ -79,7 +79,11 @@ def list_menu(
     if not include_inactive:
         stmt = stmt.where(MenuItem.is_active == True)
     if category:
-        stmt = stmt.where(MenuItem.category == category)
+        # Map legacy MenuCategory enum to new category_id
+        _CATEGORY_MAP = {"SOUPS": 1, "MAINS": 2, "DESSERTS": 3, "DRINKS": 4}
+        cat_id = _CATEGORY_MAP.get(category.value if hasattr(category, 'value') else category, None)
+        if cat_id:
+            stmt = stmt.where(MenuItem.category_id == cat_id)
     return session.exec(stmt).all()
 
 @router.post("/menu", response_model=MenuItemResponse, status_code=status.HTTP_201_CREATED)
@@ -91,7 +95,13 @@ def create_menu_item(
     if current_user.role_system != RoleSystem.MANAGER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only managers can manage menu")
     
-    item = MenuItem(**payload.model_dump()) if hasattr(payload, 'model_dump') else MenuItem(**payload.dict())
+    # Map legacy MenuCategory enum to new category_id
+    _CATEGORY_MAP = {"SOUPS": 1, "MAINS": 2, "DESSERTS": 3, "DRINKS": 4}
+    data = payload.model_dump() if hasattr(payload, 'model_dump') else payload.dict()
+    cat_value = data.pop("category", None)
+    if cat_value and "category_id" not in data:
+        data["category_id"] = _CATEGORY_MAP.get(cat_value if isinstance(cat_value, str) else cat_value.value, 2)
+    item = MenuItem(**data)
     session.add(item)
     session.commit()
     session.refresh(item)
@@ -112,6 +122,11 @@ def update_menu_item(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu item not found")
     
     update_data = payload.model_dump(exclude_unset=True) if hasattr(payload, 'model_dump') else payload.dict(exclude_unset=True)
+    # Map legacy category enum -> category_id
+    if 'category' in update_data:
+        _CATEGORY_MAP = {"SOUPS": 1, "MAINS": 2, "DESSERTS": 3, "DRINKS": 4}
+        cat_val = update_data.pop('category')
+        update_data['category_id'] = _CATEGORY_MAP.get(cat_val if isinstance(cat_val, str) else cat_val.value, 2)
     for key, value in update_data.items():
         setattr(item, key, value)
         

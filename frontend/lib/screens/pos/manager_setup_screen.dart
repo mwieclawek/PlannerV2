@@ -85,7 +85,7 @@ class _TablesTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tablesAsync = ref.watch(tablesProvider);
+    final tablesAsync = ref.watch(posTablesProvider);
 
     return Scaffold(
       body: tablesAsync.when(
@@ -132,7 +132,11 @@ class _TablesTab extends ConsumerWidget {
                 ),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
-                  onLongPress: () => _confirmDeleteTable(context, ref, table),
+                  onLongPress: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Usuwanie niezaimplementowane w v2')),
+                    );
+                  },
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -193,42 +197,11 @@ class _TablesTab extends ConsumerWidget {
                 onPressed: () async {
                   if (controller.text.trim().isEmpty) return;
                   final api = ref.read(apiServiceProvider);
-                  await api.createTable(controller.text.trim());
-                  ref.invalidate(tablesProvider);
+                  await api.createTableV2(controller.text.trim());
+                  ref.invalidate(posTablesProvider);
                   if (ctx.mounted) Navigator.pop(ctx);
                 },
                 child: const Text('Dodaj'),
-              ),
-            ],
-          ),
-    );
-  }
-
-  void _confirmDeleteTable(
-    BuildContext context,
-    WidgetRef ref,
-    RestaurantTable table,
-  ) {
-    showDialog(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: const Text('Usuń stolik?'),
-            content: Text('Czy na pewno chcesz usunąć "${table.name}"?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Anuluj'),
-              ),
-              FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () async {
-                  final api = ref.read(apiServiceProvider);
-                  await api.deleteTable(table.id);
-                  ref.invalidate(tablesProvider);
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: const Text('Usuń'),
               ),
             ],
           ),
@@ -246,107 +219,131 @@ class _MenuTab extends ConsumerStatefulWidget {
 }
 
 class _MenuTabState extends ConsumerState<_MenuTab> {
-  MenuCategory _selectedCategory = MenuCategory.SOUPS;
+  int? _selectedCategoryId;
 
   @override
   Widget build(BuildContext context) {
-    final menuAsync = ref.watch(menuProvider);
+    final categoriesAsync = ref.watch(categoriesProvider);
+    final menuAsync = ref.watch(posMenuProvider);
 
     return Scaffold(
-      body: Column(
-        children: [
-          // Category chips
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children:
-                  MenuCategory.values.map((cat) {
-                    final isSelected = cat == _selectedCategory;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(cat.label),
-                        selected: isSelected,
-                        selectedColor: const Color(
-                          0xFFE65100,
-                        ).withOpacity(0.15),
-                        onSelected:
-                            (_) => setState(() => _selectedCategory = cat),
-                      ),
-                    );
-                  }).toList(),
-            ),
-          ),
-
-          // Menu items list
-          Expanded(
-            child: menuAsync.when(
-              data: (items) {
-                final filtered =
-                    items
-                        .where((i) => i.category == _selectedCategory)
-                        .toList();
-                if (filtered.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'Brak pozycji w kategorii „${_selectedCategory.label}"',
-                      style: TextStyle(color: Colors.grey[500]),
-                    ),
-                  );
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
+      body: categoriesAsync.when(
+        data: (categories) {
+          if (categories.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Brak kategorii.'),
+                  ElevatedButton(
+                    onPressed: () => _showAddCategoryDialog(context),
+                    child: const Text('Dodaj kategorię'),
                   ),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final item = filtered[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: const Color(
-                          0xFFE65100,
-                        ).withOpacity(0.1),
-                        child: Icon(
-                          _categoryIcon(item.category),
-                          color: const Color(0xFFE65100),
+                ],
+              ),
+            );
+          }
+
+          if (_selectedCategoryId == null && categories.isNotEmpty) {
+            _selectedCategoryId = categories.first.id;
+          }
+
+          return Column(
+            children: [
+              // Category chips
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      ...categories.map((cat) {
+                        final isSelected = cat.id == _selectedCategoryId;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(cat.name),
+                            selected: isSelected,
+                            selectedColor: const Color(0xFFE65100).withOpacity(0.15),
+                            onSelected: (_) => setState(() => _selectedCategoryId = cat.id),
+                          ),
+                        );
+                      }),
+                      ActionChip(
+                        avatar: const Icon(Icons.add, size: 16),
+                        label: const Text('Nowa'),
+                        onPressed: () => _showAddCategoryDialog(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Menu items list
+              Expanded(
+                child: menuAsync.when(
+                  data: (items) {
+                    final filtered = items.where((i) => i.categoryId == _selectedCategoryId).toList();
+                    if (filtered.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'Brak pozycji w tej kategorii',
+                          style: TextStyle(color: Colors.grey[500]),
                         ),
-                      ),
-                      title: Text(
-                        item.name,
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w500),
-                      ),
-                      subtitle: Text(
-                        '${item.price.toStringAsFixed(2)} zł',
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFFE65100),
-                        ),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.red,
-                        ),
-                        onPressed: () async {
-                          final api = ref.read(apiServiceProvider);
-                          await api.deleteMenuItem(item.id);
-                          ref.invalidate(menuProvider);
-                        },
-                      ),
+                      );
+                    }
+                    return ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final item = filtered[index];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: const Color(0xFFE65100).withOpacity(0.1),
+                            child: const Icon(
+                              Icons.fastfood,
+                              color: Color(0xFFE65100),
+                            ),
+                          ),
+                          title: Text(
+                            item.name,
+                            style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                          ),
+                          subtitle: Text(
+                            '${item.price.toStringAsFixed(2)} zł',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFFE65100),
+                            ),
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.red,
+                            ),
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Usuwanie niezaimplementowane w v2')),
+                              );
+                            },
+                          ),
+                        );
+                      },
                     );
                   },
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Błąd: $e')),
-            ),
-          ),
-        ],
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(child: Text('Błąd: $e')),
+                ),
+              ),
+            ],
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Błąd: $e')),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddMenuItemDialog(context),
+        onPressed: () => _showAddMenuItemDialog(context, ref.read(categoriesProvider).valueOrNull ?? []),
         icon: const Icon(Icons.add),
         label: const Text('Dodaj danie'),
         backgroundColor: const Color(0xFFE65100),
@@ -355,10 +352,46 @@ class _MenuTabState extends ConsumerState<_MenuTab> {
     );
   }
 
-  void _showAddMenuItemDialog(BuildContext context) {
+  void _showAddCategoryDialog(BuildContext context) {
+    final nameCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Nowa Kategoria'),
+        content: TextField(
+          controller: nameCtrl,
+          decoration: const InputDecoration(labelText: 'Nazwa kategorii'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Anuluj'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (nameCtrl.text.trim().isEmpty) return;
+              final api = ref.read(apiServiceProvider);
+              await api.createCategory(nameCtrl.text.trim());
+              ref.invalidate(categoriesProvider);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Dodaj'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddMenuItemDialog(BuildContext context, List<PosCategory> categories) {
+    if (categories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dodaj najpierw kategorię')));
+      return;
+    }
+    
     final nameCtrl = TextEditingController();
     final priceCtrl = TextEditingController();
-    MenuCategory dialogCategory = _selectedCategory;
+    int? dialogCategory = _selectedCategoryId ?? categories.first.id;
 
     showDialog(
       context: context,
@@ -387,17 +420,17 @@ class _MenuTabState extends ConsumerState<_MenuTab> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      DropdownButtonFormField<MenuCategory>(
+                      DropdownButtonFormField<int>(
                         value: dialogCategory,
                         decoration: const InputDecoration(
                           labelText: 'Kategoria',
                         ),
                         items:
-                            MenuCategory.values
+                            categories
                                 .map(
                                   (c) => DropdownMenuItem(
-                                    value: c,
-                                    child: Text(c.label),
+                                    value: c.id,
+                                    child: Text(c.name),
                                   ),
                                 )
                                 .toList(),
@@ -415,15 +448,15 @@ class _MenuTabState extends ConsumerState<_MenuTab> {
                     ),
                     FilledButton(
                       onPressed: () async {
-                        if (nameCtrl.text.trim().isEmpty) return;
+                        if (nameCtrl.text.trim().isEmpty || dialogCategory == null) return;
                         final price = double.tryParse(priceCtrl.text) ?? 0.0;
                         final api = ref.read(apiServiceProvider);
-                        await api.createMenuItem(
+                        await api.createMenuItemV2(
                           nameCtrl.text.trim(),
                           price,
-                          dialogCategory.name,
+                          dialogCategory!,
                         );
-                        ref.invalidate(menuProvider);
+                        ref.invalidate(posMenuProvider);
                         if (ctx.mounted) Navigator.pop(ctx);
                       },
                       child: const Text('Dodaj'),
@@ -432,18 +465,5 @@ class _MenuTabState extends ConsumerState<_MenuTab> {
                 ),
           ),
     );
-  }
-
-  IconData _categoryIcon(MenuCategory cat) {
-    switch (cat) {
-      case MenuCategory.SOUPS:
-        return Icons.soup_kitchen;
-      case MenuCategory.MAINS:
-        return Icons.dinner_dining;
-      case MenuCategory.DESSERTS:
-        return Icons.cake;
-      case MenuCategory.DRINKS:
-        return Icons.local_drink;
-    }
   }
 }

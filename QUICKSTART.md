@@ -28,9 +28,15 @@ pip install -r requirements.txt
 # Uruchom migracje bazy danych
 alembic upgrade head
 
+# Wygeneruj dane testowe (manager / pracownicy / menu / stoliki / grafiki)
+python seed_test_data.py
+
 # Uruchom serwer
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
+
+> **Domyślne dane logowania**: `manager` / `manager123`
+> Pozostałi pracownicy (anna, piotr, tomasz): hasło `123`.
 
 Backend będzie dostępny pod: http://127.0.0.1:8000
 Dokumentacja API (Swagger): http://127.0.0.1:8000/docs
@@ -125,3 +131,4 @@ Aplikacja będzie dostępna pod: http://localhost (port 80)
 | „Shift already exists" | Zmiany muszą mieć unikalne godziny |
 | Frontend nie łączy się z backendem | Sprawdź konfigurację serwera (ustawienia → QR / ręczny URL) |
 | Błąd migracji Alembic | `alembic upgrade head` — upewnij się że baza jest dostępna |
+| Baza zablokowana (SQLite locked) | `python reset_db_alembic.py` → `python seed_test_data.py` |
