@@ -888,4 +888,175 @@ class ApiService {
     final response = await _dio.delete('/kitchen/orders/$orderId');
     return KitchenOrder.fromJson(response.data);
   }
+
+  // ── POS v2 API ──────────────────────────────────────────────────────────────
+
+  // Zones
+  Future<List<TableZone>> getZones() async {
+    final response = await _dio.get('/pos/v2/zones');
+    return (response.data as List).map((e) => TableZone.fromJson(e)).toList();
+  }
+
+  Future<TableZone> createZone(String name, {int sortOrder = 0}) async {
+    final response = await _dio.post('/pos/v2/zones',
+        data: {'name': name, 'sort_order': sortOrder});
+    return TableZone.fromJson(response.data);
+  }
+
+  // Tables v2
+  Future<List<PosTable>> getTablesV2({String? zoneId, String? status}) async {
+    final params = <String, dynamic>{};
+    if (zoneId != null) params['zone_id'] = zoneId;
+    if (status != null) params['status'] = status;
+    final response = await _dio.get('/pos/v2/tables', queryParameters: params);
+    return (response.data as List).map((e) => PosTable.fromJson(e)).toList();
+  }
+
+  Future<PosTable> createTableV2(String name,
+      {String? zoneId, int seats = 4, int sortOrder = 0}) async {
+    final response = await _dio.post('/pos/v2/tables', data: {
+      'name': name, 'zone_id': zoneId, 'seats': seats, 'sort_order': sortOrder,
+    });
+    return PosTable.fromJson(response.data);
+  }
+
+  Future<PosTable> updateTableV2(String tableId, Map<String, dynamic> data) async {
+    final response = await _dio.patch('/pos/v2/tables/$tableId', data: data);
+    return PosTable.fromJson(response.data);
+  }
+
+  // Categories
+  Future<List<PosCategory>> getCategories() async {
+    final response = await _dio.get('/pos/v2/categories');
+    return (response.data as List).map((e) => PosCategory.fromJson(e)).toList();
+  }
+
+  Future<PosCategory> createCategory(String name,
+      {String colorHex = '#607D8B', String? iconName}) async {
+    final response = await _dio.post('/pos/v2/categories', data: {
+      'name': name, 'color_hex': colorHex,
+      if (iconName != null) 'icon_name': iconName,
+    });
+    return PosCategory.fromJson(response.data);
+  }
+
+  Future<PosCategory> updateCategory(int categoryId, Map<String, dynamic> data) async {
+    final response = await _dio.patch('/pos/v2/categories/$categoryId', data: data);
+    return PosCategory.fromJson(response.data);
+  }
+
+  // Menu v2
+  Future<List<PosMenuItem>> getMenuV2({int? categoryId}) async {
+    final params = <String, dynamic>{};
+    if (categoryId != null) params['category_id'] = categoryId;
+    final response = await _dio.get('/pos/v2/menu', queryParameters: params);
+    return (response.data as List).map((e) => PosMenuItem.fromJson(e)).toList();
+  }
+
+  Future<PosMenuItem> createMenuItemV2(String name, double price, int categoryId,
+      {String? description, double taxRate = 0.23}) async {
+    final response = await _dio.post('/pos/v2/menu', data: {
+      'name': name, 'price': price, 'category_id': categoryId,
+      if (description != null) 'description': description, 'tax_rate': taxRate,
+    });
+    return PosMenuItem.fromJson(response.data);
+  }
+
+  Future<PosMenuItem> updateMenuItemV2(String itemId, Map<String, dynamic> data) async {
+    final response = await _dio.patch('/pos/v2/menu/$itemId', data: data);
+    return PosMenuItem.fromJson(response.data);
+  }
+
+  // Modifier Groups
+  Future<List<ModifierGroup>> getModifierGroups() async {
+    final response = await _dio.get('/pos/v2/modifier-groups');
+    return (response.data as List).map((e) => ModifierGroup.fromJson(e)).toList();
+  }
+
+  Future<ModifierGroup> createModifierGroup(String name,
+      {int minSelect = 0, int maxSelect = 1,
+       List<Map<String, dynamic>>? modifiers}) async {
+    final response = await _dio.post('/pos/v2/modifier-groups', data: {
+      'name': name, 'min_select': minSelect, 'max_select': maxSelect,
+      if (modifiers != null) 'modifiers': modifiers,
+    });
+    return ModifierGroup.fromJson(response.data);
+  }
+
+  Future<void> linkModifierGroup(String itemId, int groupId) async {
+    await _dio.post('/pos/v2/menu/$itemId/modifier-groups/$groupId');
+  }
+
+  // Orders v2
+  Future<PosOrder> createOrderV2(String tableId, List<Map<String, dynamic>> items,
+      {int guestCount = 1, String? notes}) async {
+    final response = await _dio.post('/pos/v2/orders', data: {
+      'table_id': tableId, 'items': items,
+      'guest_count': guestCount, if (notes != null) 'notes': notes,
+    });
+    return PosOrder.fromJson(response.data);
+  }
+
+  Future<List<PosOrder>> getOrdersV2({String? tableId, String? status, String? waiterId}) async {
+    final params = <String, dynamic>{};
+    if (tableId != null) params['table_id'] = tableId;
+    if (status != null) params['status'] = status;
+    if (waiterId != null) params['waiter_id'] = waiterId;
+    final response = await _dio.get('/pos/v2/orders', queryParameters: params);
+    return (response.data as List).map((e) => PosOrder.fromJson(e)).toList();
+  }
+
+  Future<PosOrder> getOrderV2(String orderId) async {
+    final response = await _dio.get('/pos/v2/orders/$orderId');
+    return PosOrder.fromJson(response.data);
+  }
+
+  Future<PosOrder> addItemsToOrder(String orderId, List<Map<String, dynamic>> items) async {
+    final response = await _dio.post('/pos/v2/orders/$orderId/items', data: items);
+    return PosOrder.fromJson(response.data);
+  }
+
+  Future<PosOrder> updateOrderStatusV2(String orderId, String status) async {
+    final response = await _dio.patch('/pos/v2/orders/$orderId/status',
+        data: {'status': status});
+    return PosOrder.fromJson(response.data);
+  }
+
+  Future<PosOrder> applyDiscount(String orderId, double discountPct, String managerPin) async {
+    final response = await _dio.patch('/pos/v2/orders/$orderId/discount',
+        data: {'discount_pct': discountPct, 'manager_pin': managerPin});
+    return PosOrder.fromJson(response.data);
+  }
+
+  // KDS v2
+  Future<PosOrderItem> updateKdsItemStatus(String itemId, String kdsStatus) async {
+    final response = await _dio.patch('/pos/v2/order-items/$itemId/kds-status',
+        data: {'kds_status': kdsStatus});
+    return PosOrderItem.fromJson(response.data);
+  }
+
+  Future<List<dynamic>> getKdsItems({String? status}) async {
+    final params = <String, dynamic>{};
+    if (status != null) params['status'] = status;
+    final response = await _dio.get('/pos/v2/kds/items', queryParameters: params);
+    return response.data as List;
+  }
+
+  // Payments
+  Future<PosPayment> createPayment(String orderId, String method,
+      double amount, {double tipAmount = 0.0}) async {
+    final response = await _dio.post('/pos/v2/payments', data: {
+      'order_id': orderId, 'method': method,
+      'amount': amount, 'tip_amount': tipAmount,
+    });
+    return PosPayment.fromJson(response.data);
+  }
+
+  // Tips
+  Future<TipSummary> getMyTips({String? date}) async {
+    final params = <String, dynamic>{};
+    if (date != null) params['target_date'] = date;
+    final response = await _dio.get('/pos/v2/tips/my', queryParameters: params);
+    return TipSummary.fromJson(response.data);
+  }
 }

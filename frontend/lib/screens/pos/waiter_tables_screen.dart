@@ -12,8 +12,8 @@ class WaiterTablesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tablesAsync = ref.watch(tablesProvider);
-    final ordersAsync = ref.watch(activeOrdersProvider);
+    final tablesAsync = ref.watch(posTablesProvider);
+    final ordersAsync = ref.watch(posActiveOrdersProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -78,7 +78,7 @@ class WaiterTablesScreen extends ConsumerWidget {
           }
 
           // Build a map of tableId -> active orders
-          final ordersByTable = <String, List<KitchenOrder>>{};
+          final ordersByTable = <String, List<PosOrder>>{};
           final orders = ordersAsync.valueOrNull ?? [];
           for (final order in orders) {
             ordersByTable.putIfAbsent(order.tableId, () => []).add(order);
@@ -86,8 +86,8 @@ class WaiterTablesScreen extends ConsumerWidget {
 
           return RefreshIndicator(
             onRefresh: () async {
-              ref.invalidate(tablesProvider);
-              ref.invalidate(activeOrdersProvider);
+              ref.invalidate(posTablesProvider);
+              ref.invalidate(posActiveOrdersProvider);
             },
             child: GridView.builder(
               padding: const EdgeInsets.all(16),
@@ -103,7 +103,7 @@ class WaiterTablesScreen extends ConsumerWidget {
                 final tableOrders = ordersByTable[table.id] ?? [];
                 final hasActive = tableOrders.isNotEmpty;
                 final hasReady = tableOrders.any(
-                  (o) => o.status == KitchenOrderStatus.READY,
+                  (o) => o.items.any((i) => i.kdsStatus == KdsStatus.READY),
                 );
 
                 Color cardColor;

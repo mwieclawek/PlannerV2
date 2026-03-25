@@ -98,7 +98,44 @@ backend/error.log
 backend/error_full.txt
 backend/pydantic_error.txt
 backend/test_failures.txt
+backend/cleanup_db.py
+backend/fix_tests.py
+backend/get_error.py
+backend/test_enum.py
+
+# Backend temp/debug files (KDS session)
+backend/alembic_err.txt
+backend/db_log.txt
+backend/error.txt
+backend/error_ascii.txt
+backend/error_full_ascii.txt
+backend/err.txt
+backend/employee_err.txt
+backend/sqlite_debug.txt
+backend/trace.txt
+backend/seed_err.txt
+backend/seed_err_utf8.txt
+backend/seed_out.txt
+backend/test_err*.txt
+backend/test_err_api*.txt
+backend/test_err_pyd*.txt
+backend/temp_test.log
+backend/test_result.log
+backend/backend_tests*.log
+backend/test_output.txt
+backend/pytest_err.txt
+backend/pytest_out.txt
+backend/test_backend.log
+backend/planner.db
+backend/database.db
+
+# Root debug scripts
+check_db.py
+git_status.txt
 
 # Frontend analysis
 frontend/analysis.txt
+frontend/analyze_out.txt
 
+# Token files
+backend/token.json

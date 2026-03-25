@@ -24,8 +24,8 @@ graph TD
 
     subgraph BACKEND["BACKEND (FastAPI)"]
         direction TB
-        ROUTERS["Routers Layer: auth | manager | employee | scheduler | kitchen | notifications | health | bug"]
-        SERVICES["Services Layer: ManagerService | EmployeeService | SchedulerService | PushService"]
+        ROUTERS["Routers Layer: auth | manager | employee | scheduler | pos | kitchen | notifications | health | bug"]
+        SERVICES["Services Layer: ManagerService | EmployeeService | SchedulerService | PosService | KDSService | PushService"]
         SOLVER["SolverService (OR-Tools CP-SAT)\n- Constraint Programming\n- Employee-Shift-Role Assignment\n- Soft Penalties > Hard Limits"]
         ORM["SQLModel (ORM) + Alembic"]
 
@@ -160,37 +160,91 @@ erDiagram
         time close_time
     }
 
-    RestaurantTable {
+    TableZone {
         UUID id PK
         string name
+        int sort_order
         bool is_active
+    }
+
+    PosTable {
+        UUID id PK
+        string name
+        UUID zone_id FK
+        int seats
+        enum status "FREE / OCCUPIED / BILL_PRINTED / DIRTY"
+    }
+
+    Category {
+        int id PK
+        string name UK
+        string color_hex
+        int sort_order
     }
 
     MenuItem {
         UUID id PK
         string name
         float price
-        enum category "SOUPS / MAINS / DESSERTS / DRINKS"
-        bool is_active
+        int category_id FK
+        int prep_time_sec "KDS Pacing"
+        float tax_rate
+        bool kitchen_print
+        bool bar_print
     }
 
-    KitchenOrder {
+    ModifierGroup {
+        int id PK
+        string name
+        int min_select
+        int max_select
+    }
+
+    Modifier {
+        int id PK
+        int group_id FK
+        string name
+        float price_override
+    }
+
+    Order {
         UUID id PK
         UUID table_id FK
         UUID waiter_id FK
-        enum status "PENDING / IN_PROGRESS / READY / DELIVERED / CANCELLED"
-        datetime created_at
-        datetime updated_at
+        enum status "OPEN / SENT / PARTIALLY_PAID / PAID / CANCELLED"
+        int guest_count
+        float discount_pct
     }
 
-    KitchenOrderItem {
+    OrderItem {
         UUID id PK
         UUID order_id FK
         UUID menu_item_id FK
         int quantity
-        string notes
-        float unit_price
-        string menu_item_name_snapshot
+        float unit_price_snapshot
+        string item_name_snapshot
+        int prep_time_sec_snapshot
+        int course
+        enum kds_status "NEW / PREPARING / READY / DELIVERED / VOIDED"
+        int document_version
+    }
+
+    Payment {
+        UUID id PK
+        UUID order_id FK
+        enum method "CASH / CARD / VOUCHER / MOBILE"
+        float amount
+        float tip_amount
+    }
+
+    KDSEventLog {
+        UUID id PK
+        UUID order_item_id FK
+        string action_type
+        UUID actor_id FK
+        string old_state
+        string new_state
+        bool is_undo
     }
 
     User ||--o{ Availability : "has"
@@ -209,10 +263,15 @@ erDiagram
     Schedule ||--o| ShiftGiveaway : "can be given away"
     Schedule ||--o| Attendance : "linked to"
     RestaurantConfig ||--o{ RestaurantOpeningHour : "hours"
-    RestaurantTable ||--o{ KitchenOrder : "has orders"
-    KitchenOrder ||--o{ KitchenOrderItem : "contains"
-    MenuItem ||--o{ KitchenOrderItem : "referenced by"
-    User ||--o{ KitchenOrder : "waiter"
+    TableZone ||--o{ PosTable : "contains"
+    PosTable ||--o{ Order : "has orders"
+    User ||--o{ Order : "waiter"
+    Category ||--o{ MenuItem : "contains"
+    MenuItem }o--o{ ModifierGroup : "M:N via MenuItemModifierGroup"
+    ModifierGroup ||--o{ Modifier : "options"
+    Order ||--o{ OrderItem : "line items"
+    Order ||--o{ Payment : "payments"
+    OrderItem ||--o{ KDSEventLog : "audit trail"
 ```
 
 ## Warstwa Serwisów
@@ -223,6 +282,8 @@ erDiagram
 | `ManagerService` | CRUD ról/zmian/users, statystyki, giveaway management, wymagania kadrowe, urlopy (approve/reject), dashboard, konfiguracja restauracji |
 | `EmployeeService` | Dostępność (+ status endpoint), grafik z listą współpracowników, obecność, integracja Google Calendar (OAuth 2.0) |
 | `SchedulerService` | Zapis batch, listowanie, publikacja grafiku z powiadomieniami push |
+| `PosService` | CRUD stref/stołów/kategorii/menu/modyfikatorów, zarządzanie zamówieniami i płatnościami, snapshotowanie cen |
+| `KDSService` | **Monotoniczny sync batch** (walidacja wag stanów, anti-ghosting, audit log), **Pacing Engine** (anchor-based course staggering, `delay_start_sec`) |
 | `PushService` | Firebase Cloud Messaging — wysyłka powiadomień push na urządzenia mobilne, fallback na mock w dev |
 
 ## Przepływ Generowania Grafiku
@@ -286,26 +347,37 @@ sequenceDiagram
     end
 ```
 
-## Przepływ Zamówienia (POS/KDS)
+## Przepływ Zamówienia POS v2 / KDS (Offline-First Sync)
 
 ```mermaid
 sequenceDiagram
     participant W as Kelner (Waiter)
     participant POS as POS Screen
-    participant B as Backend
-    participant KDS as Kitchen Display
+    participant B as Backend (Fat Server)
+    participant KDS as KDS Tablet (Thin Client)
 
-    W->>POS: Wybór stolika + pozycji z menu
-    POS->>B: POST /kitchen/orders
-    Note over B: Snapshot ceny i nazwy każdej pozycji
-    B-->>POS: {order_id, status: PENDING}
-    KDS->>B: GET /kitchen/orders?status=PENDING (polling 8s)
-    B-->>KDS: Lista nowych zamówień
-    KDS->>B: PATCH /kitchen/orders/{id}/status {status: IN_PROGRESS}
-    Note over KDS: Kucharz rozpoczyna przygotowanie
-    KDS->>B: PATCH /kitchen/orders/{id}/status {status: READY}
-    W->>POS: Widzi zamówienie jako READY
-    W->>B: PATCH /kitchen/orders/{id}/status {status: DELIVERED}
+    W->>POS: Wybór stolika + pozycji z menu + kursy
+    POS->>B: POST /pos/v2/orders
+    Note over B: Snapshot ceny, nazwy, prep_time_sec każdej pozycji
+    B-->>POS: {order_id, status: OPEN, items[]}
+
+    KDS->>B: GET /pos/v2/kds/items (polling)
+    B->>B: KDSService.calculate_pacing(items)
+    Note over B: Anchor-based staggering: najdłuższy prep_time_sec = anchor,<br/>pozostałe pozycje w kursie dostają delay_start_sec
+    B-->>KDS: Lista pozycji + pacing_metadata {is_anchor, delay_start_sec}
+
+    Note over KDS: Kucharz pracuje offline (zerwane Wi-Fi)
+    KDS->>KDS: Lokalna zmiana stanów (NEW → PREPARING → READY)
+
+    Note over KDS: Wi-Fi wróciło — batch sync
+    KDS->>B: POST /pos/v2/kds/sync {actions: [{item_id, new_status, client_timestamp}]}
+    B->>B: KDSService.process_sync_batch()
+    Note over B: Monotonic weight check (NEW:10 < PREPARING:30 < READY:40)<br/>✓ Forward OK | ✗ Stale rejected | ✗ Voided ghost blocked
+    B->>B: KDSEventLog (audit trail)
+    B-->>KDS: {results: [{success, applied_status}], server_time}
+
+    W->>POS: Widzi pozycje jako READY
+    W->>B: POST /pos/v2/kds/sync {READY → DELIVERED}
 ```
 
 ## Powiadomienia Push (FCM)
@@ -322,7 +394,7 @@ System obsługuje powiadomienia push za pomocą Firebase Cloud Messaging:
 
 ## Bezpieczeństwo
 
-- **JWT Auth**: Tokeny ważne 60 min (bcrypt password hashing)
+- **JWT Auth**: Tokeny ważne 60 min (pbkdf2_sha256 password hashing)
 - **Manager PIN**: Konfigurowalny zmienną `MANAGER_REGISTRATION_PIN` (domyślnie `1234`)
 - **Rejestracja wyłączona**: Konta tworzy wyłącznie Manager (`POST /manager/users`)
 - **Aktywacja użytkowników**: Dezaktywowani użytkownicy nie mogą się zalogować (`is_active`)

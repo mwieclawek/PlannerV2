@@ -22,7 +22,7 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
     super.initState();
     // Polling every 8 seconds
     _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) {
-      ref.invalidate(activeOrdersProvider);
+      ref.invalidate(posActiveOrdersProvider);
     });
   }
 
@@ -34,7 +34,7 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ordersAsync = ref.watch(activeOrdersProvider);
+    final ordersAsync = ref.watch(posActiveOrdersProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFF263238),
@@ -51,7 +51,7 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(activeOrdersProvider),
+            onPressed: () => ref.invalidate(posActiveOrdersProvider),
           ),
           IconButton(
             icon: const Icon(Icons.table_restaurant),
@@ -71,7 +71,19 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
       ),
       body: ordersAsync.when(
         data: (orders) {
-          if (orders.isEmpty) {
+          // Filter to only items relevant to KDS
+          final kdsOrders = <PosOrder>[];
+          for (final order in orders) {
+            final activeItems = order.items.where((i) =>
+                i.kdsStatus == KdsStatus.NEW ||
+                i.kdsStatus == KdsStatus.PREPARING ||
+                i.kdsStatus == KdsStatus.READY).toList();
+            if (activeItems.isNotEmpty) {
+              kdsOrders.add(order);
+            }
+          }
+
+          if (kdsOrders.isEmpty) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -94,20 +106,19 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
             );
           }
 
-          // Group by status: PENDING first, then IN_PROGRESS, then READY
-          final pending =
-              orders
-                  .where((o) => o.status == KitchenOrderStatus.PENDING)
-                  .toList();
-          final inProgress =
-              orders
-                  .where((o) => o.status == KitchenOrderStatus.IN_PROGRESS)
-                  .toList();
-          final ready =
-              orders
-                  .where((o) => o.status == KitchenOrderStatus.READY)
-                  .toList();
-          final sortedOrders = [...pending, ...inProgress, ...ready];
+          // Sort orders: NEW first, then PREPARING, then READY.
+          int getOrderWeight(PosOrder o) {
+            if (o.items.any((i) => i.kdsStatus == KdsStatus.NEW)) return 0;
+            if (o.items.any((i) => i.kdsStatus == KdsStatus.PREPARING)) return 1;
+            return 2;
+          }
+
+          kdsOrders.sort((a, b) {
+            final wA = getOrderWeight(a);
+            final wB = getOrderWeight(b);
+            if (wA != wB) return wA.compareTo(wB);
+            return a.createdAt.compareTo(b.createdAt);
+          });
 
           return GridView.builder(
             padding: const EdgeInsets.all(16),
@@ -117,9 +128,9 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
               mainAxisSpacing: 16,
               childAspectRatio: 0.7,
             ),
-            itemCount: sortedOrders.length,
+            itemCount: kdsOrders.length,
             itemBuilder:
-                (context, index) => _KdsTicket(order: sortedOrders[index]),
+                (context, index) => _KdsTicket(order: kdsOrders[index]),
           );
         },
         loading:
@@ -139,23 +150,35 @@ class _KdsScreenState extends ConsumerState<KdsScreen> {
 }
 
 class _KdsTicket extends ConsumerWidget {
-  final KitchenOrder order;
+  final PosOrder order;
   const _KdsTicket({required this.order});
+
+  KdsStatus _getTicketCollectiveStatus() {
+    final items = order.items.where((i) =>
+        i.kdsStatus == KdsStatus.NEW ||
+        i.kdsStatus == KdsStatus.PREPARING ||
+        i.kdsStatus == KdsStatus.READY).toList();
+    if (items.any((i) => i.kdsStatus == KdsStatus.NEW)) return KdsStatus.NEW;
+    if (items.any((i) => i.kdsStatus == KdsStatus.PREPARING)) return KdsStatus.PREPARING;
+    return KdsStatus.READY;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     Color headerColor;
     Color borderColor;
-    switch (order.status) {
-      case KitchenOrderStatus.PENDING:
+    final collectiveStatus = _getTicketCollectiveStatus();
+
+    switch (collectiveStatus) {
+      case KdsStatus.NEW:
         headerColor = const Color(0xFFFF6F00);
         borderColor = const Color(0xFFFF6F00);
         break;
-      case KitchenOrderStatus.IN_PROGRESS:
+      case KdsStatus.PREPARING:
         headerColor = const Color(0xFF1565C0);
         borderColor = const Color(0xFF1565C0);
         break;
-      case KitchenOrderStatus.READY:
+      case KdsStatus.READY:
         headerColor = const Color(0xFF2E7D32);
         borderColor = const Color(0xFF4CAF50);
         break;
@@ -169,6 +192,11 @@ class _KdsTicket extends ConsumerWidget {
         elapsed.inMinutes > 0
             ? '${elapsed.inMinutes} min'
             : '${elapsed.inSeconds} sek';
+
+    final items = order.items.where((i) =>
+        i.kdsStatus == KdsStatus.NEW ||
+        i.kdsStatus == KdsStatus.PREPARING ||
+        i.kdsStatus == KdsStatus.READY).toList();
 
     return Card(
       elevation: 4,
@@ -228,9 +256,10 @@ class _KdsTicket extends ConsumerWidget {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              itemCount: order.items.length,
+              itemCount: items.length,
               itemBuilder: (context, index) {
-                final item = order.items[index];
+                final item = items[index];
+                final isDone = item.kdsStatus == KdsStatus.READY;
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(
@@ -255,11 +284,12 @@ class _KdsTicket extends ConsumerWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          item.menuItemName ?? '—',
+                          item.itemNameSnapshot,
                           style: GoogleFonts.inter(
                             fontSize: 13,
-                            color: Colors.white,
+                            color: isDone ? Colors.grey : Colors.white,
                             fontWeight: FontWeight.w500,
+                            decoration: isDone ? TextDecoration.lineThrough : null,
                           ),
                         ),
                       ),
@@ -273,18 +303,18 @@ class _KdsTicket extends ConsumerWidget {
           // Action button
           Padding(
             padding: const EdgeInsets.all(10),
-            child: _buildActionButton(context, ref),
+            child: _buildActionButton(context, ref, collectiveStatus, items),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildActionButton(BuildContext context, WidgetRef ref) {
-    switch (order.status) {
-      case KitchenOrderStatus.PENDING:
+  Widget _buildActionButton(BuildContext context, WidgetRef ref, KdsStatus collectiveStatus, List<PosOrderItem> items) {
+    switch (collectiveStatus) {
+      case KdsStatus.NEW:
         return FilledButton.icon(
-          onPressed: () => _updateStatus(ref, 'IN_PROGRESS'),
+          onPressed: () => _updateAllItems(ref, items, KdsStatus.NEW, 'PREPARING'),
           icon: const Icon(Icons.play_arrow),
           label: const Text('Rozpocznij'),
           style: FilledButton.styleFrom(
@@ -293,9 +323,9 @@ class _KdsTicket extends ConsumerWidget {
             minimumSize: const Size.fromHeight(42),
           ),
         );
-      case KitchenOrderStatus.IN_PROGRESS:
+      case KdsStatus.PREPARING:
         return FilledButton.icon(
-          onPressed: () => _updateStatus(ref, 'READY'),
+          onPressed: () => _updateAllItems(ref, items, KdsStatus.PREPARING, 'READY'),
           icon: const Icon(Icons.check),
           label: const Text('GOTOWE'),
           style: FilledButton.styleFrom(
@@ -304,9 +334,9 @@ class _KdsTicket extends ConsumerWidget {
             minimumSize: const Size.fromHeight(42),
           ),
         );
-      case KitchenOrderStatus.READY:
+      case KdsStatus.READY:
         return OutlinedButton.icon(
-          onPressed: () => _updateStatus(ref, 'DELIVERED'),
+          onPressed: () => _updateAllItems(ref, items, KdsStatus.READY, 'DELIVERED'),
           icon: const Icon(Icons.done_all),
           label: const Text('Wydano'),
           style: OutlinedButton.styleFrom(
@@ -320,10 +350,16 @@ class _KdsTicket extends ConsumerWidget {
     }
   }
 
-  Future<void> _updateStatus(WidgetRef ref, String status) async {
+  Future<void> _updateAllItems(WidgetRef ref, List<PosOrderItem> items, KdsStatus currentStatus, String targetStatus) async {
     final api = ref.read(apiServiceProvider);
-    await api.updateOrderStatus(order.id, status);
-    ref.invalidate(activeOrdersProvider);
-    ref.invalidate(ordersProvider);
+    
+    // Update all items that match the collective 'waiting' state
+    for (final item in items) {
+      if (item.kdsStatus == currentStatus) {
+        await api.updateKdsItemStatus(item.id, targetStatus);
+      }
+    }
+    
+    ref.invalidate(posActiveOrdersProvider);
   }
 }
