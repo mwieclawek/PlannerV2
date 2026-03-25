@@ -7,14 +7,16 @@ graph TD
     subgraph FRONTEND["FRONTEND (Flutter Web/Mobile)"]
         direction TB
         LOGIN["Login / Setup"]
-        MANAGER_UI["Manager UI (6 zakładek)"]
-        EMPLOYEE_UI["Employee Dashboard (3 ekrany)"]
+        MANAGER_UI["Manager UI (8 zakładek)"]
+        EMPLOYEE_UI["Employee Dashboard (5 ekranów)"]
+        POS_UI["POS / KDS Screens"]
         API_SVC["ApiService (Dio + JWT)"]
         CONFIG_SVC["ConfigService (QR / Manual)"]
 
         LOGIN --> API_SVC
         MANAGER_UI --> API_SVC
         EMPLOYEE_UI --> API_SVC
+        POS_UI --> API_SVC
         MANAGER_UI --> CONFIG_SVC
     end
 
@@ -22,9 +24,9 @@ graph TD
 
     subgraph BACKEND["BACKEND (FastAPI)"]
         direction TB
-        ROUTERS["Routers Layer: auth | manager | employee | scheduler | health | bug"]
-        SERVICES["Services Layer: ManagerService | EmployeeService | SchedulerService"]
-        SOLVER["SolverService (OR-Tools CP-SAT)\n- Constraint Programming\n- Employee-Shift-Role Assignment\n- Availability & Requirements Matching"]
+        ROUTERS["Routers Layer: auth | manager | employee | scheduler | kitchen | notifications | health | bug"]
+        SERVICES["Services Layer: ManagerService | EmployeeService | SchedulerService | PushService"]
+        SOLVER["SolverService (OR-Tools CP-SAT)\n- Constraint Programming\n- Employee-Shift-Role Assignment\n- Soft Penalties > Hard Limits"]
         ORM["SQLModel (ORM) + Alembic"]
 
         ROUTERS --> SERVICES
@@ -32,6 +34,7 @@ graph TD
         SERVICES --> ORM
     end
 
+    SERVICES -- "FCM Push" --> FCM["Firebase Cloud Messaging"]
     ORM --> DB["SQLite (dev) / PostgreSQL (prod)"]
 ```
 
@@ -49,8 +52,9 @@ erDiagram
         bool is_active
         int target_hours_per_month
         int target_shifts_per_month
-        string google_access_token
-        string google_refresh_token
+        string encrypted_google_access_token
+        string encrypted_google_refresh_token
+        datetime created_at
     }
 
     JobRole {
@@ -64,55 +68,96 @@ erDiagram
         string name
         time start_time
         time end_time
-        string applicable_days
+    }
+
+    ShiftDefinitionDayLink {
+        int shift_def_id FK
+        int day_of_week "0=Mon 6=Sun"
     }
 
     Availability {
-        int id PK
+        UUID id PK
+        UUID user_id FK
         date date
-        enum status "PREFERRED / NEUTRAL / UNAVAILABLE"
+        int shift_def_id FK
+        enum status "AVAILABLE / UNAVAILABLE"
     }
 
     StaffingRequirement {
-        int id PK
+        UUID id PK
+        int shift_def_id FK
+        int role_id FK
         int min_count
-        date date
-        int day_of_week
+        date date "nullable - specific date"
+        int day_of_week "nullable - global rule"
     }
 
     Schedule {
         UUID id PK
         date date
+        int shift_def_id FK
+        UUID user_id FK
+        int role_id FK
         bool is_published
     }
 
     Attendance {
         UUID id PK
+        UUID user_id FK
         date date
         time check_in
         time check_out
-        enum status "PENDING / CONFIRMED / REJECTED"
         bool was_scheduled
+        enum status "PENDING / CONFIRMED / REJECTED"
+        UUID schedule_id FK
     }
 
     ShiftGiveaway {
         UUID id PK
+        UUID schedule_id FK
+        UUID offered_by FK
+        UUID taken_by FK
         enum status "OPEN / TAKEN / CANCELLED"
+    }
+
+    LeaveRequest {
+        UUID id PK
+        UUID user_id FK
+        date start_date
+        date end_date
+        string reason
+        enum status "PENDING / APPROVED / REJECTED / CANCELLED"
+        UUID reviewed_by FK
+    }
+
+    Notification {
+        UUID id PK
+        UUID user_id FK
+        string title
+        string body
+        bool is_read
+        datetime created_at
+    }
+
+    UserDevice {
+        UUID id PK
+        UUID user_id FK
+        string fcm_token UK
+        datetime last_active
     }
 
     RestaurantConfig {
         int id PK
         string name
         string address
-        string opening_hours
     }
 
-    MenuItem {
-        UUID id PK
-        string name
-        float price
-        enum category "SOUPS/MAINS/DESSERTS/DRINKS"
-        bool is_active
+    RestaurantOpeningHour {
+        int id PK
+        int config_id FK
+        int day_of_week
+        time open_time
+        time close_time
     }
 
     RestaurantTable {
@@ -121,44 +166,64 @@ erDiagram
         bool is_active
     }
 
+    MenuItem {
+        UUID id PK
+        string name
+        float price
+        enum category "SOUPS / MAINS / DESSERTS / DRINKS"
+        bool is_active
+    }
+
     KitchenOrder {
         UUID id PK
-        enum status "PENDING/IN_PROGRESS/READY/DELIVERED/CANCELLED"
+        UUID table_id FK
+        UUID waiter_id FK
+        enum status "PENDING / IN_PROGRESS / READY / DELIVERED / CANCELLED"
         datetime created_at
         datetime updated_at
     }
 
     KitchenOrderItem {
         UUID id PK
+        UUID order_id FK
+        UUID menu_item_id FK
         int quantity
-        float unit_price
         string notes
+        float unit_price
+        string menu_item_name_snapshot
     }
 
     User ||--o{ Availability : "has"
     User ||--o{ Schedule : "assigned to"
     User ||--o{ Attendance : "registers"
-    User ||--o{ KitchenOrder : "creates (waiter)"
+    User ||--o{ LeaveRequest : "submits"
+    User ||--o{ Notification : "receives"
+    User ||--o{ UserDevice : "has devices"
     User }o--o{ JobRole : "has roles (M:N via UserJobRoleLink)"
+    ShiftDefinition ||--o{ ShiftDefinitionDayLink : "applicable on"
     ShiftDefinition ||--o{ Availability : "for shift"
     ShiftDefinition ||--o{ Schedule : "uses"
     ShiftDefinition ||--o{ StaffingRequirement : "requires"
     JobRole ||--o{ StaffingRequirement : "for role"
     JobRole ||--o{ Schedule : "as role"
     Schedule ||--o| ShiftGiveaway : "can be given away"
-    RestaurantTable ||--o{ KitchenOrder : "has"
+    Schedule ||--o| Attendance : "linked to"
+    RestaurantConfig ||--o{ RestaurantOpeningHour : "hours"
+    RestaurantTable ||--o{ KitchenOrder : "has orders"
     KitchenOrder ||--o{ KitchenOrderItem : "contains"
-    MenuItem ||--o{ KitchenOrderItem : "ordered as"
+    MenuItem ||--o{ KitchenOrderItem : "referenced by"
+    User ||--o{ KitchenOrder : "waiter"
 ```
 
 ## Warstwa Serwisów
 
 | Serwis | Odpowiedzialność |
 |--------|-----------------|
-| `SolverService` | Generowanie grafiku (OR-Tools CP-SAT): ładowanie ograniczeń (dostępność, wymagania, cele godzinowe MTD), uruchomienie solvera, zwrócenie propozycji z ostrzeżeniami |
-| `ManagerService` | Operacje managera: CRUD ról/zmian/users, statystyki, giveaway management, edycja imion (first/last → full_name), podgląd dostępności na zmianę |
-| `EmployeeService` | Operacje pracownika: dostępność (+ status endpoint), grafik z listą współpracowników, obecność, integracja Google Calendar (OAuth 2.0 token exchange) |
-| `SchedulerService` | Operacje na grafiku: zapis batch, listowanie, publikacja |
+| `SolverService` | Generowanie grafiku (OR-Tools CP-SAT): ładowanie ograniczeń (dostępność, wymagania, cele godzinowe MTD), soft penalties za nadgodziny, priorytet wypełniania zmian nad limitami |
+| `ManagerService` | CRUD ról/zmian/users, statystyki, giveaway management, wymagania kadrowe, urlopy (approve/reject), dashboard, konfiguracja restauracji |
+| `EmployeeService` | Dostępność (+ status endpoint), grafik z listą współpracowników, obecność, integracja Google Calendar (OAuth 2.0) |
+| `SchedulerService` | Zapis batch, listowanie, publikacja grafiku z powiadomieniami push |
+| `PushService` | Firebase Cloud Messaging — wysyłka powiadomień push na urządzenia mobilne, fallback na mock w dev |
 
 ## Przepływ Generowania Grafiku
 
@@ -175,6 +240,7 @@ sequenceDiagram
     S->>S: Load: users, roles, shifts, requirements, availability
     S->>S: Fetch MTD hours (month-to-date)
     S->>S: CP-SAT Solver (constraints + soft penalties)
+    Note over S: Priorytet: wypełnienie zmiany (+50k) > kara za nadgodziny (-2k)
     S-->>B: {status, schedules[], warnings[]}
     B-->>F: Draft schedule (nie zapisany do DB)
     F->>F: Display in grid (Draft Mode)
@@ -184,70 +250,75 @@ sequenceDiagram
     B-->>F: {status: saved, count}
     M->>F: Klik "Opublikuj"
     F->>B: POST /scheduler/publish
+    B->>B: Create Notifications + Push (FCM)
     B-->>F: {status: published, count}
-    Note over F: Pracownicy widzą grafik
+    Note over F: Pracownicy widzą grafik + otrzymują powiadomienie push
 ```
 
-## Przepływ Oddawania Zmiany
+## Przepływ Giełdy Zmian
 
 ```mermaid
 sequenceDiagram
-    participant E as Pracownik
+    participant E1 as Pracownik (oddający)
     participant F as Frontend
     participant B as Backend
+    participant E2 as Pracownik (przejmujący)
     participant M as Manager
 
-    E->>F: Klik "Oddaj zmianę"
+    E1->>F: Klik "Oddaj zmianę"
     F->>B: POST /employee/giveaway/{schedule_id}
-    B-->>F: {id, status: OPEN}
-    Note over B: Giveaway widoczny w panelu Managera
-    M->>F: Widzi listę oddawanych zmian
-    F->>B: GET /manager/giveaways
-    B-->>F: Giveaways + sugerowane zastępstwa
-    M->>F: Klik "Przydziel" (wybór zastępcy)
-    F->>B: POST /manager/giveaways/{id}/reassign
-    B-->>F: {status: TAKEN}
+    B->>B: Create ShiftGiveaway (OPEN)
+    B->>B: Notify managers + eligible employees (in-app + push)
+    B-->>F: {id, status: created}
+    Note over B: Powiadomienia trafiają do managerów i kwalifikujących się pracowników
+
+    alt Pracownik przejmuje
+        E2->>F: Widzi zmianę na giełdzie
+        F->>B: POST /employee/giveaways/{id}/claim
+        B->>B: Sprawdź konflikty (overlap > 30 min = blok)
+        B->>B: Reassign schedule to E2
+        B->>B: Notify E1 + managers (push + in-app)
+        B-->>F: {status: claimed}
+    else Manager przydziela
+        M->>F: Widzi listę oddawanych zmian + sugestie
+        F->>B: POST /manager/giveaways/{id}/reassign
+        B-->>F: {status: reassigned}
+    end
 ```
 
-## Przepływ Zamówień (POS & KDS)
+## Przepływ Zamówienia (POS/KDS)
 
 ```mermaid
 sequenceDiagram
-    participant K as Kelner (POS)
+    participant W as Kelner (Waiter)
+    participant POS as POS Screen
     participant B as Backend
-    participant C as Kuchnia (KDS)
+    participant KDS as Kitchen Display
 
-    K->>B: Otwiera rachunek na stoliku
-    K->>B: POST /kitchen/orders (z pozycjami menu)
-    B-->>K: Zwraca status PENDING
-    Note over B,C: Kuchnia widzi zamówienie
-    C->>B: GET /kitchen/orders
-    B-->>C: Zwraca nowe tickety
-    C->>B: PUT status na IN_PROGRESS (w trakcie)
-    Note over K,B: Kelner widzi zmianę statusu
-    C->>B: PUT status na READY (gotowe)
-    K->>B: PUT status na DELIVERED (wydane)
+    W->>POS: Wybór stolika + pozycji z menu
+    POS->>B: POST /kitchen/orders
+    Note over B: Snapshot ceny i nazwy każdej pozycji
+    B-->>POS: {order_id, status: PENDING}
+    KDS->>B: GET /kitchen/orders?status=PENDING (polling 8s)
+    B-->>KDS: Lista nowych zamówień
+    KDS->>B: PATCH /kitchen/orders/{id}/status {status: IN_PROGRESS}
+    Note over KDS: Kucharz rozpoczyna przygotowanie
+    KDS->>B: PATCH /kitchen/orders/{id}/status {status: READY}
+    W->>POS: Widzi zamówienie jako READY
+    W->>B: PATCH /kitchen/orders/{id}/status {status: DELIVERED}
 ```
 
-## Przepływ Integracji Google Calendar
+## Powiadomienia Push (FCM)
 
-```mermaid
-sequenceDiagram
-    participant E as Pracownik
-    participant F as Frontend
-    participant B as Backend
-    participant G as Google OAuth
+System obsługuje powiadomienia push za pomocą Firebase Cloud Messaging:
 
-    E->>F: Klik "Połącz Google Calendar"
-    F->>G: Redirect do Google Consent Screen
-    G-->>F: Authorization code (auth_code)
-    F->>B: POST /employee/google-calendar/auth {auth_code}
-    B->>G: POST https://oauth2.googleapis.com/token
-    Note over B,G: exchange auth_code for tokens
-    G-->>B: {access_token, refresh_token}
-    B->>B: Save tokens to User model
-    B-->>F: {status: success}
-```
+| Zdarzenie | Odbiorcy | Kanał |
+|-----------|----------|-------|
+| Opublikowanie grafiku | Pracownicy z przypisaniami | In-app + Push |
+| Nowa zmiana na giełdzie | Managerowie + kwalifikujący się pracownicy | In-app + Push |
+| Zmiana przejęta z giełdy | Oddający pracownik + managerowie | In-app + Push |
+| Nowy wniosek urlopowy | Managerowie | In-app + Push |
+| Zatwierdzenie/odrzucenie urlopu | Wnioskujący pracownik | In-app + Push |
 
 ## Bezpieczeństwo
 
@@ -256,8 +327,9 @@ sequenceDiagram
 - **Rejestracja wyłączona**: Konta tworzy wyłącznie Manager (`POST /manager/users`)
 - **Aktywacja użytkowników**: Dezaktywowani użytkownicy nie mogą się zalogować (`is_active`)
 - **Role-Based Access**: Manager vs Employee — middleware sprawdza `role_system`
+- **Encrypted Tokens**: Tokeny Google (access + refresh) szyfrowane Fernetem (`ENCRYPTION_KEY`)
 - **CORS**: Skonfigurowany na `*` (dev), do zawężenia w produkcji
-- **Google OAuth 2.0**: Klucze (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) przechowywane jako zmienne środowiskowe, nigdy w kodzie
+- **Google OAuth 2.0**: Klucze przechowywane jako zmienne środowiskowe
 
 ## Wdrożenie (Produkcja)
 
@@ -271,8 +343,9 @@ services:
   backend:
     build: ./backend
     # Alembic migrations run on startup
-    # env: DATABASE_URL, MANAGER_REGISTRATION_PIN, GITHUB_TOKEN
-    #       GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
+    # env: DATABASE_URL, SECRET_KEY, MANAGER_REGISTRATION_PIN,
+    #       ENCRYPTION_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+    #       GOOGLE_APPLICATION_CREDENTIALS, GITHUB_TOKEN, GITHUB_REPO
 
   nginx:
     image: nginx:alpine
@@ -284,4 +357,4 @@ Pipeline CI/CD (Jenkins):
 1. Backend tests (`pytest`)
 2. Frontend analyze (`flutter analyze`)
 3. Docker build & push
-4. Deploy to dev/staging/prod
+4. Blue-Green deployment (DEV: auto z `main`, PROD: auto z tagów)

@@ -80,6 +80,7 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
   final _addressController = TextEditingController();
   bool _isLoadingConfig = true;
   bool _isSavingConfig = false;
+  bool _posEnabled = false;
 
   @override
   void initState() {
@@ -103,6 +104,7 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
         setState(() {
           _restaurantNameController.text = config['name'] ?? '';
           _addressController.text = config['address'] ?? '';
+          _posEnabled = config['pos_enabled'] == true;
           final hours = config['opening_hours'] ?? '';
           if (hours.isNotEmpty && hours.contains('-')) {
             final parts = hours.split('-');
@@ -130,7 +132,10 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
             _restaurantNameController.text,
             openingHours,
             _addressController.text.isNotEmpty ? _addressController.text : null,
+            posEnabled: _posEnabled,
           );
+      // Refresh posEnabledProvider so header buttons update immediately
+      ref.invalidate(posEnabledProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -223,6 +228,28 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 24),
+                          Card(
+                            color: _posEnabled
+                                ? Colors.green.shade50
+                                : null,
+                            child: SwitchListTile(
+                              title: const Text('Moduł POS / Kuchnia'),
+                              subtitle: Text(
+                                _posEnabled
+                                    ? 'Włączony — ikona POS widoczna w panelu'
+                                    : 'Wyłączony — moduł POS ukryty',
+                              ),
+                              secondary: Icon(
+                                Icons.restaurant,
+                                color: _posEnabled
+                                    ? Colors.green.shade700
+                                    : Colors.grey,
+                              ),
+                              value: _posEnabled,
+                              onChanged: (val) => setState(() => _posEnabled = val),
+                            ),
                           ),
                           const SizedBox(height: 24),
                           SizedBox(

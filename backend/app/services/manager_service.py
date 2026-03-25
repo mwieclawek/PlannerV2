@@ -262,23 +262,27 @@ class ManagerService:
             from ..models import RestaurantOpeningHour
             from datetime import datetime
             
-            old_hours = self.session.exec(select(RestaurantOpeningHour).where(RestaurantOpeningHour.config_id == config.id)).all()
-            for h in old_hours:
-                self.session.delete(h)
-                
-            hours_dict = json.loads(opening_hours_json)
-            for day_str, times in hours_dict.items():
-                day_int = int(day_str)
-                open_t = datetime.strptime(times["open"], "%H:%M").time()
-                close_t = datetime.strptime(times["close"], "%H:%M").time()
-                new_h = RestaurantOpeningHour(
-                    config_id=config.id,
-                    day_of_week=day_int,
-                    open_time=open_t,
-                    close_time=close_t
-                )
-                self.session.add(new_h)
-            self.session.commit()
+            try:
+                hours_dict = json.loads(opening_hours_json)
+                if isinstance(hours_dict, dict) and hours_dict:
+                    old_hours = self.session.exec(select(RestaurantOpeningHour).where(RestaurantOpeningHour.config_id == config.id)).all()
+                    for h in old_hours:
+                        self.session.delete(h)
+                        
+                    for day_str, times in hours_dict.items():
+                        day_int = int(day_str)
+                        open_t = datetime.strptime(times["open"], "%H:%M").time()
+                        close_t = datetime.strptime(times["close"], "%H:%M").time()
+                        new_h = RestaurantOpeningHour(
+                            config_id=config.id,
+                            day_of_week=day_int,
+                            open_time=open_t,
+                            close_time=close_t
+                        )
+                        self.session.add(new_h)
+                    self.session.commit()
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                logger.warning(f"Skipping opening_hours update – invalid format: {e}")
             
         self.session.refresh(config)
         return config

@@ -57,11 +57,17 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
             },
           ),
           const NotificationBell(),
-          IconButton(
-            icon: const Icon(Icons.restaurant),
-            tooltip: 'Moduł Restauracji/POS',
-            onPressed: () {
-              ref.read(moduleProvider.notifier).switchModule(AppModule.posKds);
+          Consumer(
+            builder: (context, ref, _) {
+              final posEnabled = ref.watch(posEnabledProvider).valueOrNull ?? false;
+              if (!posEnabled) return const SizedBox.shrink();
+              return IconButton(
+                icon: const Icon(Icons.restaurant),
+                tooltip: 'Moduł Restauracji/POS',
+                onPressed: () {
+                  ref.read(moduleProvider.notifier).switchModule(AppModule.posKds);
+                },
+              );
             },
           ),
           IconButton(

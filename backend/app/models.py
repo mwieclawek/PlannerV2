@@ -156,6 +156,7 @@ class RestaurantConfig(SQLModel, table=True):
     id: int = Field(default=1, primary_key=True)
     name: str
     address: Optional[str] = None
+    pos_enabled: bool = Field(default=False)
     
     opening_hours: List["RestaurantOpeningHour"] = Relationship(back_populates="config")
 

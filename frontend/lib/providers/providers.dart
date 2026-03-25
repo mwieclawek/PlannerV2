@@ -182,3 +182,14 @@ final authProvider = StateNotifierProvider<AuthNotifier, AsyncValue<User?>>((
 
 // Track unsaved changes in scheduler (for warning on tab switch/exit)
 final hasUnsavedScheduleChangesProvider = StateProvider<bool>((ref) => false);
+
+// POS Module enabled flag (from backend config)
+final posEnabledProvider = FutureProvider<bool>((ref) async {
+  final api = ref.watch(apiServiceProvider);
+  try {
+    final config = await api.getConfig();
+    return config['pos_enabled'] == true;
+  } catch (e) {
+    return false;
+  }
+});
