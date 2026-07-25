@@ -256,8 +256,8 @@ class SolverService:
                 excess_var = model.NewIntVar(0, sum(employee_hours_coeffs) + 1000, f"excess_hours_{e.id}")
                 model.Add(assigned_scaled - target_scaled <= excess_var)
                 
-                # Penalty 100 per scaled hour (meaning 1000 per full hour)
-                objective_terms.append(excess_var * -100)
+                # Penalty 6000 per scaled hour (meaning 60,000 per full hour to outweigh slot reward)
+                objective_terms.append(excess_var * -6000)
 
         # 1. Preferences & Slot Filling Reward
         for key, w_var in work.items():

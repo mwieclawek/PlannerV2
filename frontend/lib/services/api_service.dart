@@ -407,6 +407,25 @@ class ApiService {
     );
   }
 
+  // Admin System Settings (Kill Switch / Maintenance Mode)
+  Future<Map<String, dynamic>> getAdminSettings() async {
+    final response = await _dio.get('/api/admin/settings');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateAdminSettings({
+    bool? isLoginEnabled,
+    String? blockedLoginMessage,
+  }) async {
+    final data = <String, dynamic>{};
+    if (isLoginEnabled != null) data['is_login_enabled'] = isLoginEnabled;
+    if (blockedLoginMessage != null) {
+      data['blocked_login_message'] = blockedLoginMessage;
+    }
+    final response = await _dio.put('/api/admin/settings', data: data);
+    return response.data;
+  }
+
   // App Settings
   Future<Map<String, dynamic>> updateAppSettings(
     Map<String, dynamic> settings,
@@ -414,6 +433,7 @@ class ApiService {
     final response = await _dio.put('/manager/settings', data: settings);
     return response.data;
   }
+
 
   // --- Notifications ---
   // (FCM Token Registration)

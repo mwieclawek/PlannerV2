@@ -78,9 +78,13 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
   final _openingHoursController = TextEditingController();
   final _closingHoursController = TextEditingController();
   final _addressController = TextEditingController();
+  final _blockedLoginMessageController = TextEditingController();
+
   bool _isLoadingConfig = true;
   bool _isSavingConfig = false;
+  bool _isSavingAdminSettings = false;
   bool _posEnabled = false;
+  bool _isLoginEnabled = true;
 
   @override
   void initState() {
@@ -94,12 +98,20 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
     _openingHoursController.dispose();
     _closingHoursController.dispose();
     _addressController.dispose();
+    _blockedLoginMessageController.dispose();
     super.dispose();
   }
 
   Future<void> _loadConfig() async {
     try {
       final config = await ref.read(apiServiceProvider).getConfig();
+      Map<String, dynamic>? adminSettings;
+      try {
+        adminSettings = await ref.read(apiServiceProvider).getAdminSettings();
+      } catch (e) {
+        debugPrint('Could not load admin settings: $e');
+      }
+
       if (mounted) {
         setState(() {
           _restaurantNameController.text = config['name'] ?? '';
@@ -112,6 +124,12 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
               _openingHoursController.text = parts[0].trim();
               _closingHoursController.text = parts[1].trim();
             }
+          }
+          if (adminSettings != null) {
+            _isLoginEnabled = adminSettings['is_login_enabled'] ?? true;
+            _blockedLoginMessageController.text =
+                adminSettings['blocked_login_message'] ??
+                'Dostęp do aplikacji został tymczasowo wstrzymany. Skontaktuj się z administratorem.';
           }
           _isLoadingConfig = false;
         });
@@ -155,6 +173,35 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
       }
     } finally {
       if (mounted) setState(() => _isSavingConfig = false);
+    }
+  }
+
+  Future<void> _saveAdminSettings() async {
+    setState(() => _isSavingAdminSettings = true);
+    try {
+      await ref.read(apiServiceProvider).updateAdminSettings(
+            isLoginEnabled: _isLoginEnabled,
+            blockedLoginMessage: _blockedLoginMessageController.text.trim(),
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('✓ Zapisano ustawienia blokady logowania'),
+            backgroundColor: Colors.green.shade600,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Błąd: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingAdminSettings = false);
     }
   }
 
@@ -271,7 +318,7 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
                               label: Text(
                                 _isSavingConfig
                                     ? 'Zapisywanie...'
-                                    : 'Zapisz ustawienia',
+                                    : 'Zapisz ustawienia restauracji',
                               ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor:
@@ -283,6 +330,96 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
                           ),
                         ],
                       ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Blokada Logowania (Maintenance Mode / Kill Switch)',
+            style: GoogleFonts.outfit(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: _isLoadingConfig
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Card(
+                          color: !_isLoginEnabled
+                              ? Colors.amber.shade50
+                              : Colors.green.shade50,
+                          child: SwitchListTile(
+                            title: const Text(
+                              'Zezwól na logowanie użytkownikom',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Text(
+                              _isLoginEnabled
+                                  ? 'Logowanie aktywne dla wszystkich użytkowników'
+                                  : 'Logowanie ZABLOKOWANE (dostęp tylko dla konta administratora/mateusz)',
+                            ),
+                            secondary: Icon(
+                              _isLoginEnabled ? Icons.lock_open : Icons.block,
+                              color: _isLoginEnabled
+                                  ? Colors.green.shade700
+                                  : Colors.amber.shade900,
+                            ),
+                            value: _isLoginEnabled,
+                            onChanged: (val) =>
+                                setState(() => _isLoginEnabled = val),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _blockedLoginMessageController,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            labelText:
+                                'Komunikat wyświetlany przy blokadzie logowania',
+                            hintText:
+                                'Dostęp do aplikacji został tymczasowo wstrzymany...',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.message),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton.icon(
+                            onPressed: _isSavingAdminSettings
+                                ? null
+                                : _saveAdminSettings,
+                            icon: _isSavingAdminSettings
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.admin_panel_settings),
+                            label: Text(
+                              _isSavingAdminSettings
+                                  ? 'Zapisywanie...'
+                                  : 'Zapisz ustawienia blokady logowania',
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: !_isLoginEnabled
+                                  ? Colors.amber.shade900
+                                  : Theme.of(context).colorScheme.primary,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ),
         ],

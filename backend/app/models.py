@@ -7,8 +7,10 @@ from sqlmodel import SQLModel, Field, Relationship, col
 from sqlalchemy import Column, Date, Integer
 
 class RoleSystem(str, Enum):
+    ADMIN = "ADMIN"
     MANAGER = "MANAGER"
     EMPLOYEE = "EMPLOYEE"
+
 
 class AvailabilityStatus(str, Enum):
     UNAVAILABLE = "UNAVAILABLE"
@@ -159,6 +161,15 @@ class RestaurantConfig(SQLModel, table=True):
     pos_enabled: bool = Field(default=False)
     
     opening_hours: List["RestaurantOpeningHour"] = Relationship(back_populates="config")
+
+class SystemSettings(SQLModel, table=True):
+    __tablename__ = "system_settings"
+    id: int = Field(default=1, primary_key=True)
+    is_login_enabled: bool = Field(default=True)
+    blocked_login_message: str = Field(
+        default="Dostęp do aplikacji został tymczasowo wstrzymany. Skontaktuj się z administratorem."
+    )
+
 
 class AttendanceStatus(str, Enum):
     PENDING = "PENDING"       # Waiting for manager approval (unscheduled)

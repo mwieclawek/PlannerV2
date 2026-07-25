@@ -42,7 +42,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       if (mounted) {
         String message = 'Wystąpił błąd';
+        bool isForbidden = false;
         if (e is DioException) {
+          if (e.response?.statusCode == 403) {
+            isForbidden = true;
+          }
           final responseData = e.response?.data;
           if (responseData is Map && responseData['detail'] != null) {
             message = responseData['detail'].toString();
@@ -56,12 +60,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           message = e.toString();
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red.shade600,
-          ),
-        );
+        if (isForbidden && !message.contains('Nieprawidłowy')) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Row(
+                children: [
+                  Icon(Icons.lock_clock, color: Colors.orange),
+                  SizedBox(width: 8),
+                  Text('Dostęp Wstrzymany'),
+                ],
+              ),
+              content: Text(
+                message,
+                style: const TextStyle(fontSize: 15),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Zamknij'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: Colors.red.shade600,
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) {

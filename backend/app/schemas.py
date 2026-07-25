@@ -318,6 +318,19 @@ class ConfigResponse(ConfigBase):
     class Config:
         from_attributes = True
 
+# --- System Settings (Kill Switch / Maintenance Mode) ---
+class SystemSettingsResponse(BaseModel):
+    is_login_enabled: bool = True
+    blocked_login_message: str
+
+    class Config:
+        from_attributes = True
+
+class SystemSettingsUpdate(BaseModel):
+    is_login_enabled: Optional[bool] = None
+    blocked_login_message: Optional[str] = None
+
+
 # --- User Management ---
 class UserRolesUpdate(BaseModel):
     role_ids: List[int]

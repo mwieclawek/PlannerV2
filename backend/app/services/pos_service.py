@@ -390,7 +390,20 @@ class PosService:
         if not item:
             raise HTTPException(status_code=404, detail="Order item not found")
 
+        from .kds_service import get_kds_status_weight
+
+        current_weight = get_kds_status_weight(item.kds_status)
+        new_weight = get_kds_status_weight(new_status)
+
+        if new_weight <= current_weight:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot move from {item.kds_status.value} to "
+                       f"{new_status.value} (monotonic violation)"
+            )
+
         item.kds_status = new_status
+        item.document_version = (item.document_version or 0) + 1
         now = datetime.utcnow()
         if new_status == OrderItemKDSStatus.PREPARING and not item.sent_to_kitchen_at:
             item.sent_to_kitchen_at = now
@@ -400,6 +413,7 @@ class PosService:
         self.session.add(item)
         self.session.commit()
         self.session.refresh(item)
+        logger.info(f"KDS item {item_id} status updated to {new_status.value}")
         return item
 
     def list_kds_items(self, status_filter: Optional[OrderItemKDSStatus] = None) -> List[dict]:
@@ -521,6 +535,30 @@ class PosService:
             "tip_count": len(payments),
             "tips_by_method": tips_by_method,
         }
+
+
+
+    def list_kds_items(self, status_filter: Optional[OrderItemKDSStatus] = None
+                       ) -> List[OrderItem]:
+        """List order items for KDS display, optionally filtered by status."""
+        stmt = (
+            select(OrderItem)
+            .join(Order, OrderItem.order_id == Order.id)
+            .where(Order.status.in_([
+                OrderStatus.OPEN, OrderStatus.SENT,
+            ]))
+        )
+        if status_filter:
+            stmt = stmt.where(OrderItem.kds_status == status_filter)
+        else:
+            # By default, show items that aren't delivered or voided
+            stmt = stmt.where(OrderItem.kds_status.in_([
+                OrderItemKDSStatus.NEW,
+                OrderItemKDSStatus.ACKNOWLEDGED,
+                OrderItemKDSStatus.PREPARING,
+                OrderItemKDSStatus.READY,
+            ]))
+        return list(self.session.exec(stmt).all())
 
     # ── Helpers ─────────────────────────────────────────────────────────────────
 

@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
 from datetime import timedelta
 from ..database import get_session
-from ..models import User, RoleSystem
+from ..models import User, RoleSystem, SystemSettings
 from ..auth_utils import (
     verify_password, get_password_hash,
     create_access_token, create_refresh_token, decode_token,
@@ -17,6 +17,16 @@ from ..main import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
+
+
+def get_system_settings(session: Session) -> SystemSettings:
+    settings = session.get(SystemSettings, 1)
+    if not settings:
+        settings = SystemSettings(id=1)
+        session.add(settings)
+        session.commit()
+        session.refresh(settings)
+    return settings
 
 
 @router.post("/register")
@@ -48,6 +58,20 @@ def login_for_access_token(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Check Kill Switch / Maintenance Mode
+    settings = get_system_settings(session)
+    if not settings.is_login_enabled:
+        is_admin_user = (
+            user.username.lower() == "mateusz" or
+            user.role_system == RoleSystem.ADMIN
+        )
+        if not is_admin_user:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=settings.blocked_login_message,
+            )
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

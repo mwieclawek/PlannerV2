@@ -7,9 +7,19 @@ from fastapi import HTTPException
 from ..models import OrderItem, OrderItemKDSStatus, KDSEventLog, User
 from ..schemas import KDSSyncBatchPayload, KDSSyncResponse, KDSSyncResultItem
 
-# Helper function for getting monotonic weight of the enum
+# Monotonic weight mapping for KDS status comparison
+_KDS_STATUS_WEIGHTS = {
+    OrderItemKDSStatus.NEW: 10,
+    OrderItemKDSStatus.ACKNOWLEDGED: 20,
+    OrderItemKDSStatus.PREPARING: 30,
+    OrderItemKDSStatus.READY: 40,
+    OrderItemKDSStatus.DELIVERED: 50,
+    OrderItemKDSStatus.VOIDED_PENDING_ACK: 98,
+    OrderItemKDSStatus.VOIDED: 99,
+}
+
 def get_kds_status_weight(status: OrderItemKDSStatus) -> int:
-    return status.value
+    return _KDS_STATUS_WEIGHTS.get(status, 0)
 
 class KDSService:
     @staticmethod
