@@ -24,7 +24,7 @@ def upgrade() -> None:
         op.create_table(
             'system_settings',
             sa.Column('id', sa.Integer(), nullable=False),
-            sa.Column('is_login_enabled', sa.Boolean(), nullable=False, server_default=sa.text('1')),
+            sa.Column('is_login_enabled', sa.Boolean(), nullable=False, server_default=sa.text('true')),
             sa.Column('blocked_login_message', sa.String(), nullable=False, server_default="Dostęp do aplikacji został tymczasowo wstrzymany. Skontaktuj się z administratorem."),
             sa.PrimaryKeyConstraint('id')
         )
@@ -32,7 +32,7 @@ def upgrade() -> None:
         # Insert default row
         op.execute(
             "INSERT INTO system_settings (id, is_login_enabled, blocked_login_message) "
-            "VALUES (1, 1, 'Dostęp do aplikacji został tymczasowo wstrzymany. Skontaktuj się z administratorem.')"
+            "VALUES (1, TRUE, 'Dostęp do aplikacji został tymczasowo wstrzymany. Skontaktuj się z administratorem.')"
         )
 
 
