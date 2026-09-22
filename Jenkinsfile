@@ -57,13 +57,16 @@ pipeline {
                 unstash 'source'
                 script {
                     def flutterEnv = "dev"
+                    def appVersion = "dev-build"
                     if (env.TAG_NAME?.startsWith("v")) {
                         flutterEnv = "prod"
+                        appVersion = env.TAG_NAME
                     }
+                    def buildDate = sh(script: "date +'%Y-%m-%d'", returnStdout: true).trim()
                     dir('frontend') {
                         sh 'flutter clean'
                         sh 'flutter pub get'
-                        sh "flutter build web --release --dart-define=ENV=${flutterEnv}"
+                        sh "flutter build web --release --dart-define=ENV=${flutterEnv} --dart-define=APP_VERSION=${appVersion} --dart-define=BUILD_DATE=${buildDate}"
                     }
                 }
                 stash includes: 'frontend/build/web/**/*', name: 'flutter-web'
