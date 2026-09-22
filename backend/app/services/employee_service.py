@@ -89,6 +89,24 @@ class EmployeeService:
         except httpx.RequestError as e:
             raise HTTPException(status_code=500, detail=f"Could not connect to Google OAuth service: {str(e)}")
 
+    def get_google_calendar_status(self, user_id: UUID) -> dict:
+        from ..models import User
+        user = self.session.get(User, user_id)
+        if not user:
+            return {"connected": False}
+        return {"connected": bool(user.google_refresh_token or user.google_access_token)}
+
+    def unlink_google_calendar(self, user_id: UUID):
+        from ..models import User
+        from fastapi import HTTPException
+        user = self.session.get(User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user.google_access_token = None
+        user.google_refresh_token = None
+        self.session.add(user)
+        self.session.commit()
+
     def get_schedule(self, user_id: UUID, start_date: date, end_date: date) -> List[dict]:
         statement = select(Schedule).where(
             Schedule.user_id == user_id,

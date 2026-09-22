@@ -22,6 +22,21 @@ def link_google_calendar(
     service.link_google_calendar(current_user.id, request.auth_code)
     return {"status": "success", "message": "Google Calendar linked successfully"}
 
+@router.get("/google-calendar/status")
+def get_google_calendar_status(
+    current_user: User = Depends(get_current_user),
+    service: EmployeeService = Depends(get_employee_service)
+):
+    return service.get_google_calendar_status(current_user.id)
+
+@router.delete("/google-calendar/auth")
+def unlink_google_calendar(
+    current_user: User = Depends(get_current_user),
+    service: EmployeeService = Depends(get_employee_service)
+):
+    service.unlink_google_calendar(current_user.id)
+    return {"status": "success", "message": "Google Calendar unlinked successfully"}
+
 @router.get("/availability/status")
 def check_availability_status(
     start_date: date, 
