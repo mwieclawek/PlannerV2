@@ -5,7 +5,7 @@ from ..database import get_session
 from ..models import User, Notification, UserDevice
 from .auth import get_current_user
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
@@ -60,9 +60,9 @@ def register_device(
     if existing:
         if existing.user_id != current_user.id:
             existing.user_id = current_user.id
-            existing.last_active = datetime.utcnow()
+            existing.last_active = datetime.now(timezone.utc)
         else:
-            existing.last_active = datetime.utcnow()
+            existing.last_active = datetime.now(timezone.utc)
         session.add(existing)
     else:
         new_device = UserDevice(user_id=current_user.id, fcm_token=payload.token)

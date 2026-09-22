@@ -1,7 +1,7 @@
 """POS v2 Service – Business logic for the Antigravity POS system."""
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from sqlmodel import Session, select, col
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
@@ -326,7 +326,7 @@ class PosService:
 
         order.status = new_status
         if new_status in (OrderStatus.PAID, OrderStatus.CANCELLED):
-            order.closed_at = datetime.utcnow()
+            order.closed_at = datetime.now(timezone.utc)
             # Free the table
             table = self.session.get(PosTable, order.table_id)
             if table:
@@ -404,7 +404,7 @@ class PosService:
 
         item.kds_status = new_status
         item.document_version = (item.document_version or 0) + 1
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if new_status == OrderItemKDSStatus.PREPARING and not item.sent_to_kitchen_at:
             item.sent_to_kitchen_at = now
         elif new_status == OrderItemKDSStatus.READY:
@@ -481,7 +481,7 @@ class PosService:
         paid_so_far = sum(p.amount for p in order.payments) + amount
         if paid_so_far >= order.total_amount:
             order.status = OrderStatus.PAID
-            order.closed_at = datetime.utcnow()
+            order.closed_at = datetime.now(timezone.utc)
             # Set table to DIRTY
             table = self.session.get(PosTable, order.table_id)
             if table:

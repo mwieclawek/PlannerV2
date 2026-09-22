@@ -1,5 +1,5 @@
 from uuid import UUID, uuid4
-from datetime import datetime, date, timedelta, time, date as date_type
+from datetime import datetime, date, timedelta, time, date as date_type, timezone
 from typing import Optional, List
 from enum import Enum
 from pydantic import EmailStr, computed_field
@@ -35,7 +35,7 @@ class User(SQLModel, table=True):
     password_hash: str
     full_name: str
     role_system: RoleSystem = Field(default=RoleSystem.EMPLOYEE)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     target_hours_per_month: Optional[int] = Field(default=None, sa_column=Column(Integer, nullable=True))
     target_shifts_per_month: Optional[int] = Field(default=None, sa_column=Column(Integer, nullable=True))
     manager_pin: Optional[str] = Field(default=None)
@@ -185,7 +185,7 @@ class Attendance(SQLModel, table=True):
     was_scheduled: bool = Field(default=True)  # Was this person scheduled that day?
     status: AttendanceStatus = Field(default=AttendanceStatus.CONFIRMED)
     schedule_id: Optional[UUID] = Field(default=None, foreign_key="schedule.id")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     user: User = Relationship()
 
@@ -200,7 +200,7 @@ class ShiftGiveaway(SQLModel, table=True):
     schedule_id: UUID = Field(foreign_key="schedule.id")
     offered_by: UUID = Field(foreign_key="user.id")
     status: GiveawayStatus = Field(default=GiveawayStatus.OPEN)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     taken_by: Optional[UUID] = Field(default=None, foreign_key="user.id")
 
     schedule: Schedule = Relationship()
@@ -218,7 +218,7 @@ class LeaveRequest(SQLModel, table=True):
     end_date: date
     reason: str = Field(max_length=500)
     status: LeaveStatus = Field(default=LeaveStatus.PENDING)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     reviewed_at: Optional[datetime] = None
     reviewed_by: Optional[UUID] = Field(default=None, foreign_key="user.id")
 
@@ -232,13 +232,13 @@ class Notification(SQLModel, table=True):
     title: str = Field(max_length=200)
     body: str = Field(max_length=1000)
     is_read: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserDevice(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="user.id", index=True)
     fcm_token: str = Field(unique=True, index=True)
-    last_active: datetime = Field(default_factory=datetime.utcnow)
+    last_active: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     user: User = Relationship(back_populates="devices")
 
@@ -384,7 +384,7 @@ class Order(SQLModel, table=True):
     discount_authorized_by: Optional[UUID] = Field(
         default=None, foreign_key="user.id"
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     closed_at: Optional[datetime] = Field(default=None)
 
     table: Optional[PosTable] = Relationship(back_populates="orders")
@@ -482,7 +482,7 @@ class Payment(SQLModel, table=True):
     amount: float
     tip_amount: float = Field(default=0.0)
     received_by: UUID = Field(foreign_key="user.id")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     order: Order = Relationship(back_populates="payments")
     employee: Optional[User] = Relationship(
@@ -501,7 +501,7 @@ class KDSEventLog(SQLModel, table=True):
     old_state: Optional[str] = Field(default=None)
     new_state: str
     client_timestamp: datetime
-    server_timestamp: datetime = Field(default_factory=datetime.utcnow)
+    server_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     is_undo: bool = Field(default=False)
     
     order_item: Optional[OrderItem] = Relationship()
@@ -540,8 +540,8 @@ class KitchenOrder(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     table_id: UUID = Field(foreign_key="restauranttable.id")
     status: KitchenOrderStatus = Field(default=KitchenOrderStatus.PENDING)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     waiter_id: UUID = Field(foreign_key="user.id")
 
     items: List["KitchenOrderItem"] = Relationship(back_populates="order")

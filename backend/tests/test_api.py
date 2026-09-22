@@ -6,7 +6,7 @@ For Jenkins: pytest backend/tests/test_api.py --junitxml=test-results/backend-ap
 """
 import pytest
 import uuid
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta, datetime, timezone
 from sqlmodel import Session, select
 from app.models import User, RoleSystem
 from app.auth_utils import get_password_hash, create_access_token
@@ -42,7 +42,7 @@ def create_user_in_db(session: Session, user_data: dict) -> User:
         full_name=user_data["full_name"],
         role_system=user_data["role_system"],
         password_hash=get_password_hash(user_data["password"]),
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
         is_active=True
     )
     session.add(user)

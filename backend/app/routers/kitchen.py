@@ -1,6 +1,6 @@
 """POS and Kitchen router – Tables, Menu, and Orders CRUD."""
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
@@ -244,7 +244,7 @@ def update_order_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
     order.status = payload.status
-    order.updated_at = datetime.utcnow()
+    order.updated_at = datetime.now(timezone.utc)
     session.add(order)
     session.commit()
     session.refresh(order)
@@ -266,7 +266,7 @@ def cancel_order(
         raise HTTPException(status_code=400, detail="Order cannot be cancelled in current state")
 
     order.status = KitchenOrderStatus.CANCELLED
-    order.updated_at = datetime.utcnow()
+    order.updated_at = datetime.now(timezone.utc)
     session.add(order)
     session.commit()
     session.refresh(order)

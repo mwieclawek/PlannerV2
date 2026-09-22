@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../widgets/schedule_viewer.dart';
 
 class MyScheduleScreen extends ConsumerStatefulWidget {
   const MyScheduleScreen({super.key});
@@ -20,6 +21,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
   bool _teamLoading = false;
   List<ScheduleEntry> _teamEntries = [];
   Map<String, dynamic>? _summary;
+  bool _teamGridView = false;
 
   static DateTime _getMonday(DateTime date) {
     return date.subtract(Duration(days: date.weekday - 1));
@@ -332,11 +334,33 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                     const SizedBox(height: 12),
 
                     if (_showCoworkers) ...[
+                      // Sub-toggle: list vs grid
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _viewModeButton(Icons.view_list_rounded, !_teamGridView, () => setState(() => _teamGridView = false)),
+                                _viewModeButton(Icons.grid_view_rounded, _teamGridView, () => setState(() => _teamGridView = true)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       if (_teamLoading)
                         const Padding(
                           padding: EdgeInsets.all(32),
                           child: Center(child: CircularProgressIndicator()),
                         )
+                      else if (_teamGridView)
+                        _buildTeamGridView()
                       else
                         _buildTeamWeekView(),
                     ] else ...[
@@ -738,6 +762,45 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
             ),
           ),
         );
+  }
+  Widget _viewModeButton(IconData icon, bool isActive, VoidCallback onTap) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isActive ? colorScheme.primaryContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: isActive ? colorScheme.primary : colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTeamGridView() {
+    final shiftsAsync = ref.watch(shiftsProvider);
+    final rolesAsync = ref.watch(rolesProvider);
+
+    return shiftsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Text('Błąd ładowania zmian: $e'),
+      data: (shifts) => rolesAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Text('Błąd ładowania ról: $e'),
+        data: (roles) => ScheduleViewer(
+          schedules: _teamEntries,
+          shifts: shifts,
+          roles: roles,
+          weekStart: _selectedWeekStart,
+        ),
+      ),
+    );
   }
 
   Widget _buildTeamWeekView() {

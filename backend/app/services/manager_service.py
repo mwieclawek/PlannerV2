@@ -1,6 +1,6 @@
 from typing import List, Optional
 from uuid import UUID
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from sqlmodel import Session, select
 from fastapi import HTTPException
 import logging
@@ -908,7 +908,7 @@ class ManagerService:
     def process_leave_request(self, request_id: UUID, approved: bool, manager_id: UUID, background_tasks=None):
         from sqlmodel import select
         from ..models import LeaveRequest, LeaveStatus, Availability, AvailabilityStatus, ShiftDefinition
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         
         req = self.session.get(LeaveRequest, request_id)
         if not req:
@@ -919,7 +919,7 @@ class ManagerService:
             
         req.status = LeaveStatus.APPROVED if approved else LeaveStatus.REJECTED
         req.reviewed_by = manager_id
-        req.reviewed_at = datetime.utcnow()
+        req.reviewed_at = datetime.now(timezone.utc)
         self.session.add(req)
         
         logger.info(f"Leave request {request_id} processed by {manager_id}. Approved: {approved}")
