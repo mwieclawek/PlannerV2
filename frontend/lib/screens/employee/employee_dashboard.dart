@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:intl/intl.dart';
+import 'package:dio/dio.dart';
 import '../../providers/providers.dart';
 import '../../widgets/availability_grid.dart';
 import 'my_schedule_screen.dart';
@@ -367,6 +368,13 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                                   ),
                                 );
                               }
+                            } on DioException catch (e) {
+                              setDialogState(() {
+                                isSigningIn = false;
+                                final data = e.response?.data;
+                                final detail = data is Map ? data['detail'] : null;
+                                error = 'Błąd serwera: ${detail ?? e.message}';
+                              });
                             } catch (e) {
                               setDialogState(() {
                                 isSigningIn = false;
