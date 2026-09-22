@@ -227,6 +227,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Wersja: ${const String.fromEnvironment('APP_VERSION', defaultValue: 'v1.6.6')} (${const String.fromEnvironment('BUILD_DATE', defaultValue: '2026-09-23')})',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey,
+                          ),
+                        ),
                       ],
                     ),
                   ),
