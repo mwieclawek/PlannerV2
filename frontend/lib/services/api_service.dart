@@ -236,6 +236,22 @@ class ApiService {
         .toList();
   }
 
+  Future<List<ScheduleEntry>> getTeamSchedule(
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
+    final response = await _dio.get(
+      '/employee/schedules/all',
+      queryParameters: {
+        'start_date': startDate.toIso8601String().split('T')[0],
+        'end_date': endDate.toIso8601String().split('T')[0],
+      },
+    );
+    return (response.data as List)
+        .map((e) => ScheduleEntry.fromJson(e))
+        .toList();
+  }
+
   // Check if user is logged in
   Future<bool> isLoggedIn() async {
     final prefs = await SharedPreferences.getInstance();

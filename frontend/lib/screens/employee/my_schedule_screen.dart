@@ -97,7 +97,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     try {
       final entries = await ref
           .read(apiServiceProvider)
-          .getManagerSchedule(_selectedWeekStart, _selectedWeekEnd);
+          .getTeamSchedule(_selectedWeekStart, _selectedWeekEnd);
       if (mounted) {
         setState(() {
           _teamEntries = entries;
