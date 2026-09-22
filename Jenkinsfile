@@ -126,6 +126,9 @@ pipeline {
                         string(credentialsId: 'github-token', variable: 'GH_TOKEN'),
                         string(credentialsId: 'jwt-secret-key', variable: 'JWT_SECRET'),
                         string(credentialsId: 'manager-pin', variable: 'MGR_PIN'),
+                        string(credentialsId: 'google-client-id', variable: 'GOOGLE_CLIENT_ID'),
+                        string(credentialsId: 'google-client-secret', variable: 'GOOGLE_CLIENT_SECRET'),
+                        string(credentialsId: 'db-encryption-key', variable: 'ENCRYPTION_KEY'),
                         file(credentialsId: 'firebase-admin-key', variable: 'FIREBASE_KEY')
                     ]) {
                         sh """
@@ -135,6 +138,9 @@ pipeline {
                             -e GITHUB_TOKEN="\${GH_TOKEN}" \\
                             -e JWT_SECRET_KEY="\${JWT_SECRET}" \\
                             -e MANAGER_REGISTRATION_PIN="\${MGR_PIN}" \\
+                            -e GOOGLE_CLIENT_ID="\${GOOGLE_CLIENT_ID}" \\
+                            -e GOOGLE_CLIENT_SECRET="\${GOOGLE_CLIENT_SECRET}" \\
+                            -e ENCRYPTION_KEY="\${ENCRYPTION_KEY}" \\
                             -e ALLOWED_ORIGINS="http://46.225.49.0:8091" \\
                             -e GOOGLE_APPLICATION_CREDENTIALS="/app/firebase-admin-key.json" \\
                             --restart unless-stopped plannerv2-backend:dev
@@ -285,6 +291,9 @@ pipeline {
                         string(credentialsId: 'github-token', variable: 'GH_TOKEN'),
                         string(credentialsId: 'jwt-secret-key', variable: 'JWT_SECRET'),
                         string(credentialsId: 'manager-pin', variable: 'MGR_PIN'),
+                        string(credentialsId: 'google-client-id', variable: 'GOOGLE_CLIENT_ID'),
+                        string(credentialsId: 'google-client-secret', variable: 'GOOGLE_CLIENT_SECRET'),
+                        string(credentialsId: 'db-encryption-key', variable: 'ENCRYPTION_KEY'),
                         file(credentialsId: 'firebase-admin-key', variable: 'FIREBASE_KEY')
                     ]) {
                         sh """
@@ -294,6 +303,9 @@ pipeline {
                             -e GITHUB_TOKEN="\${GH_TOKEN}" \\
                             -e JWT_SECRET_KEY="\${JWT_SECRET}" \\
                             -e MANAGER_REGISTRATION_PIN="\${MGR_PIN}" \\
+                            -e GOOGLE_CLIENT_ID="\${GOOGLE_CLIENT_ID}" \\
+                            -e GOOGLE_CLIENT_SECRET="\${GOOGLE_CLIENT_SECRET}" \\
+                            -e ENCRYPTION_KEY="\${ENCRYPTION_KEY}" \\
                             -e ALLOWED_ORIGINS="https://restoplan.pl,http://46.225.49.0" \\
                             -e GOOGLE_APPLICATION_CREDENTIALS="/app/firebase-admin-key.json" \\
                             --restart unless-stopped plannerv2-backend:latest
