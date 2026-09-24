@@ -136,18 +136,32 @@ class GoogleCalendarService:
             }
         }
 
+        insert_url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+        update_url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+
         try:
-            url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events/{event_id}"
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json"
-            }
-            res = httpx.put(url, headers=headers, json=event_body, timeout=10.0)
+            # First attempt: insert new event with custom deterministic ID
+            res = httpx.post(insert_url, headers=headers, json=event_body, timeout=10.0)
             if res.status_code in (200, 201):
-                logger.info(f"Successfully synced shift {schedule.id} ({schedule.date}) to Google Calendar for {user.username}")
+                logger.info(f"Successfully inserted shift {schedule.id} ({schedule.date}) into Google Calendar for {user.username}")
                 return True
+
+            # If 409 Conflict: event already exists (or was cancelled), update it
+            if res.status_code == 409:
+                event_body["status"] = "confirmed"
+                res_put = httpx.put(update_url, headers=headers, json=event_body, timeout=10.0)
+                if res_put.status_code in (200, 201):
+                    logger.info(f"Successfully updated shift {schedule.id} ({schedule.date}) in Google Calendar for {user.username}")
+                    return True
+                else:
+                    logger.warning(f"Google Calendar API update error {res_put.status_code} for shift {schedule.id}: {res_put.text}")
+                    return False
             else:
-                logger.warning(f"Google Calendar API error {res.status_code} for shift {schedule.id}: {res.text}")
+                logger.warning(f"Google Calendar API insert error {res.status_code} for shift {schedule.id}: {res.text}")
                 return False
         except Exception as e:
             logger.error(f"Exception syncing shift {schedule.id} to Google Calendar: {e}")

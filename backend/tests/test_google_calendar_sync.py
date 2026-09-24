@@ -102,12 +102,12 @@ def test_sync_schedule_to_calendar(session: Session, test_user_with_token: User,
             return MockHttpxResponse(200, {"aud": "test"})
         return MockHttpxResponse(404)
 
-    def mock_put(url, **kwargs):
+    def mock_post(url, **kwargs):
         captured_requests.append({"url": url, "kwargs": kwargs})
         return MockHttpxResponse(200, {"id": "mock_id"})
 
     monkeypatch.setattr(httpx, "get", mock_get)
-    monkeypatch.setattr(httpx, "put", mock_put)
+    monkeypatch.setattr(httpx, "post", mock_post)
 
     service = GoogleCalendarService(session)
     result = service.sync_schedule_to_calendar(test_user_with_token, sched)
@@ -116,7 +116,6 @@ def test_sync_schedule_to_calendar(session: Session, test_user_with_token: User,
     assert len(captured_requests) == 1
     req = captured_requests[0]
     expected_event_id = f"plannerv2{sched.id.hex}"
-    assert expected_event_id in req["url"]
     
     body = req["kwargs"]["json"]
     assert body["id"] == expected_event_id
@@ -145,12 +144,12 @@ def test_sync_night_shift_crosses_midnight(session: Session, test_user_with_toke
     def mock_get(url, **kwargs):
         return MockHttpxResponse(200, {"aud": "test"})
 
-    def mock_put(url, **kwargs):
+    def mock_post(url, **kwargs):
         captured_requests.append({"url": url, "kwargs": kwargs})
         return MockHttpxResponse(200, {"id": "mock_id"})
 
     monkeypatch.setattr(httpx, "get", mock_get)
-    monkeypatch.setattr(httpx, "put", mock_put)
+    monkeypatch.setattr(httpx, "post", mock_post)
 
     service = GoogleCalendarService(session)
     result = service.sync_schedule_to_calendar(test_user_with_token, sched)
@@ -192,11 +191,11 @@ async def test_employee_sync_endpoint(client: AsyncClient, employee_headers: dic
     def mock_get(url, **kwargs):
         return MockHttpxResponse(200, {"aud": "test"})
 
-    def mock_put(url, **kwargs):
+    def mock_post(url, **kwargs):
         return MockHttpxResponse(200, {"id": "mock_event"})
 
     monkeypatch.setattr(httpx, "get", mock_get)
-    monkeypatch.setattr(httpx, "put", mock_put)
+    monkeypatch.setattr(httpx, "post", mock_post)
 
     response = await client.post(
         "/employee/google-calendar/sync",
@@ -232,7 +231,7 @@ def test_sync_schedule_summary_with_restaurant_config(session: Session, test_use
     captured_requests = []
     import httpx
     monkeypatch.setattr(httpx, "get", lambda url, **kw: MockHttpxResponse(200, {"aud": "test"}))
-    monkeypatch.setattr(httpx, "put", lambda url, **kw: (captured_requests.append(kw), MockHttpxResponse(200))[1])
+    monkeypatch.setattr(httpx, "post", lambda url, **kw: (captured_requests.append(kw), MockHttpxResponse(200))[1])
 
     service = GoogleCalendarService(session)
     result = service.sync_schedule_to_calendar(test_user_with_token, sched)
@@ -336,17 +335,43 @@ def test_manager_reassign_giveaway_syncs_calendars(session: Session, shift_def_d
     session.commit()
 
     deleted_urls = []
-    put_urls = []
+    post_urls = []
     import httpx
     monkeypatch.setattr(httpx, "get", lambda url, **kw: MockHttpxResponse(200, {"aud": "test"}))
     monkeypatch.setattr(httpx, "delete", lambda url, **kw: (deleted_urls.append(url), MockHttpxResponse(204))[1])
-    monkeypatch.setattr(httpx, "put", lambda url, **kw: (put_urls.append(url), MockHttpxResponse(200))[1])
+    monkeypatch.setattr(httpx, "post", lambda url, **kw: (post_urls.append(url), MockHttpxResponse(200))[1])
 
     mgr_svc = ManagerService(session)
     res = mgr_svc.reassign_giveaway(giveaway.id, user2.id)
     assert res["status"] == "reassigned"
     assert len(deleted_urls) == 1
     assert f"plannerv2{sched.id.hex}" in deleted_urls[0]
-    assert len(put_urls) == 1
-    assert f"plannerv2{sched.id.hex}" in put_urls[0]
+    assert len(post_urls) == 1
+
+
+def test_sync_schedule_updates_on_conflict(session: Session, test_user_with_token: User, shift_def_day: ShiftDefinition, test_job_role: JobRole, monkeypatch):
+    sched = Schedule(
+        date=date(2026, 9, 25),
+        shift_def_id=shift_def_day.id,
+        user_id=test_user_with_token.id,
+        role_id=test_job_role.id,
+        is_published=True
+    )
+    session.add(sched)
+    session.commit()
+    session.refresh(sched)
+
+    captured_put = []
+    import httpx
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: MockHttpxResponse(200, {"aud": "test"}))
+    monkeypatch.setattr(httpx, "post", lambda url, **kw: MockHttpxResponse(409, {"error": "duplicate"}))
+    monkeypatch.setattr(httpx, "put", lambda url, **kw: (captured_put.append({"url": url, "kwargs": kw}), MockHttpxResponse(200, {"id": "mock_id"}))[1])
+
+    service = GoogleCalendarService(session)
+    result = service.sync_schedule_to_calendar(test_user_with_token, sched)
+    assert result is True
+    assert len(captured_put) == 1
+    assert f"plannerv2{sched.id.hex}" in captured_put[0]["url"]
+    assert captured_put[0]["kwargs"]["json"]["status"] == "confirmed"
+
 
