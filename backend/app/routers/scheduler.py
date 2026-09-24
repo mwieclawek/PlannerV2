@@ -78,6 +78,12 @@ def manual_assign(
         existing_daily.role_id = assign.role_id
         session.add(existing_daily)
         session.commit()
+        if existing_daily.is_published and existing_daily.user:
+            from ..services.google_calendar_service import GoogleCalendarService
+            try:
+                GoogleCalendarService(session).sync_schedule_to_calendar(existing_daily.user, existing_daily)
+            except Exception:
+                pass
         return {"status": "updated", "id": str(existing_daily.id)}
     else:
         new_entry = Schedule(
@@ -105,6 +111,12 @@ def remove_assignment(
         u_id = uuid.UUID(schedule_id)
         entry = session.get(Schedule, u_id)
         if entry:
+            if entry.user and entry.is_published:
+                from ..services.google_calendar_service import GoogleCalendarService
+                try:
+                    GoogleCalendarService(session).delete_calendar_event(entry.user, entry.id)
+                except Exception:
+                    pass
             session.delete(entry)
             session.commit()
             return {"status": "deleted"}

@@ -720,6 +720,12 @@ class ApiService {
     await _dio.delete('/employee/google-calendar/auth');
   }
 
+  Future<Map<String, dynamic>> syncGoogleCalendar() async {
+    final response = await _dio.post('/employee/google-calendar/sync');
+    return response.data;
+  }
+
+
   // --- Leave Requests (Employee) ---
   Future<List<LeaveRequest>> getMyLeaveRequests({String? status}) async {
     final params = <String, dynamic>{};

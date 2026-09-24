@@ -13,14 +13,33 @@ router = APIRouter(prefix="/employee", tags=["employee"])
 def get_employee_service(session: Session = Depends(get_session)) -> EmployeeService:
     return EmployeeService(session)
 
+from ..services.google_calendar_service import GoogleCalendarService
+
 @router.post("/google-calendar/auth")
 def link_google_calendar(
     request: GoogleAuthRequest,
     current_user: User = Depends(get_current_user),
-    service: EmployeeService = Depends(get_employee_service)
+    service: EmployeeService = Depends(get_employee_service),
+    session: Session = Depends(get_session)
 ):
     service.link_google_calendar(current_user.id, request.auth_code)
-    return {"status": "success", "message": "Google Calendar linked successfully"}
+    # Immediately sync current and upcoming shifts to the connected calendar
+    cal_service = GoogleCalendarService(session)
+    sync_result = cal_service.sync_user_schedules(current_user.id)
+    return {
+        "status": "success",
+        "message": "Google Calendar linked successfully",
+        "synced": sync_result.get("synced", 0)
+    }
+
+@router.post("/google-calendar/sync")
+def sync_google_calendar(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    cal_service = GoogleCalendarService(session)
+    result = cal_service.sync_user_schedules(current_user.id)
+    return result
 
 @router.get("/google-calendar/status")
 def get_google_calendar_status(

@@ -128,6 +128,15 @@ class SchedulerService:
                 tokens = push_svc._get_user_tokens(u_id)
                 if tokens:
                     background_tasks.add_task(send_push_to_tokens, tokens, title, body)
+
+        # Sync to Google Calendar for affected users with connected calendar
+        from .google_calendar_service import GoogleCalendarService
+        cal_service = GoogleCalendarService(self.session)
+        for u_id in published_user_ids:
+            try:
+                cal_service.sync_user_schedules(u_id, start_date=start_date, end_date=end_date)
+            except Exception as e:
+                logger.warning(f"Error syncing Google Calendar for user {u_id}: {e}")
             
         self.session.commit()
         logger.info(f"Published schedules from {start_date} to {end_date}. Affected users: {len(published_user_ids)}")

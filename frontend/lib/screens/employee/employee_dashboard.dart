@@ -285,44 +285,74 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                     child: const Text('Zamknij'),
                   ),
                   if (!isLoading && !isSigningIn && error == null)
-                    isConnected
-                        ? OutlinedButton.icon(
-                          onPressed: () async {
-                            setDialogState(() => isLoading = true);
-                            try {
-                              await ref
-                                  .read(apiServiceProvider)
-                                  .disconnectGoogleCalendar();
-                              setDialogState(() {
-                                isConnected = false;
-                                isLoading = false;
-                              });
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Kalendarz Google odłączony'),
-                                    backgroundColor: Colors.orange,
-                                  ),
-                                );
-                              }
-                            } catch (e) {
-                              setDialogState(() {
-                                isLoading = false;
-                                error = 'Błąd: $e';
-                              });
+                    if (isConnected) ...[
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          setDialogState(() => isLoading = true);
+                          try {
+                            await ref
+                                .read(apiServiceProvider)
+                                .disconnectGoogleCalendar();
+                            setDialogState(() {
+                              isConnected = false;
+                              isLoading = false;
+                            });
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Kalendarz Google odłączony'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
                             }
-                          },
-                          icon: const Icon(Icons.link_off, size: 18),
-                          label: const Text('Odłącz'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.red,
-                          ),
-                        )
-                        : FilledButton.icon(
-                          onPressed: () async {
-                            setDialogState(() => isSigningIn = true);
-                            try {
-                              final googleSignIn = GoogleSignIn(
+                          } catch (e) {
+                            setDialogState(() {
+                              isLoading = false;
+                              error = 'Błąd: $e';
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.link_off, size: 18),
+                        label: const Text('Odłącz'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                      ),
+                      FilledButton.icon(
+                        onPressed: () async {
+                          setDialogState(() => isLoading = true);
+                          try {
+                            final res = await ref
+                                .read(apiServiceProvider)
+                                .syncGoogleCalendar();
+                            setDialogState(() => isLoading = false);
+                            final count = res['synced'] ?? 0;
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '✓ Zsynchronizowano $count zmian z Kalendarzem Google',
+                                  ),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() {
+                              isLoading = false;
+                              error = 'Błąd synchronizacji: $e';
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.sync, size: 18),
+                        label: const Text('Synchronizuj teraz'),
+                      ),
+                    ] else
+                      FilledButton.icon(
+                        onPressed: () async {
+                          setDialogState(() => isSigningIn = true);
+                          try {
+                            final googleSignIn = GoogleSignIn(
                                 scopes: [
                                   'https://www.googleapis.com/auth/calendar.events',
                                 ],
