@@ -318,5 +318,74 @@ class TestEmployeeUnauthorized:
         assert response.status_code == 401
 
 
+class TestGoogleCalendar:
+    """Tests for /employee/google-calendar endpoints"""
+
+    @pytest.mark.asyncio
+    async def test_google_calendar_status_initially_disconnected(
+        self, client: AsyncClient, employee_headers: dict
+    ):
+        """Test getting calendar status when not connected"""
+        response = await client.get(
+            "/employee/google-calendar/status",
+            headers=employee_headers
+        )
+        assert response.status_code == 200
+        assert response.json() == {"connected": False}
+
+    @pytest.mark.asyncio
+    async def test_google_calendar_link_and_unlink(
+        self, client: AsyncClient, employee_headers: dict, monkeypatch
+    ):
+        """Test linking with access token (ya29...) and unlinking"""
+        import httpx
+
+        # Mock Google tokeninfo validation
+        class MockResponse:
+            status_code = 200
+            text = '{"aud": "mock_client"}'
+            def json(self):
+                return {"aud": "mock_client"}
+
+        def mock_get(url, **kwargs):
+            return MockResponse()
+
+        monkeypatch.setattr(httpx, "get", mock_get)
+
+        # Link with ya29. token
+        link_res = await client.post(
+            "/employee/google-calendar/auth",
+            headers=employee_headers,
+            json={"auth_code": "ya29.mock_google_access_token"}
+        )
+        assert link_res.status_code == 200
+        assert link_res.json()["status"] == "success"
+
+        # Check status is now connected
+        status_res = await client.get(
+            "/employee/google-calendar/status",
+            headers=employee_headers
+        )
+        assert status_res.status_code == 200
+        assert status_res.json() == {"connected": True}
+
+        # Unlink
+        del_res = await client.delete(
+            "/employee/google-calendar/auth",
+            headers=employee_headers
+        )
+        assert del_res.status_code == 200
+        assert del_res.json()["status"] == "success"
+
+        # Check status is disconnected again
+        status_res2 = await client.get(
+            "/employee/google-calendar/status",
+            headers=employee_headers
+        )
+        assert status_res2.status_code == 200
+        assert status_res2.json() == {"connected": False}
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+

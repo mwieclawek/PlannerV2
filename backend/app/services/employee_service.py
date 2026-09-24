@@ -49,6 +49,32 @@ class EmployeeService:
         from fastapi import HTTPException
         from ..models import User
 
+        user = self.session.get(User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # 1. If auth_code is already an access token (from Flutter Web GoogleSignIn, starts with ya29.)
+        if auth_code.startswith("ya29."):
+            try:
+                verify_res = httpx.get(
+                    f"https://www.googleapis.com/oauth2/v3/tokeninfo?access_token={auth_code}",
+                    timeout=10.0
+                )
+                if verify_res.status_code == 200:
+                    user.google_access_token = auth_code
+                    self.session.add(user)
+                    self.session.commit()
+                    return
+                else:
+                    try:
+                        err_msg = verify_res.json().get("error_description", verify_res.text)
+                    except Exception:
+                        err_msg = verify_res.text
+                    raise HTTPException(status_code=400, detail=f"Google OAuth Error: {err_msg}")
+            except httpx.RequestError as e:
+                raise HTTPException(status_code=500, detail=f"Could not connect to Google OAuth service: {str(e)}")
+
+        # 2. Otherwise exchange authorization code for tokens
         client_id = os.getenv("GOOGLE_CLIENT_ID")
         client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
         redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "postmessage")
@@ -70,17 +96,27 @@ class EmployeeService:
             response.raise_for_status()
             token_data = response.json()
             
-            user = self.session.get(User, user_id)
-            if user:
-                user.google_access_token = token_data.get("access_token")
-                # Refresh token is typically only returned on the first authorization
-                if "refresh_token" in token_data:
-                    user.google_refresh_token = token_data.get("refresh_token")
-                self.session.add(user)
-                self.session.commit()
-            else:
-                raise HTTPException(status_code=404, detail="User not found")
+            user.google_access_token = token_data.get("access_token")
+            # Refresh token is typically only returned on the first authorization
+            if "refresh_token" in token_data:
+                user.google_refresh_token = token_data.get("refresh_token")
+            self.session.add(user)
+            self.session.commit()
         except httpx.HTTPStatusError as e:
+            # Check if this was an access token that didn't start with ya29.
+            try:
+                verify_res = httpx.get(
+                    f"https://www.googleapis.com/oauth2/v3/tokeninfo?access_token={auth_code}",
+                    timeout=5.0
+                )
+                if verify_res.status_code == 200:
+                    user.google_access_token = auth_code
+                    self.session.add(user)
+                    self.session.commit()
+                    return
+            except Exception:
+                pass
+
             try:
                 error_detail = e.response.json().get("error_description", "Failed to link Google Calendar")
             except Exception:

@@ -1,7 +1,9 @@
-from pydantic import BaseModel, model_validator, field_validator
+from pydantic import BaseModel, model_validator, field_validator, ConfigDict
 import json
 
 class ShiftDefResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     start_time: str
@@ -31,50 +33,54 @@ class ShiftDefResponse(BaseModel):
             return [int(x) for x in v.split(',') if x.strip()]
         return v
 
-# Test with mock dict
-test_data = {
-    "id": 1,
-    "name": "Poranna",
-    "start_time": "07:00",
-    "end_time": "15:00",
-    "days": []
-}
+def test_shift_def_response_parsing():
+    test_data = {
+        "id": 1,
+        "name": "Poranna",
+        "start_time": "07:00",
+        "end_time": "15:00",
+        "days": []
+    }
+    res = ShiftDefResponse(**test_data)
+    assert res.applicable_days == [0, 1, 2, 3, 4, 5, 6]
 
-res = ShiftDefResponse(**test_data)
-print(f"Data: {test_data}, parsed applicable_days: {res.applicable_days}")
+    test_data2 = {
+        "id": 2,
+        "name": "Weekend",
+        "start_time": "07:00",
+        "end_time": "15:00",
+        "days": [{"day_of_week": 5}, {"day_of_week": 6}]
+    }
+    res2 = ShiftDefResponse(**test_data2)
+    assert res2.applicable_days == [5, 6]
 
-test_data2 = {
-    "id": 2,
-    "name": "Weekend",
-    "start_time": "07:00",
-    "end_time": "15:00",
-    "days": [{"day_of_week": 5}, {"day_of_week": 6}]
-}
-res2 = ShiftDefResponse(**test_data2)
-print(f"Data: {test_data2}, parsed applicable_days: {res2.applicable_days}")
+    class MockObj:
+        pass
 
-class MockObj:
-    pass
+    obj = MockObj()
+    obj.id = 3
+    obj.name = "Empty Obj"
+    obj.start_time = "07:00"
+    obj.end_time = "15:00"
+    obj.days = []
 
-obj = MockObj()
-obj.id = 3
-obj.name = "Empty Obj"
-obj.start_time = "07:00"
-obj.end_time = "15:00"
-obj.days = []
+    res3 = ShiftDefResponse.model_validate(obj)
+    assert res3.applicable_days == [0, 1, 2, 3, 4, 5, 6]
 
-res3 = ShiftDefResponse.model_validate(obj)
-print(f"Obj Data: parsed applicable_days: {res3.applicable_days}")
+    obj2 = MockObj()
+    obj2.id = 4
+    obj2.name = "Obj w/ days"
+    obj2.start_time = "07:00"
+    obj2.end_time = "15:00"
+    class MockDay:
+         def __init__(self, d): self.day_of_week = d
+    obj2.days = [MockDay(0), MockDay(1)]
 
-obj2 = MockObj()
-obj2.id = 4
-obj2.name = "Obj w/ days"
-obj2.start_time = "07:00"
-obj2.end_time = "15:00"
-class MockDay:
-     def __init__(self, d): self.day_of_week = d
-obj2.days = [MockDay(0), MockDay(1)]
+    res4 = ShiftDefResponse.model_validate(obj2)
+    assert res4.applicable_days == [0, 1]
 
-res4 = ShiftDefResponse.model_validate(obj2)
-print(f"Obj2 Data: parsed applicable_days: {res4.applicable_days}")
+if __name__ == "__main__":
+    test_shift_def_response_parsing()
+    print("All schema tests passed!")
+
 
