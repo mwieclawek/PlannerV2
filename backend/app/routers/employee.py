@@ -1,5 +1,6 @@
 from typing import List
 from datetime import date
+import logging
 from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlmodel import Session
 from ..database import get_session
@@ -7,6 +8,8 @@ from ..models import User, Availability
 from ..auth_utils import get_current_user
 from ..schemas import AvailabilityUpdate, EmployeeScheduleResponse, GoogleAuthRequest, ScheduleResponse
 from ..services.employee_service import EmployeeService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/employee", tags=["employee"])
 
@@ -600,7 +603,19 @@ def claim_giveaway(
         if m_tokens:
             background_tasks.add_task(send_push_to_tokens, m_tokens, m_title, m_body)
         
+    old_user_id = giveaway.offered_by
+
     session.commit()
+
+    # Sync Google Calendars (remove from previous owner, add to new owner)
+    try:
+        cal_svc = GoogleCalendarService(session)
+        old_user = session.get(User, old_user_id) if old_user_id else None
+        if old_user:
+            cal_svc.delete_calendar_event(old_user, schedule.id)
+        cal_svc.sync_schedule_to_calendar(current_user, schedule)
+    except Exception as e:
+        logger.warning(f"Error syncing Google Calendar after giveaway claim: {e}")
 
     return {"status": "claimed", "schedule_id": str(schedule.id)}
 

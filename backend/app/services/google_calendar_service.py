@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 import httpx
 from sqlmodel import Session, select
 
-from ..models import User, Schedule, ShiftDefinition, JobRole
+from ..models import User, Schedule, ShiftDefinition, JobRole, RestaurantConfig
 
 logger = logging.getLogger(__name__)
 
@@ -107,10 +107,13 @@ class GoogleCalendarService:
         if shift.end_time <= shift.start_time:
             end_dt += timedelta(days=1)
 
+        config = self.session.get(RestaurantConfig, 1)
+        restaurant_name = config.name.strip() if (config and config.name and config.name.strip()) else "RestoPlan"
+
         event_id = f"plannerv2{schedule.id.hex}"
-        summary = f"Planista: {shift.name} ({role_name})"
+        summary = f"Zmiana {restaurant_name}"
         description = (
-            f"Grafik pracy w Planista\n"
+            f"Grafik pracy: {restaurant_name}\n"
             f"Stanowisko: {role_name}\n"
             f"Zmiana: {shift.name}\n"
             f"Godziny: {shift.start_time.strftime('%H:%M')} - {shift.end_time.strftime('%H:%M')}"

@@ -4,7 +4,7 @@ from datetime import date, time, datetime, timedelta
 from httpx import AsyncClient
 from sqlmodel import Session
 
-from app.models import User, Schedule, ShiftDefinition, JobRole, RoleSystem
+from app.models import User, Schedule, ShiftDefinition, JobRole, RoleSystem, RestaurantConfig, ShiftGiveaway, GiveawayStatus
 from app.services.google_calendar_service import GoogleCalendarService, WARSAW_TZ
 
 
@@ -120,7 +120,8 @@ def test_sync_schedule_to_calendar(session: Session, test_user_with_token: User,
     
     body = req["kwargs"]["json"]
     assert body["id"] == expected_event_id
-    assert "Poranna" in body["summary"]
+    assert "Zmiana" in body["summary"]
+    assert "Poranna" in body["description"]
     assert "2026-09-25T08:00:00" in body["start"]["dateTime"]
     assert "2026-09-25T16:00:00" in body["end"]["dateTime"]
 
@@ -205,3 +206,147 @@ async def test_employee_sync_endpoint(client: AsyncClient, employee_headers: dic
     data = response.json()
     assert "synced" in data
     assert "status" in data
+
+
+def test_sync_schedule_summary_with_restaurant_config(session: Session, test_user_with_token: User, shift_def_day: ShiftDefinition, test_job_role: JobRole, monkeypatch):
+    config = session.get(RestaurantConfig, 1)
+    if not config:
+        config = RestaurantConfig(id=1, name="Trattoria Test")
+        session.add(config)
+    else:
+        config.name = "Trattoria Test"
+        session.add(config)
+    session.commit()
+
+    sched = Schedule(
+        date=date(2026, 9, 25),
+        shift_def_id=shift_def_day.id,
+        user_id=test_user_with_token.id,
+        role_id=test_job_role.id,
+        is_published=True
+    )
+    session.add(sched)
+    session.commit()
+    session.refresh(sched)
+
+    captured_requests = []
+    import httpx
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: MockHttpxResponse(200, {"aud": "test"}))
+    monkeypatch.setattr(httpx, "put", lambda url, **kw: (captured_requests.append(kw), MockHttpxResponse(200))[1])
+
+    service = GoogleCalendarService(session)
+    result = service.sync_schedule_to_calendar(test_user_with_token, sched)
+    assert result is True
+    assert len(captured_requests) == 1
+    body = captured_requests[0]["json"]
+    assert body["summary"] == "Zmiana Trattoria Test"
+    assert "Poranna" in body["description"]
+
+
+@pytest.mark.asyncio
+async def test_claim_giveaway_syncs_calendars(client: AsyncClient, session: Session, employee_headers: dict, shift_def_day: ShiftDefinition, test_job_role: JobRole, monkeypatch):
+    giver = User(
+        username="giver_user",
+        email="giver@example.com",
+        password_hash="hash",
+        full_name="Adam Giver",
+        role_system=RoleSystem.EMPLOYEE,
+        is_active=True
+    )
+    giver.google_access_token = "ya29.giver_token"
+    session.add(giver)
+    session.commit()
+    session.refresh(giver)
+
+    sched = Schedule(
+        date=date(2026, 9, 28),
+        shift_def_id=shift_def_day.id,
+        user_id=giver.id,
+        role_id=test_job_role.id,
+        is_published=True
+    )
+    session.add(sched)
+    session.commit()
+    session.refresh(sched)
+
+    giveaway = ShiftGiveaway(
+        schedule_id=sched.id,
+        offered_by=giver.id,
+        status=GiveawayStatus.OPEN
+    )
+    session.add(giveaway)
+    session.commit()
+    session.refresh(giveaway)
+
+    deleted_urls = []
+    put_urls = []
+    import httpx
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: MockHttpxResponse(200, {"aud": "test"}))
+    monkeypatch.setattr(httpx, "delete", lambda url, **kw: (deleted_urls.append(url), MockHttpxResponse(204))[1])
+    monkeypatch.setattr(httpx, "put", lambda url, **kw: (put_urls.append(url), MockHttpxResponse(200))[1])
+
+    response = await client.post(f"/employee/giveaways/{giveaway.id}/claim", headers=employee_headers)
+    assert response.status_code == 200
+    assert response.json()["status"] == "claimed"
+
+    assert len(deleted_urls) == 1
+    assert f"plannerv2{sched.id.hex}" in deleted_urls[0]
+
+
+def test_manager_reassign_giveaway_syncs_calendars(session: Session, shift_def_day: ShiftDefinition, test_job_role: JobRole, monkeypatch):
+    from app.services.manager_service import ManagerService
+    user1 = User(
+        username="m_giver",
+        email="m_giver@example.com",
+        password_hash="hash",
+        full_name="Jan Giver",
+        role_system=RoleSystem.EMPLOYEE,
+        is_active=True
+    )
+    user1.google_access_token = "ya29.user1"
+
+    user2 = User(
+        username="m_taker",
+        email="m_taker@example.com",
+        password_hash="hash",
+        full_name="Anna Taker",
+        role_system=RoleSystem.EMPLOYEE,
+        is_active=True
+    )
+    user2.google_access_token = "ya29.user2"
+    session.add_all([user1, user2])
+    session.commit()
+
+    sched = Schedule(
+        date=date(2026, 9, 29),
+        shift_def_id=shift_def_day.id,
+        user_id=user1.id,
+        role_id=test_job_role.id,
+        is_published=True
+    )
+    session.add(sched)
+    session.commit()
+
+    giveaway = ShiftGiveaway(
+        schedule_id=sched.id,
+        offered_by=user1.id,
+        status=GiveawayStatus.OPEN
+    )
+    session.add(giveaway)
+    session.commit()
+
+    deleted_urls = []
+    put_urls = []
+    import httpx
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: MockHttpxResponse(200, {"aud": "test"}))
+    monkeypatch.setattr(httpx, "delete", lambda url, **kw: (deleted_urls.append(url), MockHttpxResponse(204))[1])
+    monkeypatch.setattr(httpx, "put", lambda url, **kw: (put_urls.append(url), MockHttpxResponse(200))[1])
+
+    mgr_svc = ManagerService(session)
+    res = mgr_svc.reassign_giveaway(giveaway.id, user2.id)
+    assert res["status"] == "reassigned"
+    assert len(deleted_urls) == 1
+    assert f"plannerv2{sched.id.hex}" in deleted_urls[0]
+    assert len(put_urls) == 1
+    assert f"plannerv2{sched.id.hex}" in put_urls[0]
+

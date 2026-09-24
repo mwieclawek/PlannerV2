@@ -733,6 +733,7 @@ class ManagerService:
             raise HTTPException(status_code=404, detail="Schedule not found")
         
         # Reassign the schedule to the new user
+        old_user_id = giveaway.offered_by
         schedule.user_id = new_user_id
         giveaway.status = GiveawayStatus.TAKEN
         giveaway.taken_by = new_user_id
@@ -742,6 +743,19 @@ class ManagerService:
         self.session.commit()
         
         new_user = self.session.get(User, new_user_id)
+        old_user = self.session.get(User, old_user_id) if old_user_id else None
+
+        # Sync Google Calendars
+        from .google_calendar_service import GoogleCalendarService
+        try:
+            cal_svc = GoogleCalendarService(self.session)
+            if old_user:
+                cal_svc.delete_calendar_event(old_user, schedule.id)
+            if new_user:
+                cal_svc.sync_schedule_to_calendar(new_user, schedule)
+        except Exception as e:
+            logger.warning(f"Error syncing Google Calendar after manager reassign_giveaway: {e}")
+
         return {
             "status": "reassigned",
             "new_user_name": new_user.full_name if new_user else ""
