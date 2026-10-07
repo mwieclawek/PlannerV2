@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import '../providers/providers.dart';
-import '../services/sysadmin_service.dart';
+import '../../providers/providers.dart';
+import '../../services/sysadmin_service.dart';
 
 class SysAdminDashboardScreen extends ConsumerStatefulWidget {
   const SysAdminDashboardScreen({super.key});
