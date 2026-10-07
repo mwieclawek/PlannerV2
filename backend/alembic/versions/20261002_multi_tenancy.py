@@ -22,6 +22,26 @@ depends_on = None
 
 DEFAULT_TENANT_ID = 1
 
+def index_exists(inspector, table_name, index_name):
+    try:
+        indexes = inspector.get_indexes(table_name)
+        return any(i.get('name') == index_name for i in indexes)
+    except Exception:
+        return False
+
+def fk_exists(inspector, table_name, fk_name):
+    try:
+        fks = inspector.get_foreign_keys(table_name)
+        return any(fk.get('name') == fk_name for fk in fks)
+    except Exception:
+        return False
+
+def uq_exists(inspector, table_name, uq_name):
+    try:
+        uqs = inspector.get_unique_constraints(table_name)
+        return any(uq.get('name') == uq_name for uq in uqs)
+    except Exception:
+        return False
 
 def upgrade() -> None:
     # 1. Update restaurantconfig table with multi-tenant fields
@@ -51,10 +71,9 @@ def upgrade() -> None:
     
     if not is_sqlite:
         op.alter_column('restaurantconfig', 'slug', nullable=False)
-    try:
+        
+    if not index_exists(inspector, 'restaurantconfig', 'ix_restaurantconfig_slug'):
         op.create_index('ix_restaurantconfig_slug', 'restaurantconfig', ['slug'], unique=True)
-    except Exception:
-        pass
 
     # 2. Add tenant_id to User table
     u_cols = [c['name'] for c in inspector.get_columns('user')]
@@ -63,59 +82,48 @@ def upgrade() -> None:
         op.execute(f'UPDATE "user" SET tenant_id = {default_id}')
         if not is_sqlite:
             op.alter_column('user', 'tenant_id', nullable=False)
-        try:
-            op.create_foreign_key('fk_user_restaurant_id', 'user', 'restaurantconfig', ['tenant_id'], ['id'])
-        except Exception:
-            pass
-        try:
-            op.create_index('ix_user_tenant_id', 'user', ['tenant_id'])
-        except Exception:
-            pass
-    try:
+            
+    if not fk_exists(inspector, 'user', 'fk_user_restaurant_id') and not is_sqlite:
+        op.create_foreign_key('fk_user_restaurant_id', 'user', 'restaurantconfig', ['tenant_id'], ['id'])
+        
+    if not index_exists(inspector, 'user', 'ix_user_tenant_id'):
+        op.create_index('ix_user_tenant_id', 'user', ['tenant_id'])
+        
+    if not index_exists(inspector, 'user', 'ix_user_email'):
         op.create_index('ix_user_email', 'user', ['email'])
-    except Exception:
-        pass
 
     # Drop old unique constraint on username and create tenant-scoped one
-    try:
+    if uq_exists(inspector, 'user', 'uq_user_username') and not is_sqlite:
         op.drop_constraint('uq_user_username', 'user', type_='unique')
-    except Exception:
-        try:
-            op.drop_index('ix_user_username', table_name='user')
-        except Exception:
-            pass
-    try:
+    elif index_exists(inspector, 'user', 'ix_user_username'):
+        op.drop_index('ix_user_username', table_name='user')
+        
+    if not uq_exists(inspector, 'user', 'uq_user_tenant_username') and not is_sqlite:
         op.create_unique_constraint('uq_user_tenant_username', 'user', ['tenant_id', 'username'])
-    except Exception:
-        pass
 
     # 3. Add tenant_id to JobRole
     jr_cols = [c['name'] for c in inspector.get_columns('jobrole')]
     if 'tenant_id' not in jr_cols:
         op.add_column('jobrole', sa.Column('tenant_id', sa.Integer(), nullable=True))
         op.execute(f"UPDATE jobrole SET tenant_id = {default_id}")
-        try:
-            op.create_foreign_key('fk_jobrole_restaurant_id', 'jobrole', 'restaurantconfig', ['tenant_id'], ['id'])
-        except Exception:
-            pass
-        try:
-            op.create_index('ix_jobrole_tenant_id', 'jobrole', ['tenant_id'])
-        except Exception:
-            pass
+        
+    if not fk_exists(inspector, 'jobrole', 'fk_jobrole_restaurant_id') and not is_sqlite:
+        op.create_foreign_key('fk_jobrole_restaurant_id', 'jobrole', 'restaurantconfig', ['tenant_id'], ['id'])
+        
+    if not index_exists(inspector, 'jobrole', 'ix_jobrole_tenant_id'):
+        op.create_index('ix_jobrole_tenant_id', 'jobrole', ['tenant_id'])
 
     # 4. Add tenant_id to ShiftDefinition
     sd_cols = [c['name'] for c in inspector.get_columns('shiftdefinition')]
     if 'tenant_id' not in sd_cols:
         op.add_column('shiftdefinition', sa.Column('tenant_id', sa.Integer(), nullable=True))
         op.execute(f"UPDATE shiftdefinition SET tenant_id = {default_id}")
-        try:
-            op.create_foreign_key('fk_shiftdefinition_restaurant_id', 'shiftdefinition', 'restaurantconfig', ['tenant_id'], ['id'])
-        except Exception:
-            pass
-        try:
-            op.create_index('ix_shiftdefinition_tenant_id', 'shiftdefinition', ['tenant_id'])
-        except Exception:
-            pass
+        
+    if not fk_exists(inspector, 'shiftdefinition', 'fk_shiftdefinition_restaurant_id') and not is_sqlite:
+        op.create_foreign_key('fk_shiftdefinition_restaurant_id', 'shiftdefinition', 'restaurantconfig', ['tenant_id'], ['id'])
+        
+    if not index_exists(inspector, 'shiftdefinition', 'ix_shiftdefinition_tenant_id'):
+        op.create_index('ix_shiftdefinition_tenant_id', 'shiftdefinition', ['tenant_id'])
 
     # 5. SystemSettings: add tenant_id
     all_tables = inspector.get_table_names()
@@ -125,14 +133,12 @@ def upgrade() -> None:
         if 'tenant_id' not in ss_cols:
             op.add_column(ss_table, sa.Column('tenant_id', sa.Integer(), nullable=True))
             op.execute(f'UPDATE "{ss_table}" SET tenant_id = {default_id}')
-            try:
-                op.create_foreign_key(f'fk_{ss_table}_restaurant_id', ss_table, 'restaurantconfig', ['tenant_id'], ['id'])
-            except Exception:
-                pass
-            try:
-                op.create_index(f'ix_{ss_table}_tenant_id', ss_table, ['tenant_id'])
-            except Exception:
-                pass
+            
+        if not fk_exists(inspector, ss_table, f'fk_{ss_table}_restaurant_id') and not is_sqlite:
+            op.create_foreign_key(f'fk_{ss_table}_restaurant_id', ss_table, 'restaurantconfig', ['tenant_id'], ['id'])
+            
+        if not index_exists(inspector, ss_table, f'ix_{ss_table}_tenant_id'):
+            op.create_index(f'ix_{ss_table}_tenant_id', ss_table, ['tenant_id'])
 
     # 6. POS and related tables
     for table_name in ['tablezone', 'postable', 'category', 'menuitem', 'modifiergroup', 'order', 'payment', 'restauranttable', 'kitchenorder']:
@@ -141,121 +147,83 @@ def upgrade() -> None:
             if 'tenant_id' not in cols:
                 op.add_column(table_name, sa.Column('tenant_id', sa.Integer(), nullable=True))
                 op.execute(f'UPDATE "{table_name}" SET tenant_id = {default_id}')
-                try:
-                    op.create_foreign_key(f'fk_{table_name}_restaurant_id', table_name, 'restaurantconfig', ['tenant_id'], ['id'])
-                except Exception:
-                    pass
-                try:
-                    op.create_index(f'ix_{table_name}_tenant_id', table_name, ['tenant_id'])
-                except Exception:
-                    pass
+                
+            if not fk_exists(inspector, table_name, f'fk_{table_name}_restaurant_id') and not is_sqlite:
+                op.create_foreign_key(f'fk_{table_name}_restaurant_id', table_name, 'restaurantconfig', ['tenant_id'], ['id'])
+                
+            if not index_exists(inspector, table_name, f'ix_{table_name}_tenant_id'):
+                op.create_index(f'ix_{table_name}_tenant_id', table_name, ['tenant_id'])
 
 
 def downgrade() -> None:
     conn = op.get_bind()
+    is_sqlite = conn.dialect.name == 'sqlite'
     inspector = sa.inspect(conn)
     all_tables = inspector.get_table_names()
 
     # Remove tenant_id from POS tables
     for table_name in ['modifiergroup', 'menuitem', 'category', 'postable', 'tablezone', 'order', 'payment', 'restauranttable', 'kitchenorder']:
         if table_name in all_tables:
-            try:
+            if index_exists(inspector, table_name, f'ix_{table_name}_tenant_id'):
                 op.drop_index(f'ix_{table_name}_tenant_id', table_name=table_name)
-            except Exception:
-                pass
-            try:
+            if fk_exists(inspector, table_name, f'fk_{table_name}_restaurant_id') and not is_sqlite:
                 op.drop_constraint(f'fk_{table_name}_restaurant_id', table_name, type_='foreignkey')
-            except Exception:
-                pass
-            try:
+            cols = [c['name'] for c in inspector.get_columns(table_name)]
+            if 'tenant_id' in cols and not is_sqlite:
                 op.drop_column(table_name, 'tenant_id')
-            except Exception:
-                pass
 
     # Remove tenant_id from SystemSettings
     for ss_name in ['system_settings', 'systemsettings']:
         if ss_name in all_tables:
-            try:
+            if index_exists(inspector, ss_name, f'ix_{ss_name}_tenant_id'):
                 op.drop_index(f'ix_{ss_name}_tenant_id', table_name=ss_name)
-            except Exception:
-                pass
-            try:
+            if fk_exists(inspector, ss_name, f'fk_{ss_name}_restaurant_id') and not is_sqlite:
                 op.drop_constraint(f'fk_{ss_name}_restaurant_id', ss_name, type_='foreignkey')
-            except Exception:
-                pass
-            try:
+            cols = [c['name'] for c in inspector.get_columns(ss_name)]
+            if 'tenant_id' in cols and not is_sqlite:
                 op.drop_column(ss_name, 'tenant_id')
-            except Exception:
-                pass
 
     # Remove tenant_id from ShiftDefinition
-    try:
+    if index_exists(inspector, 'shiftdefinition', 'ix_shiftdefinition_tenant_id'):
         op.drop_index('ix_shiftdefinition_tenant_id', table_name='shiftdefinition')
-    except Exception:
-        pass
-    try:
+    if fk_exists(inspector, 'shiftdefinition', 'fk_shiftdefinition_restaurant_id') and not is_sqlite:
         op.drop_constraint('fk_shiftdefinition_restaurant_id', 'shiftdefinition', type_='foreignkey')
-    except Exception:
-        pass
-    try:
+    cols = [c['name'] for c in inspector.get_columns('shiftdefinition')]
+    if 'tenant_id' in cols and not is_sqlite:
         op.drop_column('shiftdefinition', 'tenant_id')
-    except Exception:
-        pass
 
     # Remove tenant_id from JobRole
-    try:
+    if index_exists(inspector, 'jobrole', 'ix_jobrole_tenant_id'):
         op.drop_index('ix_jobrole_tenant_id', table_name='jobrole')
-    except Exception:
-        pass
-    try:
+    if fk_exists(inspector, 'jobrole', 'fk_jobrole_restaurant_id') and not is_sqlite:
         op.drop_constraint('fk_jobrole_restaurant_id', 'jobrole', type_='foreignkey')
-    except Exception:
-        pass
-    try:
+    cols = [c['name'] for c in inspector.get_columns('jobrole')]
+    if 'tenant_id' in cols and not is_sqlite:
         op.drop_column('jobrole', 'tenant_id')
-    except Exception:
-        pass
 
     # Restore User
-    try:
+    if uq_exists(inspector, 'user', 'uq_user_tenant_username') and not is_sqlite:
         op.drop_constraint('uq_user_tenant_username', 'user', type_='unique')
-    except Exception:
-        pass
-    try:
+    if index_exists(inspector, 'user', 'ix_user_email'):
         op.drop_index('ix_user_email', table_name='user')
-    except Exception:
-        pass
-    try:
+    if index_exists(inspector, 'user', 'ix_user_tenant_id'):
         op.drop_index('ix_user_tenant_id', table_name='user')
-    except Exception:
-        pass
-    try:
+    if fk_exists(inspector, 'user', 'fk_user_restaurant_id') and not is_sqlite:
         op.drop_constraint('fk_user_restaurant_id', 'user', type_='foreignkey')
-    except Exception:
-        pass
-    try:
+    cols = [c['name'] for c in inspector.get_columns('user')]
+    if 'tenant_id' in cols and not is_sqlite:
         op.drop_column('user', 'tenant_id')
-    except Exception:
-        pass
-    try:
+    if not index_exists(inspector, 'user', 'ix_user_username') and not is_sqlite:
         op.create_index('ix_user_username', 'user', ['username'], unique=True)
-    except Exception:
-        pass
 
     # Revert restaurantconfig
-    try:
+    if index_exists(inspector, 'restaurantconfig', 'ix_restaurantconfig_slug'):
         op.drop_index('ix_restaurantconfig_slug', table_name='restaurantconfig')
-    except Exception:
-        pass
-    try:
-        op.drop_column('restaurantconfig', 'created_at')
-    except Exception:
-        pass
-    try:
-        op.drop_column('restaurantconfig', 'is_active')
-    except Exception:
-        pass
-    try:
-        op.drop_column('restaurantconfig', 'slug')
-    except Exception:
-        pass
+    cols = [c['name'] for c in inspector.get_columns('restaurantconfig')]
+    if not is_sqlite:
+        if 'created_at' in cols:
+            op.drop_column('restaurantconfig', 'created_at')
+        if 'is_active' in cols:
+            op.drop_column('restaurantconfig', 'is_active')
+        if 'slug' in cols:
+            op.drop_column('restaurantconfig', 'slug')
