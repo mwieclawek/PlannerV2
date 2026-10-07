@@ -19,7 +19,7 @@ from uuid import UUID
 
 def get_scheduler_service(
     session: Session = Depends(get_session),
-    tenant_id: UUID = Depends(require_tenant)
+    tenant_id: int = Depends(require_tenant)
 ) -> SchedulerService:
     return SchedulerService(session, tenant_id)
 

@@ -39,7 +39,7 @@ from ..tenant_context import require_tenant
 
 def _get_pos_service(
     session: Session = Depends(get_session),
-    tenant_id: UUID = Depends(require_tenant)
+    tenant_id: int = Depends(require_tenant)
 ) -> PosService:
     return PosService(session, tenant_id)
 

@@ -18,7 +18,7 @@ from ..tenant_context import require_tenant
 
 def get_employee_service(
     session: Session = Depends(get_session),
-    tenant_id: UUID = Depends(require_tenant),
+    tenant_id: int = Depends(require_tenant),
 ) -> EmployeeService:
     return EmployeeService(session, tenant_id)
 

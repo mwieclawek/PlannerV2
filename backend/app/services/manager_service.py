@@ -11,7 +11,7 @@ from ..models import JobRole, ShiftDefinition, StaffingRequirement, RestaurantCo
 from ..schemas import JobRoleCreate, ShiftDefCreate, RequirementCreate, ConfigUpdate, UserUpdate, UserCreate
 
 class ManagerService:
-    def __init__(self, session: Session, tenant_id: Optional[UUID] = None):
+    def __init__(self, session: Session, tenant_id: Optional[int] = None):
         self.session = session
         if tenant_id is None:
             from ..tenant_context import get_current_tenant_id
@@ -251,7 +251,10 @@ class ManagerService:
         if not config:
             config = self.session.exec(select(RestaurantConfig)).first()
         if not config:
-            config = RestaurantConfig(id=self.tenant_id, name="My Restaurant", slug=f"rest-{str(self.tenant_id)[:8]}")
+            slug = f"rest-{self.tenant_id}" if self.tenant_id else "default"
+            config = RestaurantConfig(name="My Restaurant", slug=slug)
+            if self.tenant_id:
+                config.id = self.tenant_id
             self.session.add(config)
             self.session.commit()
             self.session.refresh(config)
@@ -267,7 +270,10 @@ class ManagerService:
         if not config:
             if "name" not in data:
                  data["name"] = "My Restaurant"
-            config = RestaurantConfig(id=self.tenant_id, slug=f"rest-{str(self.tenant_id)[:8]}", **data)
+            slug = f"rest-{self.tenant_id}" if self.tenant_id else "default"
+            config = RestaurantConfig(slug=slug, **data)
+            if self.tenant_id:
+                config.id = self.tenant_id
             self.session.add(config)
             self.session.commit()
             self.session.refresh(config)

@@ -1,6 +1,7 @@
 import os
 import re
 import logging
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
@@ -19,18 +20,20 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 
 
-def get_system_settings(session: Session, tenant_id=None) -> SystemSettings:
-    from uuid import UUID as _UUID
-    if tenant_id:
-        tid = tenant_id if isinstance(tenant_id, _UUID) else _UUID(str(tenant_id))
-        settings = session.exec(
-            select(SystemSettings).where(SystemSettings.tenant_id == tid)
-        ).first()
+def get_system_settings(session: Session, tenant_id: Optional[int] = None) -> SystemSettings:
+    if tenant_id is not None:
+        try:
+            tid = int(tenant_id)
+            settings = session.exec(
+                select(SystemSettings).where(SystemSettings.tenant_id == tid)
+            ).first()
+        except (ValueError, TypeError):
+            settings = None
     else:
         settings = session.exec(select(SystemSettings)).first()
         
     if not settings:
-        settings = SystemSettings(tenant_id=tenant_id)
+        settings = SystemSettings(tenant_id=int(tenant_id) if tenant_id is not None else None)
         session.add(settings)
         session.commit()
         session.refresh(settings)
@@ -146,11 +149,14 @@ def refresh_access_token(
     username = payload.get("sub")
     tenant_id = payload.get("tenant_id")
 
-    if tenant_id:
-        from uuid import UUID as _UUID
-        user = session.exec(
-            select(User).where(User.username == username, User.tenant_id == _UUID(tenant_id))
-        ).first()
+    if tenant_id is not None:
+        try:
+            tid = int(tenant_id)
+            user = session.exec(
+                select(User).where(User.username == username, User.tenant_id == tid)
+            ).first()
+        except (ValueError, TypeError):
+            user = None
     else:
         # Backward compat: old tokens without tenant_id
         user = session.exec(select(User).where(User.username == username)).first()
@@ -176,7 +182,7 @@ def read_users_me(current_user: User = Depends(get_current_user)):
         "is_active": current_user.is_active,
         "target_hours_per_month": current_user.target_hours_per_month,
         "target_shifts_per_month": current_user.target_shifts_per_month,
-        "tenant_id": str(current_user.tenant_id) if current_user.tenant_id else None,
+        "tenant_id": current_user.tenant_id,
         "tenant_slug": current_user.tenant.slug if current_user.tenant else None,
         "tenant_name": current_user.tenant.name if current_user.tenant else None,
     }

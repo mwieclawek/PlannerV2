@@ -20,7 +20,7 @@ def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-def get_or_create_system_settings(session: Session, tenant_id: UUID) -> SystemSettings:
+def get_or_create_system_settings(session: Session, tenant_id: int) -> SystemSettings:
     settings = session.exec(
         select(SystemSettings).where(SystemSettings.tenant_id == tenant_id)
     ).first()
@@ -36,7 +36,7 @@ def get_or_create_system_settings(session: Session, tenant_id: UUID) -> SystemSe
 def get_admin_settings(
     session: Session = Depends(get_session),
     _: User = Depends(get_admin_user),
-    tenant_id: UUID = Depends(require_tenant),
+    tenant_id: int = Depends(require_tenant),
 ):
     """Retrieve global system settings (Kill Switch / Maintenance Mode state)."""
     return get_or_create_system_settings(session, tenant_id)
@@ -47,7 +47,7 @@ def update_admin_settings(
     settings_in: SystemSettingsUpdate,
     session: Session = Depends(get_session),
     _: User = Depends(get_admin_user),
-    tenant_id: UUID = Depends(require_tenant),
+    tenant_id: int = Depends(require_tenant),
 ):
     """Update global system settings (Kill Switch / Maintenance Mode state)."""
     settings = get_or_create_system_settings(session, tenant_id)

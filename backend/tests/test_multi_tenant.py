@@ -43,7 +43,7 @@ async def test_email_login_without_tenant_slug(client: AsyncClient, session: Ses
     assert me_data["email"] == "mario@roma.it"
     assert me_data["tenant_slug"] == "pizzeria-roma"
     assert me_data["tenant_name"] == "Pizzeria Roma"
-    assert me_data["tenant_id"] == str(rest.id)
+    assert me_data["tenant_id"] == rest.id
 
 @pytest.mark.asyncio
 async def test_username_login_with_tenant_slug(client: AsyncClient, session: Session):

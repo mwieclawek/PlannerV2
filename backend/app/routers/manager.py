@@ -34,7 +34,7 @@ from ..tenant_context import require_tenant
 
 def get_manager_service(
     session: Session = Depends(get_session),
-    tenant_id: UUID = Depends(require_tenant),
+    tenant_id: int = Depends(require_tenant),
 ) -> ManagerService:
     return ManagerService(session, tenant_id)
 
@@ -82,7 +82,7 @@ def create_shift_def(
 def get_shifts(
     session: Session = Depends(get_session), 
     _: User = Depends(get_current_user),
-    tenant_id: UUID = Depends(require_tenant),
+    tenant_id: int = Depends(require_tenant),
 ):
     from ..models import ShiftDefinition
     return session.exec(select(ShiftDefinition).where(ShiftDefinition.tenant_id == tenant_id)).all()
@@ -212,7 +212,7 @@ def get_team_availability(
     week_end: date,
     session: Session = Depends(get_session),
     _: User = Depends(get_manager_user),
-    tenant_id: UUID = Depends(require_tenant),
+    tenant_id: int = Depends(require_tenant),
 ):
     """Zwraca dostępność wszystkich pracowników w danym tygodniu"""
     from ..models import Availability
@@ -259,7 +259,7 @@ from ..models import Attendance, AttendanceStatus
 def get_pending_attendance(
     session: Session = Depends(get_session),
     _: User = Depends(get_manager_user),
-    tenant_id: UUID = Depends(require_tenant),
+    tenant_id: int = Depends(require_tenant),
 ):
     """Get all attendance records pending manager approval"""
     attendances = session.exec(
@@ -452,7 +452,7 @@ def get_all_attendance(
     status: Optional[str] = Query(None, description="Filter by status: PENDING, CONFIRMED, REJECTED"),
     session: Session = Depends(get_session),
     _: User = Depends(get_manager_user),
-    tenant_id: UUID = Depends(require_tenant),
+    tenant_id: int = Depends(require_tenant),
 ):
     """Get all attendance records within date range, optionally filtered by status"""
     query = select(Attendance).where(
@@ -504,7 +504,7 @@ def get_employee_hours(
     year: int = Query(..., ge=2000, le=2100),
     session: Session = Depends(get_session),
     _: User = Depends(get_manager_user),
-    tenant_id: UUID = Depends(require_tenant),
+    tenant_id: int = Depends(require_tenant),
 ):
     """Get monthly hours summary for all employees with availability info"""
     from ..models import Schedule, Availability

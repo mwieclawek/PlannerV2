@@ -44,7 +44,7 @@ class TenantCreate(TenantBase):
         return v.lower()
 
 class TenantResponse(TenantBase):
-    id: UUID
+    id: int
     is_active: bool
     created_at: datetime
 
@@ -120,7 +120,7 @@ class UserResponse(UserBase):
     created_at: datetime
     job_roles: List[int] = []
     next_shift: Optional[NextShiftInfo] = None
-    tenant_id: Optional[UUID] = None
+    tenant_id: Optional[int] = None
     tenant_slug: Optional[str] = None
     tenant_name: Optional[str] = None
 
@@ -330,9 +330,9 @@ class ConfigUpdate(BaseModel):
     pos_enabled: Optional[bool] = None
 
 class ConfigResponse(ConfigBase):
-    id: UUID  # Changed from int to UUID for multi-tenant support
+    id: int
     pos_enabled: bool = False
-    tenant_id: Optional[UUID] = None
+    tenant_id: Optional[int] = None
 
     @model_validator(mode='before')
     @classmethod
@@ -356,7 +356,7 @@ class ConfigResponse(ConfigBase):
 class SystemSettingsResponse(BaseModel):
     is_login_enabled: bool = True
     blocked_login_message: str
-    tenant_id: Optional[UUID] = None
+    tenant_id: Optional[int] = None
 
     class Config:
         from_attributes = True

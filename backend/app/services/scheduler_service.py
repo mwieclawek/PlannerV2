@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SchedulerService:
-    def __init__(self, session: Session, tenant_id: Optional[UUID] = None):
+    def __init__(self, session: Session, tenant_id: Optional[int] = None):
         self.session = session
         if tenant_id is None:
             from ..tenant_context import get_current_tenant_id

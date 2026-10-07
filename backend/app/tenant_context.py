@@ -17,13 +17,13 @@ from sqlmodel import Session, select
 from .auth_utils import get_current_user
 from .models import Tenant, User
 
-_current_tenant_id: ContextVar[Optional[UUID]] = ContextVar('current_tenant_id', default=None)
+_current_tenant_id: ContextVar[Optional[int]] = ContextVar('current_tenant_id', default=None)
 
-def get_current_tenant_id() -> Optional[UUID]:
+def get_current_tenant_id() -> Optional[int]:
     """Get the current tenant ID from request context."""
     return _current_tenant_id.get()
 
-def set_current_tenant_id(tenant_id: UUID) -> None:
+def set_current_tenant_id(tenant_id: int) -> None:
     """Set the current tenant ID in request context."""
     _current_tenant_id.set(tenant_id)
 
@@ -32,7 +32,7 @@ from .database import get_session
 async def require_tenant(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
-) -> UUID:
+) -> int:
     """FastAPI dependency that extracts and validates tenant_id from the authenticated user."""
     if not current_user.tenant_id:
         tenant = session.exec(select(Tenant).where(Tenant.is_active == True)).first()

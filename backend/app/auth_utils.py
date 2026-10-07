@@ -84,10 +84,12 @@ async def verify_user_token(token: str, session: Session) -> User:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
         
     query = select(User).where(User.username == username)
-    if tenant_id:
-        from uuid import UUID as _UUID
-        tid = _UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id
-        query = query.where(User.tenant_id == tid)
+    if tenant_id is not None:
+        try:
+            tid = int(tenant_id)
+            query = query.where(User.tenant_id == tid)
+        except (ValueError, TypeError):
+            pass
         
     user = session.exec(query).first()
     if user is None:

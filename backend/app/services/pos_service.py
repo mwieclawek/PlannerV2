@@ -19,7 +19,7 @@ from ..models import (
 
 
 class PosService:
-    def __init__(self, session: Session, tenant_id: UUID):
+    def __init__(self, session: Session, tenant_id: int):
         self.session = session
         self.tenant_id = tenant_id
 
