@@ -24,7 +24,7 @@ def upgrade() -> None:
     if conn.dialect.name == 'postgresql':
         # Add sequence for restaurantconfig.id if missing
         conn.execute(sa.text('''
-            DO \$\$
+            DO $$
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'restaurantconfig_id_seq') THEN
                     CREATE SEQUENCE restaurantconfig_id_seq OWNED BY restaurantconfig.id;
@@ -32,12 +32,12 @@ def upgrade() -> None:
                     ALTER TABLE restaurantconfig ALTER COLUMN id SET DEFAULT nextval('restaurantconfig_id_seq');
                 END IF;
             END
-            \$\$;
+            $$;
         '''))
         
         # Add sequence for system_settings.id if missing
         conn.execute(sa.text('''
-            DO \$\$
+            DO $$
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'system_settings_id_seq') THEN
                     CREATE SEQUENCE system_settings_id_seq OWNED BY system_settings.id;
@@ -45,7 +45,7 @@ def upgrade() -> None:
                     ALTER TABLE system_settings ALTER COLUMN id SET DEFAULT nextval('system_settings_id_seq');
                 END IF;
             END
-            \$\$;
+            $$;
         '''))
 
 
