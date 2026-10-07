@@ -78,9 +78,18 @@ def decode_token(token: str, expected_type: str) -> dict:
 async def verify_user_token(token: str, session: Session) -> User:
     payload = decode_token(token, expected_type="access")
     username: str = payload.get("sub")
+    tenant_id: Optional[str] = payload.get("tenant_id")
+    
     if not username:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
-    user = session.exec(select(User).where(User.username == username)).first()
+        
+    query = select(User).where(User.username == username)
+    if tenant_id:
+        from uuid import UUID as _UUID
+        tid = _UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id
+        query = query.where(User.tenant_id == tid)
+        
+    user = session.exec(query).first()
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
     return user

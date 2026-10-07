@@ -8,6 +8,9 @@ class User {
   final int? targetHoursPerMonth;
   final int? targetShiftsPerMonth;
   final bool isActive;
+  final String? tenantId;
+  final String? tenantSlug;
+  final String? tenantName;
 
   User({
     required this.id,
@@ -19,6 +22,9 @@ class User {
     this.targetHoursPerMonth,
     this.targetShiftsPerMonth,
     this.isActive = true,
+    this.tenantId,
+    this.tenantSlug,
+    this.tenantName,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -32,6 +38,9 @@ class User {
       targetHoursPerMonth: json['target_hours_per_month'],
       targetShiftsPerMonth: json['target_shifts_per_month'],
       isActive: json['is_active'] ?? true,
+      tenantId: json['tenant_id'],
+      tenantSlug: json['tenant_slug'],
+      tenantName: json['tenant_name'],
     );
   }
 
@@ -46,6 +55,9 @@ class User {
       'target_hours_per_month': targetHoursPerMonth,
       'target_shifts_per_month': targetShiftsPerMonth,
       'is_active': isActive,
+      'tenant_id': tenantId,
+      'tenant_slug': tenantSlug,
+      'tenant_name': tenantName,
     };
   }
 

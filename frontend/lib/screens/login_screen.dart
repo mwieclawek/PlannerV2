@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -14,12 +15,14 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final _tenantSlugController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
+    _tenantSlugController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -38,7 +41,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       await ref
           .read(authProvider.notifier)
-          .login(_usernameController.text, _passwordController.text);
+          .login(
+            _usernameController.text, 
+            _passwordController.text,
+            tenantSlug: _tenantSlugController.text.trim().isNotEmpty 
+                ? _tenantSlugController.text.trim() 
+                : null,
+          );
     } catch (e) {
       if (mounted) {
         String message = 'Wystąpił błąd';
@@ -149,15 +158,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                         const SizedBox(height: 32),
                         TextField(
-                          controller: _usernameController,
+                          controller: _tenantSlugController,
                           decoration: InputDecoration(
-                            labelText: 'Login',
-                            prefixIcon: const Icon(Icons.person_outline),
+                            labelText: 'Kod restauracji',
+                            prefixIcon: const Icon(Icons.restaurant),
+                            helperText: 'Wymagane przy logowaniu loginem',
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
                           keyboardType: TextInputType.text,
+                          textInputAction: TextInputAction.next,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'[a-z0-9-]')),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Przy logowaniu emailem kod restauracji nie jest wymagany',
+                          style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: _usernameController,
+                          decoration: InputDecoration(
+                            labelText: 'Login lub Email',
+                            prefixIcon: const Icon(Icons.person_outline),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 16),

@@ -24,7 +24,7 @@ class FakeAuthNotifier extends StateNotifier<AsyncValue<User?>> implements AuthN
   ));
   
   @override
-  Future<void> login(String username, String password) async {}
+  Future<void> login(String username, String password, {String? tenantSlug}) async {}
   @override
   Future<void> register(String username, String password, String fullName, String roleSystem, {String? managerPin}) async {}
   @override

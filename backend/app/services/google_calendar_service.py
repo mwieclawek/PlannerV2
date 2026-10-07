@@ -107,7 +107,11 @@ class GoogleCalendarService:
         if shift.end_time <= shift.start_time:
             end_dt += timedelta(days=1)
 
-        config = self.session.get(RestaurantConfig, 1)
+        config = None
+        if schedule.user and getattr(schedule.user, "tenant_id", None):
+            config = self.session.get(RestaurantConfig, schedule.user.tenant_id)
+        if not config:
+            config = self.session.exec(select(RestaurantConfig)).first()
         restaurant_name = config.name.strip() if (config and config.name and config.name.strip()) else "RestoPlan"
 
         event_id = f"plannerv2{schedule.id.hex}"

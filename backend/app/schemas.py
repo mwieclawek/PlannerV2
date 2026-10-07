@@ -13,6 +13,12 @@ from .models import (
 # ... (Previous imports remain, but need field_validator, ValidationInfo)
 
 # --- Auth ---
+class LoginRequest(BaseModel):
+    """Login request supporting both email and username+tenant_slug."""
+    username: str  # Can be email or username
+    password: str
+    tenant_slug: Optional[str] = None  # Required when logging in with username (not email)
+
 class Token(BaseModel):
     access_token: str
     refresh_token: Optional[str] = None
@@ -20,6 +26,30 @@ class Token(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+# --- Tenant ---
+class TenantBase(BaseModel):
+    name: str
+    slug: str
+
+class TenantCreate(TenantBase):
+    @field_validator('slug')
+    @classmethod
+    def slug_must_be_valid(cls, v: str) -> str:
+        import re
+        if not v or len(v) < 2:
+            raise ValueError('Slug must be at least 2 characters')
+        if not re.match(r'^[a-z0-9][a-z0-9-]*$', v):
+            raise ValueError('Slug must contain only lowercase letters, digits, and hyphens')
+        return v.lower()
+
+class TenantResponse(TenantBase):
+    id: UUID
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class UserBase(BaseModel):
     username: str
@@ -90,6 +120,9 @@ class UserResponse(UserBase):
     created_at: datetime
     job_roles: List[int] = []
     next_shift: Optional[NextShiftInfo] = None
+    tenant_id: Optional[UUID] = None
+    tenant_slug: Optional[str] = None
+    tenant_name: Optional[str] = None
 
     @model_validator(mode='before')
     @classmethod
@@ -297,8 +330,9 @@ class ConfigUpdate(BaseModel):
     pos_enabled: Optional[bool] = None
 
 class ConfigResponse(ConfigBase):
-    id: int
+    id: UUID  # Changed from int to UUID for multi-tenant support
     pos_enabled: bool = False
+    tenant_id: Optional[UUID] = None
 
     @model_validator(mode='before')
     @classmethod
@@ -322,6 +356,7 @@ class ConfigResponse(ConfigBase):
 class SystemSettingsResponse(BaseModel):
     is_login_enabled: bool = True
     blocked_login_message: str
+    tenant_id: Optional[UUID] = None
 
     class Config:
         from_attributes = True

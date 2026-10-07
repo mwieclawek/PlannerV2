@@ -36,7 +36,15 @@ def create_user_in_db(session: Session, user_data: dict) -> User:
     if existing:
         return existing
 
+    from app.models import RestaurantConfig
+    tenant_id = user_data.get("tenant_id")
+    if not tenant_id:
+        rest = session.exec(select(RestaurantConfig)).first()
+        if rest:
+            tenant_id = rest.id
+
     user = User(
+        tenant_id=tenant_id,
         username=user_data["username"],
         email=user_data.get("email"),
         full_name=user_data["full_name"],

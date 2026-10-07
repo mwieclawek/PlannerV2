@@ -1,5 +1,5 @@
 from datetime import date
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from uuid import UUID
 from sqlmodel import Session, select
 from ..models import Schedule, User, JobRole, ShiftDefinition
@@ -9,14 +9,26 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SchedulerService:
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, tenant_id: Optional[UUID] = None):
         self.session = session
+        if tenant_id is None:
+            from ..tenant_context import get_current_tenant_id
+            tid = get_current_tenant_id()
+            if not tid:
+                from ..models import RestaurantConfig
+                first_rest = session.exec(select(RestaurantConfig)).first()
+                if first_rest:
+                    tid = first_rest.id
+            self.tenant_id = tid
+        else:
+            self.tenant_id = tenant_id
 
     def save_batch(self, batch: BatchSaveRequest) -> int:
         # 1. Clear existing in range
-        statements = select(Schedule).where(
+        statements = select(Schedule).join(User, Schedule.user_id == User.id).where(
             Schedule.date >= batch.start_date, 
-            Schedule.date <= batch.end_date
+            Schedule.date <= batch.end_date,
+            User.tenant_id == self.tenant_id
         )
         existing = self.session.exec(statements).all()
         
@@ -53,9 +65,10 @@ class SchedulerService:
         return count
 
     def get_schedule_list(self, start_date: date, end_date: date) -> List[Dict[str, Any]]:
-        query = select(Schedule).where(
+        query = select(Schedule).join(User, Schedule.user_id == User.id).where(
             Schedule.date >= start_date,
-            Schedule.date <= end_date
+            Schedule.date <= end_date,
+            User.tenant_id == self.tenant_id
         )
         schedules = self.session.exec(query).all()
         
@@ -92,9 +105,10 @@ class SchedulerService:
     def publish_schedule(self, start_date: date, end_date: date, background_tasks=None) -> int:
         from ..models import Notification
         
-        query = select(Schedule).where(
+        query = select(Schedule).join(User, Schedule.user_id == User.id).where(
             Schedule.date >= start_date,
-            Schedule.date <= end_date
+            Schedule.date <= end_date,
+            User.tenant_id == self.tenant_id
         )
         schedules = self.session.exec(query).all()
         

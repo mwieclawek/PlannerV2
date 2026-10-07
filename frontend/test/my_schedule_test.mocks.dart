@@ -132,13 +132,25 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
           as String);
 
   @override
-  _i5.Future<String> login(String? email, String? password) =>
+  _i5.Future<String> login(
+    String? email,
+    String? password, {
+    String? tenantSlug,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#login, [email, password]),
+            Invocation.method(
+              #login,
+              [email, password],
+              {#tenantSlug: tenantSlug},
+            ),
             returnValue: _i5.Future<String>.value(
               _i4.dummyValue<String>(
                 this,
-                Invocation.method(#login, [email, password]),
+                Invocation.method(
+                  #login,
+                  [email, password],
+                  {#tenantSlug: tenantSlug},
+                ),
               ),
             ),
           )

@@ -45,12 +45,16 @@ class ApiService {
   }
 
   // Auth
-  Future<String> login(String email, String password) async {
+  Future<String> login(String email, String password, {String? tenantSlug}) async {
     final response = await _dio.post(
       '/auth/token',
       data: {'username': email, 'password': password},
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
+        headers: {
+          if (tenantSlug != null && tenantSlug.isNotEmpty)
+            'X-Tenant-Slug': tenantSlug,
+        },
         // prevent throwing for 400 so we can inspect it, or just let it throw but ensure Interceptor handles it?
         // Actually, let's keep it throwing but standard
       ),

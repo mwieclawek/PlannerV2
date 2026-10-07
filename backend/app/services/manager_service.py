@@ -11,17 +11,27 @@ from ..models import JobRole, ShiftDefinition, StaffingRequirement, RestaurantCo
 from ..schemas import JobRoleCreate, ShiftDefCreate, RequirementCreate, ConfigUpdate, UserUpdate, UserCreate
 
 class ManagerService:
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, tenant_id: Optional[UUID] = None):
         self.session = session
+        if tenant_id is None:
+            from ..tenant_context import get_current_tenant_id
+            tid = get_current_tenant_id()
+            if not tid:
+                first_rest = session.exec(select(RestaurantConfig)).first()
+                if first_rest:
+                    tid = first_rest.id
+            self.tenant_id = tid
+        else:
+            self.tenant_id = tenant_id
 
     # --- User Management ---
     def create_user(self, user_in: "UserCreate") -> User:
         # Check if username exists
-        existing_user = self.session.exec(select(User).where(User.username == user_in.username)).first()
+        existing_user = self.session.exec(select(User).where(User.username == user_in.username, User.tenant_id == self.tenant_id)).first()
         if existing_user:
             raise HTTPException(status_code=400, detail="Username already exists")
             
-        # Check if email exists (if provided)
+        # Check if email exists (if provided) - globally unique for email-based login
         if user_in.email:
              existing_email = self.session.exec(select(User).where(User.email == user_in.email)).first()
              if existing_email:
@@ -32,6 +42,7 @@ class ManagerService:
         hashed_pin = get_password_hash(user_in.manager_pin) if user_in.manager_pin else None
         
         user = User(
+            tenant_id=self.tenant_id,
             username=user_in.username,
             email=user_in.email,
             password_hash=hashed_password,
@@ -50,7 +61,7 @@ class ManagerService:
 
     # --- Roles ---
     def create_role(self, role_in: JobRoleCreate) -> JobRole:
-        role = JobRole(name=role_in.name, color_hex=role_in.color_hex)
+        role = JobRole(tenant_id=self.tenant_id, name=role_in.name, color_hex=role_in.color_hex)
         self.session.add(role)
         self.session.commit()
         self.session.refresh(role)
@@ -58,7 +69,7 @@ class ManagerService:
         return role
 
     def get_roles(self) -> List[JobRole]:
-        return self.session.exec(select(JobRole)).all()
+        return self.session.exec(select(JobRole).where(JobRole.tenant_id == self.tenant_id)).all()
 
     def update_role(self, role_id: int, role_in: JobRoleCreate) -> JobRole:
         role = self.session.get(JobRole, role_id)
@@ -89,6 +100,7 @@ class ManagerService:
         e_time = datetime.strptime(shift_in.end_time, "%H:%M").time()
         
         existing = self.session.exec(select(ShiftDefinition).where(
+            ShiftDefinition.tenant_id == self.tenant_id,
             ShiftDefinition.start_time == s_time,
             ShiftDefinition.end_time == e_time
         )).first()
@@ -98,6 +110,7 @@ class ManagerService:
         from ..models import ShiftDefinitionDayLink
         
         shift = ShiftDefinition(
+            tenant_id=self.tenant_id,
             name=shift_in.name, 
             start_time=s_time, 
             end_time=e_time
@@ -124,6 +137,7 @@ class ManagerService:
         e_time = datetime.strptime(shift_in.end_time, "%H:%M").time()
 
         existing = self.session.exec(select(ShiftDefinition).where(
+            ShiftDefinition.tenant_id == self.tenant_id,
             ShiftDefinition.start_time == s_time,
             ShiftDefinition.end_time == e_time,
             ShiftDefinition.id != shift_id
@@ -233,20 +247,27 @@ class ManagerService:
 
     # --- Config ---
     def get_config(self) -> RestaurantConfig:
-        config = self.session.get(RestaurantConfig, 1)
+        config = self.session.get(RestaurantConfig, self.tenant_id)
         if not config:
-            return RestaurantConfig(name="My Restaurant")
+            config = self.session.exec(select(RestaurantConfig)).first()
+        if not config:
+            config = RestaurantConfig(id=self.tenant_id, name="My Restaurant", slug=f"rest-{str(self.tenant_id)[:8]}")
+            self.session.add(config)
+            self.session.commit()
+            self.session.refresh(config)
         return config
 
     def update_config(self, update: ConfigUpdate) -> RestaurantConfig:
-        config = self.session.get(RestaurantConfig, 1)
+        config = self.session.get(RestaurantConfig, self.tenant_id)
+        if not config:
+            config = self.session.exec(select(RestaurantConfig)).first()
         data = update.dict(exclude_unset=True)
         opening_hours_json = data.pop("opening_hours", None)
         
         if not config:
             if "name" not in data:
                  data["name"] = "My Restaurant"
-            config = RestaurantConfig(id=1, **data)
+            config = RestaurantConfig(id=self.tenant_id, slug=f"rest-{str(self.tenant_id)[:8]}", **data)
             self.session.add(config)
             self.session.commit()
             self.session.refresh(config)
@@ -355,7 +376,7 @@ class ManagerService:
         from ..models import Schedule
         from ..schemas import NextShiftInfo
         
-        query = select(User).where(User.role_system == RoleSystem.EMPLOYEE)
+        query = select(User).where(User.role_system == RoleSystem.EMPLOYEE, User.tenant_id == self.tenant_id)
         if not include_inactive:
             query = query.where(User.is_active == True)
         users = self.session.exec(query).all()
@@ -489,7 +510,7 @@ class ManagerService:
             select(Schedule)
             .where(Schedule.date == today)
             .join(User, Schedule.user_id == User.id)
-            .where(User.is_active == True)
+            .where(User.is_active == True, User.tenant_id == self.tenant_id)
         ).all()
         
         working_today = []
@@ -519,6 +540,8 @@ class ManagerService:
              select(Attendance)
              .where(Attendance.date <= yesterday)
              .where(Attendance.status == AttendanceStatus.PENDING)
+             .join(User, Attendance.user_id == User.id)
+             .where(User.tenant_id == self.tenant_id)
              .order_by(Attendance.date.desc())
         ).all()
         
@@ -546,7 +569,11 @@ class ManagerService:
         
         from ..models import ShiftGiveaway, GiveawayStatus
         open_giveaways_db = self.session.exec(
-            select(ShiftGiveaway).where(ShiftGiveaway.status == GiveawayStatus.OPEN)
+            select(ShiftGiveaway)
+            .where(ShiftGiveaway.status == GiveawayStatus.OPEN)
+            .join(Schedule, ShiftGiveaway.schedule_id == Schedule.id)
+            .join(User, Schedule.user_id == User.id)
+            .where(User.tenant_id == self.tenant_id)
         ).all()
         
         open_giveaways = []
@@ -579,6 +606,8 @@ class ManagerService:
         pending_leave_reqs_db = self.session.exec(
             select(LeaveRequest)
             .where(LeaveRequest.status == LeaveStatus.PENDING)
+            .join(User, LeaveRequest.user_id == User.id)
+            .where(User.tenant_id == self.tenant_id)
             .order_by(LeaveRequest.start_date)
         ).all()
         
@@ -606,10 +635,14 @@ class ManagerService:
 
     # --- Shift Giveaway ---
     def get_open_giveaways(self) -> List[dict]:
-        from ..models import ShiftGiveaway, GiveawayStatus, Availability
+        from ..models import ShiftGiveaway, GiveawayStatus, Availability, Schedule, User
         
         giveaways = self.session.exec(
-            select(ShiftGiveaway).where(ShiftGiveaway.status == GiveawayStatus.OPEN)
+            select(ShiftGiveaway)
+            .where(ShiftGiveaway.status == GiveawayStatus.OPEN)
+            .join(Schedule, ShiftGiveaway.schedule_id == Schedule.id)
+            .join(User, Schedule.user_id == User.id)
+            .where(User.tenant_id == self.tenant_id)
         ).all()
         
         result = []
@@ -625,7 +658,7 @@ class ManagerService:
             # Build suggestions: active employees with availability for this date + same role
             eligible_users = self.session.exec(
                 select(User)
-                .where(User.role_system == RoleSystem.EMPLOYEE)
+                .where(User.role_system == RoleSystem.EMPLOYEE, User.tenant_id == self.tenant_id)
                 .where(User.is_active == True)
                 .where(User.id != g.offered_by)
             ).all()
@@ -798,7 +831,7 @@ class ManagerService:
         # Get employees
         employees = self.session.exec(
             select(User)
-            .where(User.role_system == RoleSystem.EMPLOYEE)
+            .where(User.role_system == RoleSystem.EMPLOYEE, User.tenant_id == self.tenant_id)
             .where(User.is_active == True)
         ).all()
         
@@ -907,7 +940,7 @@ class ManagerService:
         from sqlmodel import select
         from ..models import LeaveRequest, LeaveStatus, User
         
-        query = select(LeaveRequest)
+        query = select(LeaveRequest).join(User, LeaveRequest.user_id == User.id).where(User.tenant_id == self.tenant_id)
         if status:
             query = query.where(LeaveRequest.status == LeaveStatus(status))
         query = query.order_by(LeaveRequest.start_date.desc())
@@ -1001,10 +1034,13 @@ class ManagerService:
         end_date = date(year, month, last_day)
         
         requests = self.session.exec(
-            select(LeaveRequest).where(
+            select(LeaveRequest)
+            .join(User, LeaveRequest.user_id == User.id)
+            .where(
                 LeaveRequest.start_date <= end_date,
                 LeaveRequest.end_date >= start_date,
-                LeaveRequest.status == LeaveStatus.APPROVED
+                LeaveRequest.status == LeaveStatus.APPROVED,
+                User.tenant_id == self.tenant_id
             )
         ).all()
         

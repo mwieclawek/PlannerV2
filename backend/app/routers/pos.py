@@ -35,8 +35,13 @@ from ..services.kds_service import KDSService
 router = APIRouter(prefix="/pos/v2", tags=["pos-v2"])
 
 
-def _get_pos_service(session: Session = Depends(get_session)) -> PosService:
-    return PosService(session)
+from ..tenant_context import require_tenant
+
+def _get_pos_service(
+    session: Session = Depends(get_session),
+    tenant_id: UUID = Depends(require_tenant)
+) -> PosService:
+    return PosService(session, tenant_id)
 
 
 def _require_manager(user: User):

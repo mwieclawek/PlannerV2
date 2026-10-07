@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from datetime import date
 from uuid import UUID
 from sqlmodel import Session, select
@@ -9,8 +9,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 class EmployeeService:
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, tenant_id: Optional[UUID] = None):
         self.session = session
+        if tenant_id is None:
+            from ..tenant_context import get_current_tenant_id
+            tid = get_current_tenant_id()
+            if not tid:
+                from ..models import RestaurantConfig
+                first_rest = session.exec(select(RestaurantConfig)).first()
+                if first_rest:
+                    tid = first_rest.id
+            self.tenant_id = tid
+        else:
+            self.tenant_id = tenant_id
 
     def get_availability(self, user_id: UUID, start_date: date, end_date: date) -> List[Availability]:
         statement = select(Availability).where(
@@ -220,10 +231,11 @@ class EmployeeService:
     def get_team_schedule(self, start_date: date, end_date: date) -> List[dict]:
         from ..models import JobRole, ShiftDefinition, User, ShiftGiveaway, GiveawayStatus
         
-        statement = select(Schedule).where(
+        statement = select(Schedule).join(User, Schedule.user_id == User.id).where(
             Schedule.date >= start_date,
             Schedule.date <= end_date,
-            Schedule.is_published == True 
+            Schedule.is_published == True,
+            User.tenant_id == self.tenant_id
         ).order_by(Schedule.date)
         schedules = self.session.exec(statement).all()
         

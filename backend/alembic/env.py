@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from sqlmodel import SQLModel
 
 from backend.app.models import (
-    User, JobRole, ShiftDefinition, Availability,
+    Tenant, User, JobRole, ShiftDefinition, Availability,
     StaffingRequirement, Schedule, RestaurantConfig, SystemSettings, UserJobRoleLink,
     Attendance, AttendanceStatus, ShiftGiveaway, GiveawayStatus,
     LeaveRequest, LeaveStatus,

@@ -19,13 +19,14 @@ from ..models import (
 
 
 class PosService:
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, tenant_id: UUID):
         self.session = session
+        self.tenant_id = tenant_id
 
     # ── Table Zones ────────────────────────────────────────────────────────────
 
     def create_zone(self, name: str, sort_order: int = 0) -> TableZone:
-        zone = TableZone(name=name, sort_order=sort_order)
+        zone = TableZone(tenant_id=self.tenant_id, name=name, sort_order=sort_order)
         self.session.add(zone)
         self.session.commit()
         self.session.refresh(zone)
@@ -33,7 +34,7 @@ class PosService:
         return zone
 
     def list_zones(self, include_inactive: bool = False) -> List[TableZone]:
-        stmt = select(TableZone).order_by(TableZone.sort_order)
+        stmt = select(TableZone).where(TableZone.tenant_id == self.tenant_id).order_by(TableZone.sort_order)
         if not include_inactive:
             stmt = stmt.where(TableZone.is_active == True)
         return list(self.session.exec(stmt).all())
@@ -46,7 +47,7 @@ class PosService:
             zone = self.session.get(TableZone, zone_id)
             if not zone:
                 raise HTTPException(status_code=404, detail="Zone not found")
-        table = PosTable(name=name, zone_id=zone_id, seats=seats,
+        table = PosTable(tenant_id=self.tenant_id, name=name, zone_id=zone_id, seats=seats,
                          sort_order=sort_order)
         self.session.add(table)
         self.session.commit()
@@ -69,7 +70,7 @@ class PosService:
     def list_tables(self, zone_id: Optional[UUID] = None,
                     status_filter: Optional[TableStatus] = None,
                     include_inactive: bool = False) -> List[PosTable]:
-        stmt = select(PosTable).order_by(PosTable.sort_order)
+        stmt = select(PosTable).where(PosTable.tenant_id == self.tenant_id).order_by(PosTable.sort_order)
         if not include_inactive:
             stmt = stmt.where(PosTable.is_active == True)
         if zone_id:
@@ -84,11 +85,11 @@ class PosService:
                         icon_name: Optional[str] = None,
                         sort_order: int = 0) -> Category:
         existing = self.session.exec(
-            select(Category).where(Category.name == name)
+            select(Category).where(Category.tenant_id == self.tenant_id).where(Category.name == name)
         ).first()
         if existing:
             raise HTTPException(status_code=400, detail="Category already exists")
-        cat = Category(name=name, color_hex=color_hex, icon_name=icon_name,
+        cat = Category(tenant_id=self.tenant_id, name=name, color_hex=color_hex, icon_name=icon_name,
                        sort_order=sort_order)
         self.session.add(cat)
         self.session.commit()
@@ -109,7 +110,7 @@ class PosService:
         return cat
 
     def list_categories(self, include_inactive: bool = False) -> List[Category]:
-        stmt = select(Category).order_by(Category.sort_order)
+        stmt = select(Category).where(Category.tenant_id == self.tenant_id).order_by(Category.sort_order)
         if not include_inactive:
             stmt = stmt.where(Category.is_active == True)
         return list(self.session.exec(stmt).all())
@@ -120,7 +121,7 @@ class PosService:
         cat = self.session.get(Category, kwargs.get("category_id"))
         if not cat:
             raise HTTPException(status_code=400, detail="Category not found")
-        item = MenuItem(**kwargs)
+        item = MenuItem(tenant_id=self.tenant_id, **kwargs)
         self.session.add(item)
         self.session.commit()
         self.session.refresh(item)
@@ -141,7 +142,7 @@ class PosService:
 
     def list_menu_items(self, category_id: Optional[int] = None,
                         include_inactive: bool = False) -> List[MenuItem]:
-        stmt = select(MenuItem).order_by(MenuItem.sort_order)
+        stmt = select(MenuItem).where(MenuItem.tenant_id == self.tenant_id).order_by(MenuItem.sort_order)
         if not include_inactive:
             stmt = stmt.where(MenuItem.is_active == True)
         if category_id:
@@ -173,7 +174,7 @@ class PosService:
     def create_modifier_group(self, name: str, min_select: int = 0,
                               max_select: int = 1,
                               modifiers: Optional[List[dict]] = None) -> ModifierGroup:
-        group = ModifierGroup(name=name, min_select=min_select,
+        group = ModifierGroup(tenant_id=self.tenant_id, name=name, min_select=min_select,
                               max_select=max_select)
         self.session.add(group)
         self.session.flush()  # get group.id
@@ -194,7 +195,7 @@ class PosService:
         return group
 
     def list_modifier_groups(self, include_inactive: bool = False) -> List[ModifierGroup]:
-        stmt = select(ModifierGroup)
+        stmt = select(ModifierGroup).where(ModifierGroup.tenant_id == self.tenant_id)
         if not include_inactive:
             stmt = stmt.where(ModifierGroup.is_active == True)
         return list(self.session.exec(stmt).all())
@@ -209,7 +210,7 @@ class PosService:
         if not table or not table.is_active:
             raise HTTPException(status_code=400, detail="Table not found or inactive")
 
-        order = Order(
+        order = Order(tenant_id=self.tenant_id, 
             table_id=table_id,
             waiter_id=waiter.id,
             guest_count=guest_count,
@@ -289,7 +290,7 @@ class PosService:
                     status_filter: Optional[OrderStatus] = None,
                     waiter_id: Optional[UUID] = None) -> List[Order]:
         stmt = (
-            select(Order)
+            select(Order).where(Order.tenant_id == self.tenant_id)
             .options(
                 selectinload(Order.items).selectinload(OrderItem.modifiers),
                 selectinload(Order.payments),
@@ -332,7 +333,7 @@ class PosService:
             if table:
                 # Only change to DIRTY if no other open orders on this table
                 other_open = self.session.exec(
-                    select(Order).where(
+                    select(Order).where(Order.tenant_id == self.tenant_id).where(
                         Order.table_id == order.table_id,
                         Order.id != order.id,
                         Order.status.in_([OrderStatus.OPEN, OrderStatus.SENT,
@@ -356,7 +357,7 @@ class PosService:
 
         # Find a manager with matching PIN
         managers = self.session.exec(
-            select(User).where(
+            select(User).where(User.tenant_id == self.tenant_id).where(
                 User.role_system == RoleSystem.MANAGER,
                 User.manager_pin != None,
             )
@@ -468,7 +469,7 @@ class PosService:
             raise HTTPException(status_code=400,
                                 detail="Order is already closed")
 
-        payment = Payment(
+        payment = Payment(tenant_id=self.tenant_id, 
             order_id=order_id,
             method=method,
             amount=amount,
@@ -486,7 +487,7 @@ class PosService:
             table = self.session.get(PosTable, order.table_id)
             if table:
                 other_open = self.session.exec(
-                    select(Order).where(
+                    select(Order).where(Order.tenant_id == self.tenant_id).where(
                         Order.table_id == order.table_id,
                         Order.id != order.id,
                         Order.status.in_([OrderStatus.OPEN, OrderStatus.SENT,
@@ -510,7 +511,7 @@ class PosService:
                         target_date: Optional[date] = None) -> dict:
         """Smart Tips Tracker – today's tip totals for a waiter."""
         target = target_date or date.today()
-        stmt = select(Payment).where(
+        stmt = select(Payment).where(Payment.tenant_id == self.tenant_id).where(
             Payment.received_by == user_id,
             Payment.tip_amount > 0,
         )
@@ -565,7 +566,7 @@ class PosService:
     def _load_order(self, order_id: UUID) -> Optional[Order]:
         """Load an order with all relationships eagerly."""
         stmt = (
-            select(Order)
+            select(Order).where(Order.tenant_id == self.tenant_id)
             .where(Order.id == order_id)
             .options(
                 selectinload(Order.items).selectinload(OrderItem.modifiers),

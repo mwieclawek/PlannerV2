@@ -1,4 +1,5 @@
 from typing import List
+from uuid import UUID
 from datetime import date
 import logging
 from fastapi import APIRouter, Depends, BackgroundTasks
@@ -13,8 +14,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/employee", tags=["employee"])
 
-def get_employee_service(session: Session = Depends(get_session)) -> EmployeeService:
-    return EmployeeService(session)
+from ..tenant_context import require_tenant
+
+def get_employee_service(
+    session: Session = Depends(get_session),
+    tenant_id: UUID = Depends(require_tenant),
+) -> EmployeeService:
+    return EmployeeService(session, tenant_id)
 
 from ..services.google_calendar_service import GoogleCalendarService
 
@@ -321,7 +327,7 @@ def offer_shift_giveaway(
     from ..models import Notification, RoleSystem
     from ..services.push_service import PushService, send_push_to_tokens
     push_svc = PushService(session)
-    managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER)).all()
+    managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER, User.tenant_id == current_user.tenant_id)).all()
     
     # 1. Notify Managers
     for m in managers:
@@ -343,7 +349,8 @@ def offer_shift_giveaway(
         select(User).where(
             User.role_system == RoleSystem.EMPLOYEE,
             User.is_active == True,
-            User.id != current_user.id
+            User.id != current_user.id,
+            User.tenant_id == current_user.tenant_id
         )
     ).all()
     
@@ -437,10 +444,14 @@ def get_open_giveaways_for_employee(
     from datetime import datetime, timedelta
     from ..models import Availability, AvailabilityStatus
 
+    from ..models import User
     giveaways = session.exec(
-        select(ShiftGiveaway).where(
+        select(ShiftGiveaway)
+        .join(User, ShiftGiveaway.offered_by == User.id)
+        .where(
             ShiftGiveaway.status == GiveawayStatus.OPEN,
             ShiftGiveaway.offered_by != current_user.id,
+            User.tenant_id == current_user.tenant_id
         )
     ).all()
 
@@ -588,7 +599,7 @@ def claim_giveaway(
         background_tasks.add_task(send_push_to_tokens, tokens, title, body)
     
     # Notify managers
-    managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER)).all()
+    managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER, User.tenant_id == current_user.tenant_id)).all()
     for m in managers:
         m_title = "Zmiana na Giełdzie przejęta"
         m_body = f"{current_user.full_name} wziął zmianę pracownika z dnia {schedule.date}."
@@ -660,7 +671,7 @@ def create_leave_request(
     from ..models import Notification, RoleSystem
     from ..services.push_service import PushService, send_push_to_tokens
     push_svc = PushService(session)
-    managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER)).all()
+    managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER, User.tenant_id == current_user.tenant_id)).all()
     for m in managers:
         title = "Nowy wniosek urlopowy"
         body = f"Pracownik {current_user.full_name} złożył wniosek o urlop od {request.start_date} do {request.end_date}."

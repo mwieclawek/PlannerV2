@@ -30,8 +30,13 @@ def get_manager_user(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Not a manager")
     return current_user
 
-def get_manager_service(session: Session = Depends(get_session)) -> ManagerService:
-    return ManagerService(session)
+from ..tenant_context import require_tenant
+
+def get_manager_service(
+    session: Session = Depends(get_session),
+    tenant_id: UUID = Depends(require_tenant),
+) -> ManagerService:
+    return ManagerService(session, tenant_id)
 
 # --- Routes ---
 
@@ -74,9 +79,13 @@ def create_shift_def(
     return service.create_shift(shift_in)
 
 @router.get("/shifts", response_model=List[ShiftDefResponse])
-def get_shifts(session: Session = Depends(get_session), _: User = Depends(get_current_user)):
-    # Simple list doesnt necessarily need service but for consistency:
-    return session.exec(select(ShiftDefinition)).all()
+def get_shifts(
+    session: Session = Depends(get_session), 
+    _: User = Depends(get_current_user),
+    tenant_id: UUID = Depends(require_tenant),
+):
+    from ..models import ShiftDefinition
+    return session.exec(select(ShiftDefinition).where(ShiftDefinition.tenant_id == tenant_id)).all()
 
 @router.put("/shifts/{shift_id}", response_model=ShiftDefResponse)
 def update_shift(
@@ -202,7 +211,8 @@ def get_team_availability(
     week_start: date,
     week_end: date,
     session: Session = Depends(get_session),
-    _: User = Depends(get_manager_user)
+    _: User = Depends(get_manager_user),
+    tenant_id: UUID = Depends(require_tenant),
 ):
     """Zwraca dostępność wszystkich pracowników w danym tygodniu"""
     from ..models import Availability
@@ -210,6 +220,8 @@ def get_team_availability(
         select(Availability)
         .where(Availability.date >= week_start)
         .where(Availability.date <= week_end)
+        .join(User, Availability.user_id == User.id)
+        .where(User.tenant_id == tenant_id)
     ).all()
     
     # Group by user
@@ -246,11 +258,15 @@ from ..models import Attendance, AttendanceStatus
 @router.get("/attendance/pending")
 def get_pending_attendance(
     session: Session = Depends(get_session),
-    _: User = Depends(get_manager_user)
+    _: User = Depends(get_manager_user),
+    tenant_id: UUID = Depends(require_tenant),
 ):
     """Get all attendance records pending manager approval"""
     attendances = session.exec(
-        select(Attendance).where(Attendance.status == AttendanceStatus.PENDING)
+        select(Attendance)
+        .where(Attendance.status == AttendanceStatus.PENDING)
+        .join(User, Attendance.user_id == User.id)
+        .where(User.tenant_id == tenant_id)
     ).all()
     
     return [{
@@ -319,7 +335,7 @@ async def export_attendance_pdf(
     query = select(Attendance).where(
         Attendance.date >= start_date,
         Attendance.date <= end_date
-    )
+    ).join(User, Attendance.user_id == User.id).where(User.tenant_id == user.tenant_id)
     
     if status:
         try:
@@ -435,13 +451,14 @@ def get_all_attendance(
     end_date: date,
     status: Optional[str] = Query(None, description="Filter by status: PENDING, CONFIRMED, REJECTED"),
     session: Session = Depends(get_session),
-    _: User = Depends(get_manager_user)
+    _: User = Depends(get_manager_user),
+    tenant_id: UUID = Depends(require_tenant),
 ):
     """Get all attendance records within date range, optionally filtered by status"""
     query = select(Attendance).where(
         Attendance.date >= start_date,
         Attendance.date <= end_date
-    )
+    ).join(User, Attendance.user_id == User.id).where(User.tenant_id == tenant_id)
     
     if status:
         try:
@@ -486,7 +503,8 @@ def get_employee_hours(
     month: int = Query(..., ge=1, le=12),
     year: int = Query(..., ge=2000, le=2100),
     session: Session = Depends(get_session),
-    _: User = Depends(get_manager_user)
+    _: User = Depends(get_manager_user),
+    tenant_id: UUID = Depends(require_tenant),
 ):
     """Get monthly hours summary for all employees with availability info"""
     from ..models import Schedule, Availability
@@ -501,16 +519,16 @@ def get_employee_hours(
         select(Schedule).where(
             Schedule.date >= first_day,
             Schedule.date <= last_day
-        )
+        ).join(User, Schedule.user_id == User.id).where(User.tenant_id == tenant_id)
     ).all()
     
     # Get shift definitions for time calculations
-    all_shifts = session.exec(select(ShiftDefinition)).all()
+    all_shifts = session.exec(select(ShiftDefinition).where(ShiftDefinition.tenant_id == tenant_id)).all()
     shift_map = {s.id: s for s in all_shifts}
     
     # Get all employees
     employees = session.exec(
-        select(User).where(User.role_system == RoleSystem.EMPLOYEE)
+        select(User).where(User.role_system == RoleSystem.EMPLOYEE, User.tenant_id == tenant_id)
     ).all()
     
     # Get availability for the month (to know who submitted)
@@ -518,7 +536,7 @@ def get_employee_hours(
         select(Availability).where(
             Availability.date >= first_day,
             Availability.date <= last_day
-        )
+        ).join(User, Availability.user_id == User.id).where(User.tenant_id == tenant_id)
     ).all()
     users_with_availability = {str(a.user_id) for a in availabilities}
     

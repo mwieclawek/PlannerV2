@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
 from datetime import timedelta
 from ..database import get_session
-from ..models import User, RoleSystem, SystemSettings
+from ..models import User, RoleSystem, SystemSettings, Tenant, RestaurantConfig
 from ..auth_utils import (
     verify_password, get_password_hash,
     create_access_token, create_refresh_token, decode_token,
@@ -19,10 +19,18 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
 
 
-def get_system_settings(session: Session) -> SystemSettings:
-    settings = session.get(SystemSettings, 1)
+def get_system_settings(session: Session, tenant_id=None) -> SystemSettings:
+    from uuid import UUID as _UUID
+    if tenant_id:
+        tid = tenant_id if isinstance(tenant_id, _UUID) else _UUID(str(tenant_id))
+        settings = session.exec(
+            select(SystemSettings).where(SystemSettings.tenant_id == tid)
+        ).first()
+    else:
+        settings = session.exec(select(SystemSettings)).first()
+        
     if not settings:
-        settings = SystemSettings(id=1)
+        settings = SystemSettings(tenant_id=tenant_id)
         session.add(settings)
         session.commit()
         session.refresh(settings)
@@ -41,6 +49,9 @@ def register(
     )
 
 
+def _is_email(value: str) -> bool:
+    return '@' in value and '.' in value.split('@')[-1]
+
 @router.post("/token", response_model=Token)
 @limiter.limit("5/minute")
 def login_for_access_token(
@@ -49,9 +60,41 @@ def login_for_access_token(
     session: Session = Depends(get_session),
 ):
     # Rate limit applied via state.limiter in main.py by the caller.
-    # slowapi doesn't support decorators on imported routers easily,
-    # so we apply it at the app level via a middleware rule instead.
-    user = session.exec(select(User).where(User.username == form_data.username.lower())).first()
+    login_input = form_data.username.strip().lower()
+    
+    if _is_email(login_input):
+        # Email login - globally unique, no tenant slug needed
+        user = session.exec(select(User).where(User.email == login_input)).first()
+    else:
+        # Username login
+        tenant_slug = request.headers.get("X-Tenant-Slug", "").strip().lower()
+        if tenant_slug:
+            tenant = session.exec(select(RestaurantConfig).where(RestaurantConfig.slug == tenant_slug, RestaurantConfig.is_active == True)).first()
+            if not tenant:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Restaurant not found",
+                )
+            user = session.exec(select(User).where(User.username == login_input, User.tenant_id == tenant.id)).first()
+        else:
+            # Backward-compatibility fallback when slug is not provided:
+            # 1. Check default restaurant
+            default_rest = session.exec(select(RestaurantConfig).where(RestaurantConfig.slug == "default", RestaurantConfig.is_active == True)).first()
+            user = None
+            if default_rest:
+                user = session.exec(select(User).where(User.username == login_input, User.tenant_id == default_rest.id)).first()
+
+            # 2. If not found in default, check if username exists uniquely across the DB
+            if not user:
+                matching_users = session.exec(select(User).where(User.username == login_input)).all()
+                if len(matching_users) == 1:
+                    user = matching_users[0]
+                elif len(matching_users) > 1:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Username exists in multiple restaurants. Please provide restaurant code (X-Tenant-Slug) or use email.",
+                    )
+
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -60,12 +103,9 @@ def login_for_access_token(
         )
 
     # Check Kill Switch / Maintenance Mode
-    settings = get_system_settings(session)
+    settings = get_system_settings(session, tenant_id=user.tenant_id)
     if not settings.is_login_enabled:
-        is_admin_user = (
-            user.username.lower() == "mateusz" or
-            user.role_system == RoleSystem.ADMIN
-        )
+        is_admin_user = (user.role_system == RoleSystem.ADMIN) or (user.username and user.username.lower() == "mateusz")
         if not is_admin_user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -77,11 +117,12 @@ def login_for_access_token(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is deactivated. Contact your manager.",
         )
+        
     access_token = create_access_token(
-        data={"sub": user.username},
+        data={"sub": user.username, "tenant_id": str(user.tenant_id) if user.tenant_id else None},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-    refresh_token = create_refresh_token(data={"sub": user.username})
+    refresh_token = create_refresh_token(data={"sub": user.username, "tenant_id": str(user.tenant_id) if user.tenant_id else None})
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -103,13 +144,22 @@ def refresh_access_token(
     token = auth_header.removeprefix("Bearer ")
     payload = decode_token(token, expected_type="refresh")
     username = payload.get("sub")
+    tenant_id = payload.get("tenant_id")
 
-    user = session.exec(select(User).where(User.username == username)).first()
+    if tenant_id:
+        from uuid import UUID as _UUID
+        user = session.exec(
+            select(User).where(User.username == username, User.tenant_id == _UUID(tenant_id))
+        ).first()
+    else:
+        # Backward compat: old tokens without tenant_id
+        user = session.exec(select(User).where(User.username == username)).first()
+
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid or inactive user")
 
-    new_access = create_access_token(data={"sub": user.username})
-    new_refresh = create_refresh_token(data={"sub": user.username})
+    new_access = create_access_token(data={"sub": user.username, "tenant_id": str(user.tenant_id) if user.tenant_id else None})
+    new_refresh = create_refresh_token(data={"sub": user.username, "tenant_id": str(user.tenant_id) if user.tenant_id else None})
     return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
 
 
@@ -126,6 +176,9 @@ def read_users_me(current_user: User = Depends(get_current_user)):
         "is_active": current_user.is_active,
         "target_hours_per_month": current_user.target_hours_per_month,
         "target_shifts_per_month": current_user.target_shifts_per_month,
+        "tenant_id": str(current_user.tenant_id) if current_user.tenant_id else None,
+        "tenant_slug": current_user.tenant.slug if current_user.tenant else None,
+        "tenant_name": current_user.tenant.name if current_user.tenant else None,
     }
 
 

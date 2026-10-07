@@ -14,8 +14,14 @@ from ..schemas import (
 
 router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 
-def get_scheduler_service(session: Session = Depends(get_session)) -> SchedulerService:
-    return SchedulerService(session)
+from ..tenant_context import require_tenant
+from uuid import UUID
+
+def get_scheduler_service(
+    session: Session = Depends(get_session),
+    tenant_id: UUID = Depends(require_tenant)
+) -> SchedulerService:
+    return SchedulerService(session, tenant_id)
 
 @router.post("/generate")
 def generate_schedule(
@@ -61,13 +67,18 @@ def publish_schedule(
 def manual_assign(
     assign: ManualAssignment,
     session: Session = Depends(get_session),
-    _: User = Depends(get_manager_user)
+    current_user: User = Depends(get_manager_user)
 ):
     # This logic is small enough for now, or could move to SchedulerService
     # Keeping it simple for the moment but using schema
-    from ..models import Schedule
+    from ..models import Schedule, User
     from sqlmodel import select
     
+    # ensure user belongs to same tenant
+    assignee = session.get(User, assign.user_id)
+    if not assignee or assignee.tenant_id != current_user.tenant_id:
+        return {"status": "error", "message": "User not in tenant"}
+        
     existing_daily = session.exec(select(Schedule).where(
         Schedule.date == assign.date,
         Schedule.user_id == assign.user_id

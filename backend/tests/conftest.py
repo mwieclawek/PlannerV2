@@ -23,8 +23,24 @@ def session_fixture() -> Generator[Session, None, None]:
     SQLModel.metadata.drop_all(engine)
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
+        from app.models import RestaurantConfig
+        from uuid import UUID
+        default_rest = RestaurantConfig(
+            name="Test Restaurant",
+            slug="test"
+        )
+        session.add(default_rest)
+        session.commit()
+        session.refresh(default_rest)
         yield session
     SQLModel.metadata.drop_all(engine)
+
+@pytest.fixture(name="test_tenant")
+def test_tenant_fixture(session: Session):
+    """Return the primary test tenant for all tests."""
+    from app.models import Tenant
+    from sqlmodel import select
+    return session.exec(select(Tenant).where(Tenant.slug == "test")).first()
 
 import pytest_asyncio
 
@@ -52,12 +68,13 @@ def manager_token_fixture() -> str:
     return ""
 
 @pytest.fixture(name="auth_headers")
-def auth_headers_fixture(session: Session) -> dict:
+def auth_headers_fixture(session: Session, test_tenant) -> dict:
     from app.models import User, RoleSystem
     from app.auth_utils import get_password_hash
     
-    # Create user
+    # Create user within the test tenant
     user = User(
+        tenant_id=test_tenant.id,
         username="manager_test",
         email="manager@test.com",
         password_hash=get_password_hash("secret"),
@@ -68,16 +85,17 @@ def auth_headers_fixture(session: Session) -> dict:
     session.commit()
     session.refresh(user)
     
-    token = create_access_token(data={"sub": user.username})
+    token = create_access_token(data={"sub": user.username, "tenant_id": str(user.tenant_id)})
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture(name="employee_headers")
-def employee_headers_fixture(session: Session) -> dict:
+def employee_headers_fixture(session: Session, test_tenant) -> dict:
     from app.models import User, RoleSystem
     from app.auth_utils import get_password_hash
     
-    # Create user
+    # Create user within the test tenant
     user = User(
+        tenant_id=test_tenant.id,
         username="employee_test",
         email="employee@test.com",
         password_hash=get_password_hash("secret"),
@@ -88,11 +106,11 @@ def employee_headers_fixture(session: Session) -> dict:
     session.commit()
     session.refresh(user)
     
-    token = create_access_token(data={"sub": user.username})
+    token = create_access_token(data={"sub": user.username, "tenant_id": str(user.tenant_id)})
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture(name="shift_definition")
-def shift_definition_fixture(session: Session):
+def shift_definition_fixture(session: Session, test_tenant):
     """Create a test shift definition"""
     from app.models import ShiftDefinition
     from sqlmodel import select
@@ -101,6 +119,7 @@ def shift_definition_fixture(session: Session):
     
     # Simple check or just create new one
     shift = ShiftDefinition(
+        tenant_id=test_tenant.id,
         name="Test Morning Shift",
         start_time=time(8, 0),
         end_time=time(16, 0)
@@ -111,12 +130,13 @@ def shift_definition_fixture(session: Session):
     return shift
 
 @pytest.fixture(name="job_role")
-def job_role_fixture(session: Session):
+def job_role_fixture(session: Session, test_tenant):
     """Create a test job role"""
     from app.models import JobRole
     from sqlmodel import select
     
     role = JobRole(
+        tenant_id=test_tenant.id,
         name="Test Role",
         color_hex="#FF5733"
     )

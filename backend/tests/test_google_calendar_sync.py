@@ -208,9 +208,10 @@ async def test_employee_sync_endpoint(client: AsyncClient, employee_headers: dic
 
 
 def test_sync_schedule_summary_with_restaurant_config(session: Session, test_user_with_token: User, shift_def_day: ShiftDefinition, test_job_role: JobRole, monkeypatch):
-    config = session.get(RestaurantConfig, 1)
+    from sqlmodel import select
+    config = session.exec(select(RestaurantConfig)).first()
     if not config:
-        config = RestaurantConfig(id=1, name="Trattoria Test")
+        config = RestaurantConfig(name="Trattoria Test", slug="trattoria-test")
         session.add(config)
     else:
         config.name = "Trattoria Test"

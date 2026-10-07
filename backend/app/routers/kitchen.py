@@ -27,7 +27,7 @@ def list_tables(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    stmt = select(RestaurantTable)
+    stmt = select(RestaurantTable).where(RestaurantTable.tenant_id == current_user.tenant_id)
     if not include_inactive:
         stmt = stmt.where(RestaurantTable.is_active == True)
     return session.exec(stmt).all()
@@ -41,7 +41,7 @@ def create_table(
     if current_user.role_system != RoleSystem.MANAGER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only managers can manage tables")
     
-    table = RestaurantTable(name=payload.name, is_active=payload.is_active)
+    table = RestaurantTable(name=payload.name, is_active=payload.is_active, tenant_id=current_user.tenant_id)
     session.add(table)
     session.commit()
     session.refresh(table)
@@ -57,7 +57,7 @@ def delete_table(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only managers can manage tables")
     
     table = session.get(RestaurantTable, table_id)
-    if not table:
+    if not table or table.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
     
     # Soft delete
@@ -75,7 +75,7 @@ def list_menu(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    stmt = select(MenuItem)
+    stmt = select(MenuItem).where(MenuItem.tenant_id == current_user.tenant_id)
     if not include_inactive:
         stmt = stmt.where(MenuItem.is_active == True)
     if category:
@@ -101,7 +101,7 @@ def create_menu_item(
     cat_value = data.pop("category", None)
     if cat_value and "category_id" not in data:
         data["category_id"] = _CATEGORY_MAP.get(cat_value if isinstance(cat_value, str) else cat_value.value, 2)
-    item = MenuItem(**data)
+    item = MenuItem(**data, tenant_id=current_user.tenant_id)
     session.add(item)
     session.commit()
     session.refresh(item)
@@ -118,7 +118,7 @@ def update_menu_item(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only managers can manage menu")
     
     item = session.get(MenuItem, item_id)
-    if not item:
+    if not item or item.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu item not found")
     
     update_data = payload.model_dump(exclude_unset=True) if hasattr(payload, 'model_dump') else payload.dict(exclude_unset=True)
@@ -145,7 +145,7 @@ def delete_menu_item(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only managers can manage menu")
     
     item = session.get(MenuItem, item_id)
-    if not item:
+    if not item or item.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu item not found")
     
     # Soft delete
@@ -167,12 +167,13 @@ def create_order(
     # to avoid clients relying solely on 8-second HTTP polling.
     # Verify table
     table = session.get(RestaurantTable, payload.table_id)
-    if not table or not table.is_active:
+    if not table or not table.is_active or table.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=400, detail="Table not found or inactive.")
 
     order = KitchenOrder(
         table_id=payload.table_id,
         waiter_id=current_user.id,
+        tenant_id=current_user.tenant_id
     )
     session.add(order)
     session.flush()  # to get order.id
@@ -180,7 +181,7 @@ def create_order(
     for item_data in payload.items:
         # Verify menu item & fetch current price
         menu_item = session.get(MenuItem, item_data.menu_item_id)
-        if not menu_item or not menu_item.is_active:
+        if not menu_item or not menu_item.is_active or menu_item.tenant_id != current_user.tenant_id:
              raise HTTPException(status_code=400, detail=f"Menu item {item_data.menu_item_id} not found or inactive")
              
         item = KitchenOrderItem(
@@ -206,7 +207,7 @@ def list_orders(
     current_user: User = Depends(get_current_user),
 ):
     """List orders, useful for Waiter screen or KDS (filtering by status)."""
-    stmt = select(KitchenOrder)
+    stmt = select(KitchenOrder).where(KitchenOrder.tenant_id == current_user.tenant_id)
     if table_id:
         stmt = stmt.where(KitchenOrder.table_id == table_id)
     if status_filter is not None:
@@ -224,7 +225,7 @@ def get_order(
     current_user: User = Depends(get_current_user),
 ):
     order = session.get(KitchenOrder, order_id)
-    if not order:
+    if not order or order.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     return order
 
@@ -240,7 +241,7 @@ def update_order_status(
 ):
     """Update order status (from KDS: IN_PROGRESS -> READY, from POS: DELIVERED)."""
     order = session.get(KitchenOrder, order_id)
-    if not order:
+    if not order or order.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
     order.status = payload.status
@@ -259,7 +260,7 @@ def cancel_order(
 ):
     """Cancel a kitchen order (soft-delete)."""
     order = session.get(KitchenOrder, order_id)
-    if not order:
+    if not order or order.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
     if order.status in [KitchenOrderStatus.DELIVERED, KitchenOrderStatus.CANCELLED]:

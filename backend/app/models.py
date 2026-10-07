@@ -4,7 +4,7 @@ from typing import Optional, List
 from enum import Enum
 from pydantic import EmailStr, computed_field
 from sqlmodel import SQLModel, Field, Relationship, col
-from sqlalchemy import Column, Date, Integer
+from sqlalchemy import Column, Date, Integer, UniqueConstraint
 
 class RoleSystem(str, Enum):
     ADMIN = "ADMIN"
@@ -16,6 +16,71 @@ class AvailabilityStatus(str, Enum):
     UNAVAILABLE = "UNAVAILABLE"
     AVAILABLE = "AVAILABLE"
 
+from sqlalchemy.types import TypeDecorator
+import sqlalchemy as sa
+
+class CoercingUUID(TypeDecorator):
+    """UUID type that transparently coerces integers, strings, and UUID objects."""
+    impl = sa.Uuid
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, int):
+            return UUID(int=value)
+        if isinstance(value, str):
+            try:
+                return UUID(value)
+            except Exception:
+                return value
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, UUID):
+            return value
+        try:
+            return UUID(str(value))
+        except Exception:
+            return value
+
+class RestaurantOpeningHour(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    config_id: UUID = Field(sa_column=Column(CoercingUUID, sa.ForeignKey("restaurantconfig.id")))
+    day_of_week: int
+    open_time: time
+    close_time: time
+
+    config: "RestaurantConfig" = Relationship(back_populates="opening_hours")
+
+class RestaurantConfig(SQLModel, table=True):
+    """Restaurant model representing a client restaurant (tenant) in the system."""
+    id: UUID = Field(default_factory=uuid4, sa_column=Column(CoercingUUID, primary_key=True))
+    name: str  # Display name, e.g. "Restauracja Bella Italia"
+    slug: str = Field(unique=True, index=True)  # URL-safe identifier/code, e.g. "bella-italia"
+    address: Optional[str] = None
+    pos_enabled: bool = Field(default=False)
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    opening_hours: List["RestaurantOpeningHour"] = Relationship(back_populates="config")
+    users: List["User"] = Relationship(back_populates="restaurant_config")
+
+    def __init__(self, **data):
+        if "id" in data and isinstance(data["id"], int):
+            data["id"] = UUID(int=data["id"])
+        if "slug" not in data or not data["slug"]:
+            name = data.get("name", "restaurant")
+            import re
+            slug = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')
+            data["slug"] = slug or f"rest-{uuid4().hex[:6]}"
+        super().__init__(**data)
+
+# Alias for tenant abstraction across services and auth
+Tenant = RestaurantConfig
+
 # Join table for User and JobRole
 class UserJobRoleLink(SQLModel, table=True):
     user_id: Optional[UUID] = Field(default=None, foreign_key="user.id", primary_key=True)
@@ -23,15 +88,20 @@ class UserJobRoleLink(SQLModel, table=True):
 
 class JobRole(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[UUID] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
     name: str
     color_hex: str
     
     users: List["User"] = Relationship(back_populates="job_roles", link_model=UserJobRoleLink)
 
 class User(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "username", name="uq_user_tenant_username"),
+    )
     id: UUID = Field(default_factory=uuid4, primary_key=True)
-    username: str = Field(unique=True, index=True)
-    email: Optional[str] = Field(default=None)  # Optional, for contact only
+    tenant_id: Optional[UUID] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
+    username: str = Field(index=True)
+    email: Optional[str] = Field(default=None, index=True)  # Optional, for contact only
     password_hash: str
     full_name: str
     role_system: RoleSystem = Field(default=RoleSystem.EMPLOYEE)
@@ -43,6 +113,11 @@ class User(SQLModel, table=True):
     encrypted_google_access_token: Optional[str] = Field(default=None)
     encrypted_google_refresh_token: Optional[str] = Field(default=None)
 
+    restaurant_config: Optional["RestaurantConfig"] = Relationship(back_populates="users")
+
+    @property
+    def tenant(self) -> Optional["RestaurantConfig"]:
+        return self.restaurant_config
     job_roles: List[JobRole] = Relationship(back_populates="users", link_model=UserJobRoleLink)
     availabilities: List["Availability"] = Relationship(back_populates="user")
     schedules: List["Schedule"] = Relationship(back_populates="user")
@@ -112,6 +187,7 @@ class ShiftDefinitionDayLink(SQLModel, table=True):
 
 class ShiftDefinition(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[UUID] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
     name: str
     start_time: time
     end_time: time
@@ -145,26 +221,9 @@ class Schedule(SQLModel, table=True):
 
     user: User = Relationship(back_populates="schedules")
 
-class RestaurantOpeningHour(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    config_id: int = Field(foreign_key="restaurantconfig.id")
-    day_of_week: int
-    open_time: time
-    close_time: time
-
-    config: "RestaurantConfig" = Relationship(back_populates="opening_hours")
-
-class RestaurantConfig(SQLModel, table=True):
-    id: int = Field(default=1, primary_key=True)
-    name: str
-    address: Optional[str] = None
-    pos_enabled: bool = Field(default=False)
-    
-    opening_hours: List["RestaurantOpeningHour"] = Relationship(back_populates="config")
-
 class SystemSettings(SQLModel, table=True):
-    __tablename__ = "system_settings"
-    id: int = Field(default=1, primary_key=True)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[UUID] = Field(default=None, sa_column=Column(CoercingUUID, sa.ForeignKey("restaurantconfig.id"), index=True, nullable=True))
     is_login_enabled: bool = Field(default=True)
     blocked_login_message: str = Field(
         default="Dostęp do aplikacji został tymczasowo wstrzymany. Skontaktuj się z administratorem."
@@ -250,6 +309,7 @@ class UserDevice(SQLModel, table=True):
 class TableZone(SQLModel, table=True):
     """A logical zone on the restaurant floor plan (e.g. Patio, Main Hall, Bar)."""
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    tenant_id: Optional[UUID] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
     name: str
     sort_order: int = Field(default=0)
     is_active: bool = Field(default=True)
@@ -267,6 +327,7 @@ class TableStatus(str, Enum):
 class PosTable(SQLModel, table=True):
     """A physical table/seat in the restaurant."""
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    tenant_id: Optional[UUID] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
     name: str = Field(index=True)
     zone_id: Optional[UUID] = Field(default=None, foreign_key="tablezone.id")
     seats: int = Field(default=4)
@@ -283,6 +344,7 @@ class PosTable(SQLModel, table=True):
 class Category(SQLModel, table=True):
     """Dynamic menu category (replaces the old MenuCategory enum)."""
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[UUID] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
     name: str = Field(unique=True)
     color_hex: str = Field(default="#607D8B")
     icon_name: Optional[str] = Field(default=None)
@@ -295,6 +357,7 @@ class Category(SQLModel, table=True):
 class MenuItem(SQLModel, table=True):
     """A product on the menu."""
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    tenant_id: Optional[UUID] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
     name: str
     description: Optional[str] = Field(default=None)
     price: float = Field(default=0.0)
@@ -315,6 +378,7 @@ class MenuItem(SQLModel, table=True):
 class ModifierGroup(SQLModel, table=True):
     """A group of modifiers (e.g. 'Doneness', 'Extras')."""
     id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[UUID] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
     name: str
     min_select: int = Field(default=0)   # 0 = optional, 1+ = required
     max_select: int = Field(default=1)   # 1 = single-choice, N = multi
@@ -375,6 +439,7 @@ class OrderItemKDSStatus(str, Enum):
 class Order(SQLModel, table=True):
     """A POS order attached to a table and served by a waiter."""
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    tenant_id: Optional[UUID] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
     table_id: UUID = Field(foreign_key="postable.id")
     waiter_id: UUID = Field(foreign_key="user.id")
     status: OrderStatus = Field(default=OrderStatus.OPEN)
@@ -477,6 +542,7 @@ class PaymentMethod(str, Enum):
 class Payment(SQLModel, table=True):
     """A single payment against an order (supports multi-method split)."""
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    tenant_id: Optional[UUID] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
     order_id: UUID = Field(foreign_key="order.id")
     method: PaymentMethod
     amount: float
@@ -532,12 +598,14 @@ class KitchenOrderStatus(str, Enum):
 class RestaurantTable(SQLModel, table=True):
     """DEPRECATED – use PosTable instead. Kept for existing migration/data."""
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    tenant_id: Optional[UUID] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
     name: str = Field(index=True)
     is_active: bool = Field(default=True)
 
 class KitchenOrder(SQLModel, table=True):
     """DEPRECATED – use Order instead."""
     id: UUID = Field(default_factory=uuid4, primary_key=True)
+    tenant_id: Optional[UUID] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
     table_id: UUID = Field(foreign_key="restauranttable.id")
     status: KitchenOrderStatus = Field(default=KitchenOrderStatus.PENDING)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -582,3 +650,38 @@ class KitchenOrderItem(SQLModel, table=True):
     @property
     def menu_item_name(self) -> Optional[str]:
         return self.menu_item_name_snapshot or (self.menu_item.name if self.menu_item else None)
+
+
+# ── Automatic tenant_id injection for backwards compatibility & consistency ───
+from sqlalchemy import event, text
+
+def _auto_set_tenant_id(mapper, connection, target):
+    if getattr(target, 'tenant_id', None) is None:
+        from .tenant_context import get_current_tenant_id
+        tid = get_current_tenant_id()
+        if tid:
+            target.tenant_id = tid
+        else:
+            try:
+                res = connection.execute(text("SELECT id FROM restaurantconfig LIMIT 1")).fetchone()
+                if res and res[0]:
+                    from uuid import UUID as _UUID
+                    val = res[0]
+                    target.tenant_id = val if isinstance(val, _UUID) else _UUID(str(val))
+                else:
+                    from uuid import UUID as _UUID
+                    from datetime import datetime, timezone
+                    default_id = _UUID(int=1)
+                    now_utc = datetime.now(timezone.utc)
+                    id_val = default_id.hex if connection.dialect.name == "sqlite" else default_id
+                    connection.execute(
+                        text("INSERT INTO restaurantconfig (id, name, slug, pos_enabled, is_active, created_at) "
+                             "VALUES (:id, 'Default Restaurant', 'default', 0, 1, :created)"),
+                        {"id": id_val, "created": now_utc}
+                    )
+                    target.tenant_id = default_id
+            except Exception:
+                pass
+
+for _model in [User, JobRole, ShiftDefinition, SystemSettings, TableZone, PosTable, Category, MenuItem, ModifierGroup, Order, Payment, RestaurantTable, KitchenOrder]:
+    event.listen(_model, 'before_insert', _auto_set_tenant_id)
