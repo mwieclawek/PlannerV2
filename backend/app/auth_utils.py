@@ -94,7 +94,23 @@ async def verify_user_token(token: str, session: Session) -> User:
     user = session.exec(query).first()
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
+    ensure_tenant_active(user)
     return user
+
+
+def ensure_tenant_active(user: User) -> None:
+    """Raise 403 if the user's restaurant has been blocked by the system owner.
+
+    Superadmins are exempt so they can never lock themselves out of the panel.
+    """
+    if user.is_superadmin:
+        return
+    restaurant = user.restaurant_config
+    if restaurant is not None and not restaurant.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Restauracja została zablokowana. Skontaktuj się z administratorem systemu.",
+        )
 
 
 async def get_current_user(
@@ -102,3 +118,15 @@ async def get_current_user(
     session: Session = Depends(get_session),
 ) -> User:
     return await verify_user_token(token, session)
+
+
+async def get_current_superadmin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Dependency for global (cross-tenant) system-owner endpoints."""
+    if not current_user.is_superadmin or not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superadmin privileges required",
+        )
+    return current_user

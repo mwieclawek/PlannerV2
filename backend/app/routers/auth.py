@@ -11,7 +11,7 @@ from ..models import User, RoleSystem, SystemSettings, Tenant, RestaurantConfig
 from ..auth_utils import (
     verify_password, get_password_hash,
     create_access_token, create_refresh_token, decode_token,
-    ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
+    ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user, ensure_tenant_active
 )
 from ..schemas import Token, UserCreate, UserResponse
 from ..main import limiter
@@ -108,12 +108,19 @@ def login_for_access_token(
     # Check Kill Switch / Maintenance Mode
     settings = get_system_settings(session, tenant_id=user.tenant_id)
     if not settings.is_login_enabled:
-        is_admin_user = (user.role_system == RoleSystem.ADMIN) or (user.username and user.username.lower() == "mateusz")
+        is_admin_user = (
+            user.is_superadmin
+            or user.role_system == RoleSystem.ADMIN
+            or (user.username and user.username.lower() == "mateusz")
+        )
         if not is_admin_user:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=settings.blocked_login_message,
             )
+
+    # Restaurant blocked by the system owner (superadmins are exempt)
+    ensure_tenant_active(user)
 
     if not user.is_active:
         raise HTTPException(
@@ -185,6 +192,7 @@ def read_users_me(current_user: User = Depends(get_current_user)):
         "tenant_id": current_user.tenant_id,
         "tenant_slug": current_user.tenant.slug if current_user.tenant else None,
         "tenant_name": current_user.tenant.name if current_user.tenant else None,
+        "is_superadmin": bool(current_user.is_superadmin),
     }
 
 

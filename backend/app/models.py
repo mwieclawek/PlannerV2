@@ -5,6 +5,7 @@ from enum import Enum
 from pydantic import EmailStr, computed_field
 from sqlmodel import SQLModel, Field, Relationship, col
 from sqlalchemy import Column, Date, Integer, UniqueConstraint
+from sqlalchemy import false as sa_false
 
 class RoleSystem(str, Enum):
     ADMIN = "ADMIN"
@@ -78,6 +79,9 @@ class User(SQLModel, table=True):
     target_shifts_per_month: Optional[int] = Field(default=None, sa_column=Column(Integer, nullable=True))
     manager_pin: Optional[str] = Field(default=None)
     is_active: bool = Field(default=True)
+    # Global system-owner flag (cross-tenant). NOT the same as RoleSystem.ADMIN/MANAGER,
+    # which are scoped to a single restaurant. Never settable through tenant-level endpoints.
+    is_superadmin: bool = Field(default=False, sa_column_kwargs={"server_default": sa_false()})
     encrypted_google_access_token: Optional[str] = Field(default=None)
     encrypted_google_refresh_token: Optional[str] = Field(default=None)
 

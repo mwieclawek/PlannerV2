@@ -44,6 +44,10 @@ class ApiService {
     );
   }
 
+  /// Authenticated HTTP client (token injection + 401 handling) shared with
+  /// feature-specific services such as SysAdminService.
+  Dio get client => _dio;
+
   // Auth
   Future<String> login(String email, String password, {String? tenantSlug}) async {
     final response = await _dio.post(

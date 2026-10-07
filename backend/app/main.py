@@ -63,7 +63,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from .routers import auth, manager, employee, scheduler, health, bug_report, notifications, kitchen, pos, admin
+from .routers import auth, manager, employee, scheduler, health, bug_report, notifications, kitchen, pos, admin, sysadmin
 app.include_router(auth.router)
 app.include_router(manager.router)
 app.include_router(employee.router)
@@ -75,6 +75,7 @@ app.include_router(kitchen.router)
 app.include_router(pos.router)
 app.include_router(admin.router)
 app.include_router(admin.router, prefix="/api")
+app.include_router(sysadmin.router)
 
 @app.get("/")
 def read_root():

@@ -7,6 +7,7 @@ import '../screens/login_screen.dart';
 import '../screens/employee/employee_dashboard.dart';
 import '../screens/manager/manager_dashboard.dart';
 import '../screens/server_setup_screen.dart';
+import '../screens/sysadmin/sysadmin_dashboard.dart';
 import '../providers/config_provider.dart';
 
 import '../providers/module_provider.dart';
@@ -71,6 +72,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (isLoggedIn) {
         final activeModule = ref.read(moduleProvider);
 
+        final isSysAdminRoute = state.matchedLocation == '/superadmin';
+
+        if (user.isSuperadmin) {
+          // SuperAdmin is locked to their panel (no normal POS/Planning dashboard)
+          if (!isSysAdminRoute) {
+            return '/superadmin';
+          }
+          return null; // allow access to /superadmin
+        } else if (isSysAdminRoute) {
+          // Regular user trying to access sysadmin panel -> redirect to normal dash
+          return user.isManager ? '/manager' : '/employee';
+        }
+
         if (isLoginRoute) {
           if (activeModule == AppModule.planning) {
             return user.isManager ? '/manager' : '/employee';
@@ -112,6 +126,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ServerSetupScreen(),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(path: '/superadmin', builder: (context, state) => const SysAdminDashboardScreen()),
 
       // Module: Planning
       GoRoute(

@@ -11,6 +11,7 @@ class User {
   final String? tenantId;
   final String? tenantSlug;
   final String? tenantName;
+  final bool isSuperadmin;
 
   User({
     required this.id,
@@ -25,6 +26,7 @@ class User {
     this.tenantId,
     this.tenantSlug,
     this.tenantName,
+    this.isSuperadmin = false,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -38,9 +40,11 @@ class User {
       targetHoursPerMonth: json['target_hours_per_month'],
       targetShiftsPerMonth: json['target_shifts_per_month'],
       isActive: json['is_active'] ?? true,
-      tenantId: json['tenant_id'],
+      // Backend returns tenant_id as int - must not be assigned directly to String?
+      tenantId: json['tenant_id']?.toString(),
       tenantSlug: json['tenant_slug'],
       tenantName: json['tenant_name'],
+      isSuperadmin: json['is_superadmin'] == true,
     );
   }
 
@@ -58,6 +62,7 @@ class User {
       'tenant_id': tenantId,
       'tenant_slug': tenantSlug,
       'tenant_name': tenantName,
+      'is_superadmin': isSuperadmin,
     };
   }
 

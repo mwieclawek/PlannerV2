@@ -123,6 +123,10 @@ class UserResponse(UserBase):
     tenant_id: Optional[int] = None
     tenant_slug: Optional[str] = None
     tenant_name: Optional[str] = None
+    # Read-only. Intentionally absent from UserCreate/UserUpdate: ManagerService.update_user
+    # applies every submitted field via setattr, so exposing it there would let any
+    # restaurant manager promote themselves to system owner.
+    is_superadmin: bool = False
 
     @model_validator(mode='before')
     @classmethod
@@ -1174,4 +1178,107 @@ class KDSSyncResponse(BaseModel):
     # can resync immediately if it was offline.
     refreshed_items: List[OrderItemResponse] = []
     server_time: datetime
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  SysAdmin (global system-owner panel)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_SLUG_RE = r'^[a-z0-9][a-z0-9-]{1,62}$'
+_EMAIL_RE = r'^[^@\s]+@[^@\s]+\.[^@\s]+$'
+
+
+def _validate_password_strength(v: str) -> str:
+    """Same rules as UserCreate.password_strength."""
+    if len(v) < 8:
+        raise ValueError('Password must be at least 8 characters')
+    if not any(c.isupper() for c in v):
+        raise ValueError('Password must contain at least one uppercase letter')
+    if not any(c.isdigit() for c in v):
+        raise ValueError('Password must contain at least one digit')
+    return v
+
+
+class SysAdminRestaurantCreate(BaseModel):
+    """Create a new restaurant (tenant). `login_id` is accepted as an alias of `slug`."""
+    name: str
+    slug: Optional[str] = None
+    login_id: Optional[str] = None
+
+    @field_validator('name')
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError('Name must be at least 2 characters')
+        return v
+
+    @model_validator(mode='after')
+    def resolve_slug(self):
+        import re
+        raw = (self.slug or self.login_id or '').strip().lower()
+        if not raw:
+            raise ValueError('slug (login_id) is required')
+        if not re.match(_SLUG_RE, raw):
+            raise ValueError(
+                'slug (login_id) must be 2-63 chars: lowercase letters, digits and hyphens, '
+                'starting with a letter or digit'
+            )
+        self.slug = raw
+        self.login_id = raw
+        return self
+
+
+class SysAdminRestaurantStatusUpdate(BaseModel):
+    is_active: bool
+
+
+class SysAdminRestaurantResponse(BaseModel):
+    id: int
+    name: str
+    slug: str
+    is_active: bool
+    created_at: Optional[datetime] = None
+    user_count: int = 0      # active users attached to the restaurant
+    manager_count: int = 0   # active users with RoleSystem.MANAGER
+
+
+class SysAdminManagerCreate(BaseModel):
+    email: str
+    password: str
+    first_name: str
+    last_name: str
+
+    @field_validator('email')
+    @classmethod
+    def email_valid(cls, v: str) -> str:
+        import re
+        v = v.strip().lower()
+        if not re.match(_EMAIL_RE, v):
+            raise ValueError('Invalid email address')
+        return v
+
+    @field_validator('first_name', 'last_name')
+    @classmethod
+    def names_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError('Field cannot be empty')
+        return v
+
+    @field_validator('password')
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return _validate_password_strength(v)
+
+
+class SysAdminManagerResponse(BaseModel):
+    user_id: UUID
+    email: str
+    username: str
+    full_name: str
+    tenant_id: int
+    role_system: RoleSystem
+    created: bool  # False => an existing account in this restaurant was promoted
+    message: str
 

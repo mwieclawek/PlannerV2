@@ -4,17 +4,21 @@ import '../models/models.dart';
 import '../services/push_service.dart';
 
 import 'config_provider.dart';
+import '../services/sysadmin_service.dart';
 
 // API Service Provider
 final apiServiceProvider = Provider<ApiService>((ref) {
   final baseUrl = ref.watch(configProvider);
   if (baseUrl == null) {
-    // Return an ApiService with an invalid URL instead of throwing synchronously.
-    // GoRouter will redirect to /setup so no real requests are made.
-    // If AuthNotifier checks auth, this will safely fail with a DioException.
     return ApiService('http://unconfigured-server');
   }
   return ApiService(baseUrl);
+});
+
+// SysAdmin Service Provider
+final sysAdminServiceProvider = Provider<SysAdminService>((ref) {
+  final api = ref.watch(apiServiceProvider);
+  return SysAdminService(api.client);
 });
 
 // Push Service Provider
