@@ -55,6 +55,10 @@ class UserJobRoleLink(SQLModel, table=True):
     user_id: Optional[UUID] = Field(default=None, foreign_key="user.id", primary_key=True)
     role_id: Optional[int] = Field(default=None, foreign_key="jobrole.id", primary_key=True)
 
+class ShiftRoleLink(SQLModel, table=True):
+    shift_def_id: Optional[int] = Field(default=None, foreign_key="shiftdefinition.id", primary_key=True)
+    role_id: Optional[int] = Field(default=None, foreign_key="jobrole.id", primary_key=True)
+
 class JobRole(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     tenant_id: Optional[int] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
@@ -62,6 +66,7 @@ class JobRole(SQLModel, table=True):
     color_hex: str
     
     users: List["User"] = Relationship(back_populates="job_roles", link_model=UserJobRoleLink)
+    shifts: List["ShiftDefinition"] = Relationship(back_populates="allowed_roles", link_model=ShiftRoleLink)
 
 class User(SQLModel, table=True):
     __table_args__ = (
@@ -164,6 +169,7 @@ class ShiftDefinition(SQLModel, table=True):
     start_time: time
     end_time: time
     days: List["ShiftDefinitionDayLink"] = Relationship()
+    allowed_roles: List["JobRole"] = Relationship(back_populates="shifts", link_model=ShiftRoleLink)
 
 class Availability(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)

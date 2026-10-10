@@ -173,6 +173,7 @@ class ShiftDefBase(BaseModel):
     start_time: str # HH:MM - handled as string in input
     end_time: str   # HH:MM
     applicable_days: List[int] = [0, 1, 2, 3, 4, 5, 6]  # 0=Mon, 6=Sun, default all days
+    allowed_role_ids: List[int] = []
 
 class ShiftDefCreate(ShiftDefBase):
     @field_validator('start_time', 'end_time')
@@ -198,21 +199,27 @@ class ShiftDefResponse(BaseModel):
     start_time: time
     end_time: time
     applicable_days: List[int] = [0, 1, 2, 3, 4, 5, 6]
+    allowed_role_ids: List[int] = []
 
     @model_validator(mode='before')
     @classmethod
-    def extract_applicable_days(cls, data):
+    def extract_custom_fields(cls, data):
         if hasattr(data, 'days'):
             days = [d.day_of_week for d in getattr(data, 'days', [])]
+            roles = [r.id for r in getattr(data, 'allowed_roles', [])]
             if not days:  # default if no specific days are set
                 days = [0, 1, 2, 3, 4, 5, 6]
             if not isinstance(data, dict):
                 data.__dict__['applicable_days'] = days
-        elif isinstance(data, dict) and 'days' in data:
-            days = [d.day_of_week if hasattr(d, 'day_of_week') else d.get('day_of_week') for d in data.get('days', [])]
-            if not days:
-                days = [0, 1, 2, 3, 4, 5, 6]
-            data['applicable_days'] = days
+                data.__dict__['allowed_role_ids'] = roles
+        elif isinstance(data, dict):
+            if 'days' in data:
+                days = [d.day_of_week if hasattr(d, 'day_of_week') else d.get('day_of_week') for d in data.get('days', [])]
+                if not days:
+                    days = [0, 1, 2, 3, 4, 5, 6]
+                data['applicable_days'] = days
+            if 'allowed_roles' in data:
+                data['allowed_role_ids'] = [r.id if hasattr(r, 'id') else r.get('id') for r in data.get('allowed_roles', [])]
         return data
 
     @field_validator('applicable_days', mode='before')
@@ -1232,6 +1239,23 @@ class SysAdminRestaurantCreate(BaseModel):
 class SysAdminRestaurantStatusUpdate(BaseModel):
     is_active: bool
 
+class SysAdminRestaurantUpdate(BaseModel):
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    login_id: Optional[str] = None
+
+class SysAdminUserResponse(BaseModel):
+    id: UUID
+    username: str
+    full_name: str
+    email: Optional[str] = None
+    role_system: RoleSystem
+    is_active: bool
+    created_at: Optional[datetime] = None
+
+class SysAdminPasswordReset(BaseModel):
+    new_password: str
+
 
 class SysAdminRestaurantResponse(BaseModel):
     id: int
@@ -1281,4 +1305,5 @@ class SysAdminManagerResponse(BaseModel):
     role_system: RoleSystem
     created: bool  # False => an existing account in this restaurant was promoted
     message: str
+
 

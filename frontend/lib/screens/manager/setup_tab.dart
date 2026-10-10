@@ -444,6 +444,7 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
   final _shiftStartController = TextEditingController();
   final _shiftEndController = TextEditingController();
   List<int> _selectedDays = [0, 1, 2, 3, 4, 5, 6];
+  List<int> _selectedRoleIds = [];
   int? _editingShiftId;
 
   @override
@@ -543,6 +544,7 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
               _shiftStartController.text,
               _shiftEndController.text,
               _selectedDays,
+              _selectedRoleIds,
             );
       } else {
         await ref
@@ -551,7 +553,7 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
               _shiftNameController.text,
               _shiftStartController.text,
               _shiftEndController.text,
-              applicableDays: _selectedDays,
+              applicableDays: _selectedDays, allowedRoleIds: _selectedRoleIds,
             );
       }
       _shiftNameController.clear();
@@ -559,6 +561,7 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
       _shiftEndController.clear();
       setState(() {
         _selectedDays = [0, 1, 2, 3, 4, 5, 6];
+        _selectedRoleIds = [];
         _editingShiftId = null;
       });
       ref.invalidate(shiftsProvider);
@@ -587,6 +590,7 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
       _shiftStartController.text = shift.startTime;
       _shiftEndController.text = shift.endTime;
       _selectedDays = List.from(shift.applicableDays);
+      _selectedRoleIds = List.from(shift.allowedRoleIds);
     });
   }
 
@@ -597,6 +601,7 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
       _shiftStartController.clear();
       _shiftEndController.clear();
       _selectedDays = [0, 1, 2, 3, 4, 5, 6];
+        _selectedRoleIds = [];
     });
   }
 
@@ -766,6 +771,20 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
                     ),
                   ),
                   const SizedBox(height: 8),
+                  const Text("Przypisane role (puste = wszystkie):", style: TextStyle(fontSize: 12)),
+                  rolesAsync.when(
+                    data: (roles) => Wrap(
+                      spacing: 4,
+                      children: roles.map((role) => FilterChip(
+                        label: Text(role.name),
+                        selected: _selectedRoleIds.contains(role.id),
+                        onSelected: (s) => setState(() => s ? _selectedRoleIds.add(role.id) : _selectedRoleIds.remove(role.id)),
+                      )).toList(),
+                    ),
+                    loading: () => const SizedBox(),
+                    error: (_, __) => const SizedBox(),
+                  ),
+                  const SizedBox(height: 16),
                   if (_editingShiftId != null)
                     Row(
                       children: [
@@ -1239,3 +1258,5 @@ class _RequirementsTabState extends ConsumerState<_RequirementsTab> {
     );
   }
 }
+
+

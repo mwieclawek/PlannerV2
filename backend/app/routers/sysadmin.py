@@ -22,6 +22,9 @@ from ..schemas import (
     SysAdminRestaurantCreate,
     SysAdminRestaurantResponse,
     SysAdminRestaurantStatusUpdate,
+    SysAdminRestaurantUpdate,
+    SysAdminUserResponse,
+    SysAdminPasswordReset,
 )
 
 router = APIRouter(
@@ -229,3 +232,83 @@ def add_restaurant_manager(
         created=True,
         message="Utworzono konto managera",
     )
+
+@router.put("/restaurants/{restaurant_id}", response_model=SysAdminRestaurantResponse)
+def update_restaurant(
+    restaurant_id: int,
+    payload: SysAdminRestaurantUpdate,
+    session: Session = Depends(get_session),
+    superadmin: User = Depends(get_current_superadmin),
+):
+    """Update a restaurant (name, slug)."""
+    restaurant = _get_restaurant_or_404(session, restaurant_id)
+    
+    new_slug = payload.slug or payload.login_id
+    if new_slug:
+        existing = session.exec(
+            select(RestaurantConfig).where(RestaurantConfig.slug == new_slug, RestaurantConfig.id != restaurant_id)
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Restauracja z identyfikatorem '{new_slug}' już istnieje",
+            )
+        restaurant.slug = new_slug
+    
+    if payload.name:
+        restaurant.name = payload.name
+        
+    session.add(restaurant)
+    session.commit()
+    session.refresh(restaurant)
+
+    logger.info(
+        "SYSADMIN %s updated restaurant id=%s slug=%s",
+        superadmin.email or superadmin.username, restaurant.id, restaurant.slug,
+    )
+    user_count = _count_by_tenant(session).get(restaurant.id, 0)
+    manager_count = _count_by_tenant(
+        session, User.role_system == RoleSystem.MANAGER
+    ).get(restaurant.id, 0)
+    return _to_response(restaurant, user_count, manager_count)
+
+@router.get("/restaurants/{restaurant_id}/users", response_model=List[SysAdminUserResponse])
+def get_restaurant_users(
+    restaurant_id: int,
+    session: Session = Depends(get_session),
+    superadmin: User = Depends(get_current_superadmin),
+):
+    """List all users of a restaurant."""
+    _get_restaurant_or_404(session, restaurant_id)
+    
+    users = session.exec(
+        select(User)
+        .where(User.tenant_id == restaurant_id)
+    ).all()
+    
+    users.sort(key=lambda u: (0 if u.role_system == RoleSystem.MANAGER else 1, 0 if u.is_active else 1, u.username))
+    return users
+
+from uuid import UUID
+
+@router.put("/users/{user_id}/reset-password")
+def reset_user_password(
+    user_id: UUID,
+    payload: SysAdminPasswordReset,
+    session: Session = Depends(get_session),
+    superadmin: User = Depends(get_current_superadmin),
+):
+    """Reset any user's password."""
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        
+    user.password_hash = get_password_hash(payload.new_password)
+    session.add(user)
+    session.commit()
+    
+    logger.info(
+        "SYSADMIN %s reset password for user %s",
+        superadmin.email or superadmin.username, user.id,
+    )
+    return {"message": "Hasło zostało zmienione"}

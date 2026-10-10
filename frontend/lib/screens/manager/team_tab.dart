@@ -82,7 +82,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
     return Color(int.parse('FF$hexCode', radix: 16));
   }
 
-  void _showEditNameDialog(TeamMember user) {
+  void _showEditUserDialog(TeamMember user) {
     // Split full name into first/last
     final parts = user.fullName.split(' ');
     final firstNameController = TextEditingController(
@@ -90,6 +90,9 @@ class _TeamTabState extends ConsumerState<TeamTab> {
     );
     final lastNameController = TextEditingController(
       text: parts.length > 1 ? parts.sublist(1).join(' ') : '',
+    );
+    final emailController = TextEditingController(
+      text: user.email ?? '',
     );
     bool isLoading = false;
 
@@ -99,7 +102,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
           (context) => StatefulBuilder(
             builder:
                 (context, setDialogState) => AlertDialog(
-                  title: Text('Edytuj dane: ${user.fullName}'),
+                  title: Text('Edytuj dane: '),
                   content: SizedBox(
                     width: 300,
                     child: Column(
@@ -128,11 +131,18 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                           ),
                           textCapitalization: TextCapitalization.words,
                         ),
-                        if (isLoading)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 16),
-                            child: CircularProgressIndicator(),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: emailController,
+                          decoration: InputDecoration(
+                            labelText: 'Email',
+                            prefixIcon: const Icon(Icons.email),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
+                          keyboardType: TextInputType.emailAddress,
+                        ),
                       ],
                     ),
                   ),
@@ -150,6 +160,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                                 final firstName =
                                     firstNameController.text.trim();
                                 final lastName = lastNameController.text.trim();
+                                final email = emailController.text.trim();
                                 if (firstName.isEmpty) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
@@ -169,6 +180,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                                   await api.updateUser(
                                     user.id,
                                     fullName: fullName,
+                                    email: email.isNotEmpty ? email : null,
                                   );
                                   if (context.mounted) {
                                     Navigator.pop(context);
@@ -185,15 +197,24 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('Błąd: $e'),
-                                        backgroundColor:
-                                            Theme.of(context).colorScheme.error,
+                                        content: Text('Błąd: '),
+                                        backgroundColor: Colors.red,
                                       ),
                                     );
                                   }
                                 }
                               },
-                      child: const Text('Zapisz'),
+                      child:
+                          isLoading
+                              ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                              : const Text('Zapisz'),
                     ),
                   ],
                 ),
@@ -702,12 +723,12 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                                   onEditRoles: () => _showRoleDialog(user),
                                   onResetPassword:
                                       () => _showPasswordDialog(user),
-                                  onEditName: () => _showEditNameDialog(user),
+                                  onEditName: () => _showEditUserDialog(user),
                                 ),
                           );
                           break;
                         case 'edit_name':
-                          _showEditNameDialog(user);
+                          _showEditUserDialog(user);
                           break;
                         case 'toggle_active':
                           _toggleUserActive(user);
@@ -759,7 +780,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                             onEdit: () => _showPreferencesDialog(user),
                             onEditRoles: () => _showRoleDialog(user),
                             onResetPassword: () => _showPasswordDialog(user),
-                            onEditName: () => _showEditNameDialog(user),
+                            onEditName: () => _showEditUserDialog(user),
                           ),
                     );
                   },

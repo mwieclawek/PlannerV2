@@ -136,6 +136,7 @@ class ApiService {
     String startTime,
     String endTime, {
     List<int>? applicableDays,
+    List<int>? allowedRoleIds,
   }) async {
     final response = await _dio.post(
       '/manager/shifts',
@@ -144,6 +145,7 @@ class ApiService {
         'start_time': startTime,
         'end_time': endTime,
         'applicable_days': applicableDays ?? [0, 1, 2, 3, 4, 5, 6],
+        'allowed_role_ids': allowedRoleIds ?? [],
       },
     );
     return ShiftDefinition.fromJson(response.data);
@@ -419,6 +421,7 @@ class ApiService {
     String startTime,
     String endTime,
     List<int> applicableDays,
+    List<int> allowedRoleIds,
   ) async {
     await _dio.put(
       '/manager/shifts/$shiftId',
@@ -427,6 +430,7 @@ class ApiService {
         'start_time': startTime,
         'end_time': endTime,
         'applicable_days': applicableDays,
+        'allowed_role_ids': allowedRoleIds,
       },
     );
   }
@@ -1111,3 +1115,4 @@ class ApiService {
     return TipSummary.fromJson(response.data);
   }
 }
+

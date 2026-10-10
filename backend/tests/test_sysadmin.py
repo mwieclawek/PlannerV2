@@ -78,7 +78,7 @@ async def test_manager_cannot_escalate_via_user_update(
         json={"is_superadmin": True, "full_name": "Worker X"},
         headers=auth_headers,
     )
-    assert resp.status_code == 200, resp.text
+    print(resp.text); assert resp.status_code == 200, resp.text
     session.refresh(victim)
     assert victim.is_superadmin is False
 
@@ -89,7 +89,7 @@ async def test_manager_cannot_escalate_via_user_update(
 async def test_list_restaurants_with_stats(client: AsyncClient, session: Session, superadmin_headers, test_tenant):
     _make_user(session, test_tenant.id, "emp1", role=RoleSystem.EMPLOYEE)
     resp = await client.get("/sysadmin/restaurants", headers=superadmin_headers)
-    assert resp.status_code == 200
+    print(resp.text); assert resp.status_code == 200
     data = {r["slug"]: r for r in resp.json()}
     assert "test" in data
     # superadmin (MANAGER) + emp1
@@ -136,7 +136,7 @@ async def test_block_restaurant_blocks_login_and_tokens(client: AsyncClient, ses
     mgr_headers = _headers(mgr)
 
     resp = await client.put(f"/sysadmin/restaurants/{other.id}/status", json={"is_active": False}, headers=superadmin_headers)
-    assert resp.status_code == 200
+    print(resp.text); assert resp.status_code == 200
     assert resp.json()["is_active"] is False
 
     login = await client.post("/auth/token", data={"username": "boss@other.pl", "password": "Secret123"})
@@ -155,7 +155,7 @@ async def test_superadmin_not_locked_out_by_blocking_own_restaurant(
     client: AsyncClient, superadmin_headers, test_tenant
 ):
     resp = await client.put(f"/sysadmin/restaurants/{test_tenant.id}/status", json={"is_active": False}, headers=superadmin_headers)
-    assert resp.status_code == 200
+    print(resp.text); assert resp.status_code == 200
     assert (await client.get("/sysadmin/restaurants", headers=superadmin_headers)).status_code == 200
     login = await client.post("/auth/token", data={"username": "owner@restoplan.pl", "password": "Secret123"})
     assert login.status_code == 200
@@ -256,3 +256,4 @@ async def test_add_manager_validation(client: AsyncClient, superadmin_headers, t
         assert resp.status_code == 422, override
     resp = await client.post("/sysadmin/restaurants/99999/managers", json=base, headers=superadmin_headers)
     assert resp.status_code == 404
+

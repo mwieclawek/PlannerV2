@@ -96,6 +96,7 @@ class ShiftDefinition {
   final String startTime;
   final String endTime;
   final List<int> applicableDays; // 0=Mon, 1=Tue ... 6=Sun
+  final List<int> allowedRoleIds;
 
   ShiftDefinition({
     required this.id,
@@ -103,6 +104,7 @@ class ShiftDefinition {
     required this.startTime,
     required this.endTime,
     this.applicableDays = const [0, 1, 2, 3, 4, 5, 6], // Default: all days
+    this.allowedRoleIds = const [],
   });
 
   factory ShiftDefinition.fromJson(Map<String, dynamic> json) {
@@ -111,24 +113,29 @@ class ShiftDefinition {
     if (json['applicable_days'] != null) {
       days = List<int>.from(json['applicable_days']);
     }
+    List<int> roles = [];
+    if (json['allowed_role_ids'] != null) {
+      roles = List<int>.from(json['allowed_role_ids']);
+    }
+    
     return ShiftDefinition(
       id: json['id'],
       name: json['name'],
       startTime: json['start_time'],
       endTime: json['end_time'],
       applicableDays: days,
+      allowedRoleIds: roles,
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'start_time': startTime,
-      'end_time': endTime,
-      'applicable_days': applicableDays,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'start_time': startTime,
+        'end_time': endTime,
+        'applicable_days': applicableDays,
+        'allowed_role_ids': allowedRoleIds,
+      };
 }
 
 enum AvailabilityStatus {

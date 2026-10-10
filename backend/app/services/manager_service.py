@@ -107,7 +107,7 @@ class ManagerService:
         if existing:
             raise HTTPException(status_code=400, detail="Shift with these hours already exists")
 
-        from ..models import ShiftDefinitionDayLink
+        from ..models import ShiftDefinitionDayLink, JobRole
         
         shift = ShiftDefinition(
             tenant_id=self.tenant_id,
@@ -115,6 +115,10 @@ class ManagerService:
             start_time=s_time, 
             end_time=e_time
         )
+        if getattr(shift_in, "allowed_role_ids", None):
+            roles = self.session.exec(select(JobRole).where(JobRole.id.in_(shift_in.allowed_role_ids), JobRole.tenant_id == self.tenant_id)).all()
+            shift.allowed_roles = list(roles)
+
         self.session.add(shift)
         self.session.commit()
         self.session.refresh(shift)
@@ -145,11 +149,17 @@ class ManagerService:
         if existing:
             raise HTTPException(status_code=400, detail="Shift with these hours already exists")
 
-        from ..models import ShiftDefinitionDayLink
+        from ..models import ShiftDefinitionDayLink, JobRole
         shift.name = shift_in.name
         shift.start_time = s_time
         shift.end_time = e_time
         
+        if getattr(shift_in, "allowed_role_ids", None):
+            roles = self.session.exec(select(JobRole).where(JobRole.id.in_(shift_in.allowed_role_ids), JobRole.tenant_id == self.tenant_id)).all()
+            shift.allowed_roles = list(roles)
+        else:
+            shift.allowed_roles = []
+            
         old_links = self.session.exec(select(ShiftDefinitionDayLink).where(ShiftDefinitionDayLink.shift_def_id == shift.id)).all()
         for link in old_links:
             self.session.delete(link)
@@ -158,10 +168,9 @@ class ManagerService:
             link = ShiftDefinitionDayLink(shift_def_id=shift.id, day_of_week=d)
             self.session.add(link)
             
-        self.session.add(shift)
         self.session.commit()
         self.session.refresh(shift)
-        logger.info(f"Updated shift definition with ID: {shift_id}")
+        logger.info(f"Updated shift definition: {shift.name} (ID: {shift.id})")
         return shift
 
     def delete_shift(self, shift_id: int):
@@ -1062,4 +1071,5 @@ class ManagerService:
             })
             
         return {"entries": entries}
+
 

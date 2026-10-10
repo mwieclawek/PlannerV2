@@ -669,3 +669,22 @@ W g√≥rnym pasku: ikona **‚ùî** ‚Üí dialog z najwa≈ºniejszymi informacjami o obs≈
 ### Polityka Prywatno≈õci
 
 Dostƒôpna z ekranu logowania ‚Äî link na dole strony.
+
+## Panel SuperAdmina (Multi-Tenancy)
+PlannerV2 od teraz posiada pe≥ne wsparcie dla struktury Multi-Tenant z wbudowanym panelem w≥aúciciela systemu (SuperAdmin).
+
+Logowanie SuperAdmina:
+* Login: manager@default.pl (wartoúÊ bazowa ustawiana przez seed bazy danych, w zaleønoúci od konfiguracji)
+* Has≥o: zgodne z instrukcjπ instalacji (domyúlnie "Manager1")
+
+Funkcje w panelu SuperAdmin:
+1. **Zarzπdzanie restauracjami:**
+   - Dodawanie nowych restauracji.
+   - Dezaktywowanie/aktywowanie dostÍpu dla danej restauracji.
+   - Edycja danych (nazwa oraz unikalny ID/Slug restauracji uøywany podczas logowania nazwπ uøytkownika).
+2. **Zarzπdzanie kontami:**
+   - Tworzenie pierwszego managera (w≥aúciciela) dla nowo dodanej restauracji.
+   - Przeglπdanie listy wszystkich uøytkownikÛw i pracownikÛw przypisanych do danej restauracji.
+   - Awaryjne resetowanie hase≥ dla wybranych uøytkownikÛw.
+
+DziÍki temu system pozwala na bezproblemowπ obs≥ugÍ wielu lokali gastronomicznych na jednej instancji serwera.

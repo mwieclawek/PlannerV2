@@ -3,12 +3,13 @@
 // Do not manually edit this file.
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
-import 'dart:async' as _i5;
+import 'dart:async' as _i6;
 
-import 'package:frontend/models/models.dart' as _i2;
-import 'package:frontend/services/api_service.dart' as _i3;
+import 'package:dio/dio.dart' as _i2;
+import 'package:frontend/models/models.dart' as _i3;
+import 'package:frontend/services/api_service.dart' as _i4;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i4;
+import 'package:mockito/src/dummies.dart' as _i5;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -25,97 +26,102 @@ import 'package:mockito/src/dummies.dart' as _i4;
 // ignore_for_file: subtype_of_sealed_class
 // ignore_for_file: invalid_use_of_internal_member
 
-class _FakeUser_0 extends _i1.SmartFake implements _i2.User {
-  _FakeUser_0(Object parent, Invocation parentInvocation)
+class _FakeDio_0 extends _i1.SmartFake implements _i2.Dio {
+  _FakeDio_0(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeJobRole_1 extends _i1.SmartFake implements _i2.JobRole {
-  _FakeJobRole_1(Object parent, Invocation parentInvocation)
+class _FakeUser_1 extends _i1.SmartFake implements _i3.User {
+  _FakeUser_1(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeShiftDefinition_2 extends _i1.SmartFake
-    implements _i2.ShiftDefinition {
-  _FakeShiftDefinition_2(Object parent, Invocation parentInvocation)
+class _FakeJobRole_2 extends _i1.SmartFake implements _i3.JobRole {
+  _FakeJobRole_2(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeUserStats_3 extends _i1.SmartFake implements _i2.UserStats {
-  _FakeUserStats_3(Object parent, Invocation parentInvocation)
+class _FakeShiftDefinition_3 extends _i1.SmartFake
+    implements _i3.ShiftDefinition {
+  _FakeShiftDefinition_3(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeDashboardHome_4 extends _i1.SmartFake implements _i2.DashboardHome {
-  _FakeDashboardHome_4(Object parent, Invocation parentInvocation)
+class _FakeUserStats_4 extends _i1.SmartFake implements _i3.UserStats {
+  _FakeUserStats_4(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeRestaurantTable_5 extends _i1.SmartFake
-    implements _i2.RestaurantTable {
-  _FakeRestaurantTable_5(Object parent, Invocation parentInvocation)
+class _FakeDashboardHome_5 extends _i1.SmartFake implements _i3.DashboardHome {
+  _FakeDashboardHome_5(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeMenuItem_6 extends _i1.SmartFake implements _i2.MenuItem {
-  _FakeMenuItem_6(Object parent, Invocation parentInvocation)
+class _FakeRestaurantTable_6 extends _i1.SmartFake
+    implements _i3.RestaurantTable {
+  _FakeRestaurantTable_6(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeKitchenOrder_7 extends _i1.SmartFake implements _i2.KitchenOrder {
-  _FakeKitchenOrder_7(Object parent, Invocation parentInvocation)
+class _FakeMenuItem_7 extends _i1.SmartFake implements _i3.MenuItem {
+  _FakeMenuItem_7(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeTableZone_8 extends _i1.SmartFake implements _i2.TableZone {
-  _FakeTableZone_8(Object parent, Invocation parentInvocation)
+class _FakeKitchenOrder_8 extends _i1.SmartFake implements _i3.KitchenOrder {
+  _FakeKitchenOrder_8(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakePosTable_9 extends _i1.SmartFake implements _i2.PosTable {
-  _FakePosTable_9(Object parent, Invocation parentInvocation)
+class _FakeTableZone_9 extends _i1.SmartFake implements _i3.TableZone {
+  _FakeTableZone_9(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakePosCategory_10 extends _i1.SmartFake implements _i2.PosCategory {
-  _FakePosCategory_10(Object parent, Invocation parentInvocation)
+class _FakePosTable_10 extends _i1.SmartFake implements _i3.PosTable {
+  _FakePosTable_10(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakePosMenuItem_11 extends _i1.SmartFake implements _i2.PosMenuItem {
-  _FakePosMenuItem_11(Object parent, Invocation parentInvocation)
+class _FakePosCategory_11 extends _i1.SmartFake implements _i3.PosCategory {
+  _FakePosCategory_11(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeModifierGroup_12 extends _i1.SmartFake implements _i2.ModifierGroup {
-  _FakeModifierGroup_12(Object parent, Invocation parentInvocation)
+class _FakePosMenuItem_12 extends _i1.SmartFake implements _i3.PosMenuItem {
+  _FakePosMenuItem_12(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakePosOrder_13 extends _i1.SmartFake implements _i2.PosOrder {
-  _FakePosOrder_13(Object parent, Invocation parentInvocation)
+class _FakeModifierGroup_13 extends _i1.SmartFake implements _i3.ModifierGroup {
+  _FakeModifierGroup_13(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakePosOrderItem_14 extends _i1.SmartFake implements _i2.PosOrderItem {
-  _FakePosOrderItem_14(Object parent, Invocation parentInvocation)
+class _FakePosOrder_14 extends _i1.SmartFake implements _i3.PosOrder {
+  _FakePosOrder_14(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakePosPayment_15 extends _i1.SmartFake implements _i2.PosPayment {
-  _FakePosPayment_15(Object parent, Invocation parentInvocation)
+class _FakePosOrderItem_15 extends _i1.SmartFake implements _i3.PosOrderItem {
+  _FakePosOrderItem_15(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
-class _FakeTipSummary_16 extends _i1.SmartFake implements _i2.TipSummary {
-  _FakeTipSummary_16(Object parent, Invocation parentInvocation)
+class _FakePosPayment_16 extends _i1.SmartFake implements _i3.PosPayment {
+  _FakePosPayment_16(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeTipSummary_17 extends _i1.SmartFake implements _i3.TipSummary {
+  _FakeTipSummary_17(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
 /// A class which mocks [ApiService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockApiService extends _i1.Mock implements _i3.ApiService {
+class MockApiService extends _i1.Mock implements _i4.ApiService {
   MockApiService() {
     _i1.throwOnMissingStub(this);
   }
@@ -124,7 +130,7 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
   String get baseUrl =>
       (super.noSuchMethod(
             Invocation.getter(#baseUrl),
-            returnValue: _i4.dummyValue<String>(
+            returnValue: _i5.dummyValue<String>(
               this,
               Invocation.getter(#baseUrl),
             ),
@@ -132,7 +138,15 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
           as String);
 
   @override
-  _i5.Future<String> login(
+  _i2.Dio get client =>
+      (super.noSuchMethod(
+            Invocation.getter(#client),
+            returnValue: _FakeDio_0(this, Invocation.getter(#client)),
+          )
+          as _i2.Dio);
+
+  @override
+  _i6.Future<String> login(
     String? email,
     String? password, {
     String? tenantSlug,
@@ -143,8 +157,8 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               [email, password],
               {#tenantSlug: tenantSlug},
             ),
-            returnValue: _i5.Future<String>.value(
-              _i4.dummyValue<String>(
+            returnValue: _i6.Future<String>.value(
+              _i5.dummyValue<String>(
                 this,
                 Invocation.method(
                   #login,
@@ -154,10 +168,10 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               ),
             ),
           )
-          as _i5.Future<String>);
+          as _i6.Future<String>);
 
   @override
-  _i5.Future<String> register(
+  _i6.Future<String> register(
     String? username,
     String? password,
     String? fullName,
@@ -170,8 +184,8 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               [username, password, fullName, roleSystem],
               {#managerPin: managerPin},
             ),
-            returnValue: _i5.Future<String>.value(
-              _i4.dummyValue<String>(
+            returnValue: _i6.Future<String>.value(
+              _i5.dummyValue<String>(
                 this,
                 Invocation.method(
                   #register,
@@ -181,229 +195,236 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               ),
             ),
           )
-          as _i5.Future<String>);
+          as _i6.Future<String>);
 
   @override
-  _i5.Future<_i2.User> getCurrentUser() =>
+  _i6.Future<_i3.User> getCurrentUser() =>
       (super.noSuchMethod(
             Invocation.method(#getCurrentUser, []),
-            returnValue: _i5.Future<_i2.User>.value(
-              _FakeUser_0(this, Invocation.method(#getCurrentUser, [])),
+            returnValue: _i6.Future<_i3.User>.value(
+              _FakeUser_1(this, Invocation.method(#getCurrentUser, [])),
             ),
           )
-          as _i5.Future<_i2.User>);
+          as _i6.Future<_i3.User>);
 
   @override
-  _i5.Future<void> logout() =>
+  _i6.Future<void> logout() =>
       (super.noSuchMethod(
             Invocation.method(#logout, []),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> changePassword(String? oldPassword, String? newPassword) =>
+  _i6.Future<void> changePassword(String? oldPassword, String? newPassword) =>
       (super.noSuchMethod(
             Invocation.method(#changePassword, [oldPassword, newPassword]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<List<_i2.JobRole>> getRoles() =>
+  _i6.Future<List<_i3.JobRole>> getRoles() =>
       (super.noSuchMethod(
             Invocation.method(#getRoles, []),
-            returnValue: _i5.Future<List<_i2.JobRole>>.value(<_i2.JobRole>[]),
+            returnValue: _i6.Future<List<_i3.JobRole>>.value(<_i3.JobRole>[]),
           )
-          as _i5.Future<List<_i2.JobRole>>);
+          as _i6.Future<List<_i3.JobRole>>);
 
   @override
-  _i5.Future<_i2.JobRole> createRole(String? name, String? colorHex) =>
+  _i6.Future<_i3.JobRole> createRole(String? name, String? colorHex) =>
       (super.noSuchMethod(
             Invocation.method(#createRole, [name, colorHex]),
-            returnValue: _i5.Future<_i2.JobRole>.value(
-              _FakeJobRole_1(
+            returnValue: _i6.Future<_i3.JobRole>.value(
+              _FakeJobRole_2(
                 this,
                 Invocation.method(#createRole, [name, colorHex]),
               ),
             ),
           )
-          as _i5.Future<_i2.JobRole>);
+          as _i6.Future<_i3.JobRole>);
 
   @override
-  _i5.Future<List<_i2.ShiftDefinition>> getShifts() =>
+  _i6.Future<List<_i3.ShiftDefinition>> getShifts() =>
       (super.noSuchMethod(
             Invocation.method(#getShifts, []),
-            returnValue: _i5.Future<List<_i2.ShiftDefinition>>.value(
-              <_i2.ShiftDefinition>[],
+            returnValue: _i6.Future<List<_i3.ShiftDefinition>>.value(
+              <_i3.ShiftDefinition>[],
             ),
           )
-          as _i5.Future<List<_i2.ShiftDefinition>>);
+          as _i6.Future<List<_i3.ShiftDefinition>>);
 
   @override
-  _i5.Future<_i2.ShiftDefinition> createShift(
+  _i6.Future<_i3.ShiftDefinition> createShift(
     String? name,
     String? startTime,
     String? endTime, {
     List<int>? applicableDays,
+    List<int>? allowedRoleIds,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #createShift,
               [name, startTime, endTime],
-              {#applicableDays: applicableDays},
+              {
+                #applicableDays: applicableDays,
+                #allowedRoleIds: allowedRoleIds,
+              },
             ),
-            returnValue: _i5.Future<_i2.ShiftDefinition>.value(
-              _FakeShiftDefinition_2(
+            returnValue: _i6.Future<_i3.ShiftDefinition>.value(
+              _FakeShiftDefinition_3(
                 this,
                 Invocation.method(
                   #createShift,
                   [name, startTime, endTime],
-                  {#applicableDays: applicableDays},
+                  {
+                    #applicableDays: applicableDays,
+                    #allowedRoleIds: allowedRoleIds,
+                  },
                 ),
               ),
             ),
           )
-          as _i5.Future<_i2.ShiftDefinition>);
+          as _i6.Future<_i3.ShiftDefinition>);
 
   @override
-  _i5.Future<List<_i2.Availability>> getAvailability(
+  _i6.Future<List<_i3.Availability>> getAvailability(
     DateTime? startDate,
     DateTime? endDate,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#getAvailability, [startDate, endDate]),
-            returnValue: _i5.Future<List<_i2.Availability>>.value(
-              <_i2.Availability>[],
+            returnValue: _i6.Future<List<_i3.Availability>>.value(
+              <_i3.Availability>[],
             ),
           )
-          as _i5.Future<List<_i2.Availability>>);
+          as _i6.Future<List<_i3.Availability>>);
 
   @override
-  _i5.Future<void> updateAvailability(List<_i2.AvailabilityUpdate>? updates) =>
+  _i6.Future<void> updateAvailability(List<_i3.AvailabilityUpdate>? updates) =>
       (super.noSuchMethod(
             Invocation.method(#updateAvailability, [updates]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<Map<String, dynamic>> generateSchedule(
+  _i6.Future<Map<String, dynamic>> generateSchedule(
     DateTime? startDate,
     DateTime? endDate,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#generateSchedule, [startDate, endDate]),
-            returnValue: _i5.Future<Map<String, dynamic>>.value(
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
             ),
           )
-          as _i5.Future<Map<String, dynamic>>);
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i5.Future<List<_i2.Requirement>> getRequirements(
+  _i6.Future<List<_i3.Requirement>> getRequirements(
     DateTime? startDate,
     DateTime? endDate,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#getRequirements, [startDate, endDate]),
-            returnValue: _i5.Future<List<_i2.Requirement>>.value(
-              <_i2.Requirement>[],
+            returnValue: _i6.Future<List<_i3.Requirement>>.value(
+              <_i3.Requirement>[],
             ),
           )
-          as _i5.Future<List<_i2.Requirement>>);
+          as _i6.Future<List<_i3.Requirement>>);
 
   @override
-  _i5.Future<void> setRequirements(List<_i2.RequirementUpdate>? requirements) =>
+  _i6.Future<void> setRequirements(List<_i3.RequirementUpdate>? requirements) =>
       (super.noSuchMethod(
             Invocation.method(#setRequirements, [requirements]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<List<_i2.ScheduleEntry>> getManagerSchedule(
+  _i6.Future<List<_i3.ScheduleEntry>> getManagerSchedule(
     DateTime? startDate,
     DateTime? endDate,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#getManagerSchedule, [startDate, endDate]),
-            returnValue: _i5.Future<List<_i2.ScheduleEntry>>.value(
-              <_i2.ScheduleEntry>[],
+            returnValue: _i6.Future<List<_i3.ScheduleEntry>>.value(
+              <_i3.ScheduleEntry>[],
             ),
           )
-          as _i5.Future<List<_i2.ScheduleEntry>>);
+          as _i6.Future<List<_i3.ScheduleEntry>>);
 
   @override
-  _i5.Future<List<_i2.EmployeeScheduleEntry>> getEmployeeSchedule(
+  _i6.Future<List<_i3.EmployeeScheduleEntry>> getEmployeeSchedule(
     DateTime? startDate,
     DateTime? endDate,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#getEmployeeSchedule, [startDate, endDate]),
-            returnValue: _i5.Future<List<_i2.EmployeeScheduleEntry>>.value(
-              <_i2.EmployeeScheduleEntry>[],
+            returnValue: _i6.Future<List<_i3.EmployeeScheduleEntry>>.value(
+              <_i3.EmployeeScheduleEntry>[],
             ),
           )
-          as _i5.Future<List<_i2.EmployeeScheduleEntry>>);
+          as _i6.Future<List<_i3.EmployeeScheduleEntry>>);
 
   @override
-  _i5.Future<List<_i2.ScheduleEntry>> getTeamSchedule(
+  _i6.Future<List<_i3.ScheduleEntry>> getTeamSchedule(
     DateTime? startDate,
     DateTime? endDate,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#getTeamSchedule, [startDate, endDate]),
-            returnValue: _i5.Future<List<_i2.ScheduleEntry>>.value(
-              <_i2.ScheduleEntry>[],
+            returnValue: _i6.Future<List<_i3.ScheduleEntry>>.value(
+              <_i3.ScheduleEntry>[],
             ),
           )
-          as _i5.Future<List<_i2.ScheduleEntry>>);
+          as _i6.Future<List<_i3.ScheduleEntry>>);
 
   @override
-  _i5.Future<bool> isLoggedIn() =>
+  _i6.Future<bool> isLoggedIn() =>
       (super.noSuchMethod(
             Invocation.method(#isLoggedIn, []),
-            returnValue: _i5.Future<bool>.value(false),
+            returnValue: _i6.Future<bool>.value(false),
           )
-          as _i5.Future<bool>);
+          as _i6.Future<bool>);
 
   @override
-  _i5.Future<List<_i2.TeamMember>> getUsers({bool? includeInactive = false}) =>
+  _i6.Future<List<_i3.TeamMember>> getUsers({bool? includeInactive = false}) =>
       (super.noSuchMethod(
             Invocation.method(#getUsers, [], {
               #includeInactive: includeInactive,
             }),
-            returnValue: _i5.Future<List<_i2.TeamMember>>.value(
-              <_i2.TeamMember>[],
+            returnValue: _i6.Future<List<_i3.TeamMember>>.value(
+              <_i3.TeamMember>[],
             ),
           )
-          as _i5.Future<List<_i2.TeamMember>>);
+          as _i6.Future<List<_i3.TeamMember>>);
 
   @override
-  _i5.Future<void> setUserRoles(String? userId, List<int>? roleIds) =>
+  _i6.Future<void> setUserRoles(String? userId, List<int>? roleIds) =>
       (super.noSuchMethod(
             Invocation.method(#setUserRoles, [userId, roleIds]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> resetUserPassword(String? userId, String? newPassword) =>
+  _i6.Future<void> resetUserPassword(String? userId, String? newPassword) =>
       (super.noSuchMethod(
             Invocation.method(#resetUserPassword, [userId, newPassword]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> updateUser(
+  _i6.Future<void> updateUser(
     String? userId, {
     String? fullName,
     String? email,
@@ -427,13 +448,13 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
                 #clearTargets: clearTargets,
               },
             ),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> createUser({
+  _i6.Future<void> createUser({
     required String? username,
     required String? password,
     required String? fullName,
@@ -452,13 +473,13 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               #targetHoursPerMonth: targetHoursPerMonth,
               #targetShiftsPerMonth: targetShiftsPerMonth,
             }),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> createAssignment({
+  _i6.Future<void> createAssignment({
     required DateTime? date,
     required int? shiftDefId,
     required String? userId,
@@ -471,43 +492,43 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               #userId: userId,
               #roleId: roleId,
             }),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> deleteAssignment(String? scheduleId) =>
+  _i6.Future<void> deleteAssignment(String? scheduleId) =>
       (super.noSuchMethod(
             Invocation.method(#deleteAssignment, [scheduleId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> deleteRole(int? roleId) =>
+  _i6.Future<void> deleteRole(int? roleId) =>
       (super.noSuchMethod(
             Invocation.method(#deleteRole, [roleId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> deleteShift(int? shiftId) =>
+  _i6.Future<void> deleteShift(int? shiftId) =>
       (super.noSuchMethod(
             Invocation.method(#deleteShift, [shiftId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> saveBatchSchedule(
+  _i6.Future<void> saveBatchSchedule(
     DateTime? startDate,
     DateTime? endDate,
-    List<_i2.ScheduleEntry>? entries,
+    List<_i3.ScheduleEntry>? entries,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#saveBatchSchedule, [
@@ -515,27 +536,28 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               endDate,
               entries,
             ]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> updateRole(int? roleId, String? name, String? colorHex) =>
+  _i6.Future<void> updateRole(int? roleId, String? name, String? colorHex) =>
       (super.noSuchMethod(
             Invocation.method(#updateRole, [roleId, name, colorHex]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> updateShift(
+  _i6.Future<void> updateShift(
     int? shiftId,
     String? name,
     String? startTime,
     String? endTime,
     List<int>? applicableDays,
+    List<int>? allowedRoleIds,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#updateShift, [
@@ -544,24 +566,25 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               startTime,
               endTime,
               applicableDays,
+              allowedRoleIds,
             ]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<Map<String, dynamic>> getAdminSettings() =>
+  _i6.Future<Map<String, dynamic>> getAdminSettings() =>
       (super.noSuchMethod(
             Invocation.method(#getAdminSettings, []),
-            returnValue: _i5.Future<Map<String, dynamic>>.value(
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
             ),
           )
-          as _i5.Future<Map<String, dynamic>>);
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i5.Future<Map<String, dynamic>> updateAdminSettings({
+  _i6.Future<Map<String, dynamic>> updateAdminSettings({
     bool? isLoginEnabled,
     String? blockedLoginMessage,
   }) =>
@@ -570,73 +593,73 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               #isLoginEnabled: isLoginEnabled,
               #blockedLoginMessage: blockedLoginMessage,
             }),
-            returnValue: _i5.Future<Map<String, dynamic>>.value(
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
             ),
           )
-          as _i5.Future<Map<String, dynamic>>);
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i5.Future<Map<String, dynamic>> updateAppSettings(
+  _i6.Future<Map<String, dynamic>> updateAppSettings(
     Map<String, dynamic>? settings,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#updateAppSettings, [settings]),
-            returnValue: _i5.Future<Map<String, dynamic>>.value(
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
             ),
           )
-          as _i5.Future<Map<String, dynamic>>);
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i5.Future<void> registerDeviceToken(String? token) =>
+  _i6.Future<void> registerDeviceToken(String? token) =>
       (super.noSuchMethod(
             Invocation.method(#registerDeviceToken, [token]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> unregisterDeviceToken(String? token) =>
+  _i6.Future<void> unregisterDeviceToken(String? token) =>
       (super.noSuchMethod(
             Invocation.method(#unregisterDeviceToken, [token]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<List<_i2.AppNotification>> getNotifications() =>
+  _i6.Future<List<_i3.AppNotification>> getNotifications() =>
       (super.noSuchMethod(
             Invocation.method(#getNotifications, []),
-            returnValue: _i5.Future<List<_i2.AppNotification>>.value(
-              <_i2.AppNotification>[],
+            returnValue: _i6.Future<List<_i3.AppNotification>>.value(
+              <_i3.AppNotification>[],
             ),
           )
-          as _i5.Future<List<_i2.AppNotification>>);
+          as _i6.Future<List<_i3.AppNotification>>);
 
   @override
-  _i5.Future<void> markNotificationRead(String? id) =>
+  _i6.Future<void> markNotificationRead(String? id) =>
       (super.noSuchMethod(
             Invocation.method(#markNotificationRead, [id]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<Map<String, dynamic>> getConfig() =>
+  _i6.Future<Map<String, dynamic>> getConfig() =>
       (super.noSuchMethod(
             Invocation.method(#getConfig, []),
-            returnValue: _i5.Future<Map<String, dynamic>>.value(
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
             ),
           )
-          as _i5.Future<Map<String, dynamic>>);
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i5.Future<void> saveConfig(
+  _i6.Future<void> saveConfig(
     String? name,
     String? openingHours,
     String? address, {
@@ -648,50 +671,50 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               [name, openingHours, address],
               {#posEnabled: posEnabled},
             ),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<List<_i2.TeamAvailability>> getTeamAvailability(
+  _i6.Future<List<_i3.TeamAvailability>> getTeamAvailability(
     DateTime? weekStart,
     DateTime? weekEnd,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#getTeamAvailability, [weekStart, weekEnd]),
-            returnValue: _i5.Future<List<_i2.TeamAvailability>>.value(
-              <_i2.TeamAvailability>[],
+            returnValue: _i6.Future<List<_i3.TeamAvailability>>.value(
+              <_i3.TeamAvailability>[],
             ),
           )
-          as _i5.Future<List<_i2.TeamAvailability>>);
+          as _i6.Future<List<_i3.TeamAvailability>>);
 
   @override
-  _i5.Future<Map<String, dynamic>> getAttendanceDefaults(DateTime? date) =>
+  _i6.Future<Map<String, dynamic>> getAttendanceDefaults(DateTime? date) =>
       (super.noSuchMethod(
             Invocation.method(#getAttendanceDefaults, [date]),
-            returnValue: _i5.Future<Map<String, dynamic>>.value(
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
             ),
           )
-          as _i5.Future<Map<String, dynamic>>);
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i5.Future<Map<String, dynamic>> registerAttendance(
+  _i6.Future<Map<String, dynamic>> registerAttendance(
     DateTime? date,
     String? checkIn,
     String? checkOut,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#registerAttendance, [date, checkIn, checkOut]),
-            returnValue: _i5.Future<Map<String, dynamic>>.value(
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
             ),
           )
-          as _i5.Future<Map<String, dynamic>>);
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i5.Future<void> registerManualAttendance({
+  _i6.Future<void> registerManualAttendance({
     required String? userId,
     required DateTime? date,
     required String? checkIn,
@@ -708,54 +731,54 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               #wasScheduled: wasScheduled,
               #status: status,
             }),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<List<Map<String, dynamic>>> getMyAttendance(
+  _i6.Future<List<Map<String, dynamic>>> getMyAttendance(
     DateTime? startDate,
     DateTime? endDate,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#getMyAttendance, [startDate, endDate]),
-            returnValue: _i5.Future<List<Map<String, dynamic>>>.value(
+            returnValue: _i6.Future<List<Map<String, dynamic>>>.value(
               <Map<String, dynamic>>[],
             ),
           )
-          as _i5.Future<List<Map<String, dynamic>>>);
+          as _i6.Future<List<Map<String, dynamic>>>);
 
   @override
-  _i5.Future<List<Map<String, dynamic>>> getPendingAttendance() =>
+  _i6.Future<List<Map<String, dynamic>>> getPendingAttendance() =>
       (super.noSuchMethod(
             Invocation.method(#getPendingAttendance, []),
-            returnValue: _i5.Future<List<Map<String, dynamic>>>.value(
+            returnValue: _i6.Future<List<Map<String, dynamic>>>.value(
               <Map<String, dynamic>>[],
             ),
           )
-          as _i5.Future<List<Map<String, dynamic>>>);
+          as _i6.Future<List<Map<String, dynamic>>>);
 
   @override
-  _i5.Future<void> confirmAttendance(String? attendanceId) =>
+  _i6.Future<void> confirmAttendance(String? attendanceId) =>
       (super.noSuchMethod(
             Invocation.method(#confirmAttendance, [attendanceId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> rejectAttendance(String? attendanceId) =>
+  _i6.Future<void> rejectAttendance(String? attendanceId) =>
       (super.noSuchMethod(
             Invocation.method(#rejectAttendance, [attendanceId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<List<Map<String, dynamic>>> getAllAttendance(
+  _i6.Future<List<Map<String, dynamic>>> getAllAttendance(
     DateTime? startDate,
     DateTime? endDate, {
     String? status,
@@ -766,19 +789,19 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               [startDate, endDate],
               {#status: status},
             ),
-            returnValue: _i5.Future<List<Map<String, dynamic>>>.value(
+            returnValue: _i6.Future<List<Map<String, dynamic>>>.value(
               <Map<String, dynamic>>[],
             ),
           )
-          as _i5.Future<List<Map<String, dynamic>>>);
+          as _i6.Future<List<Map<String, dynamic>>>);
 
   @override
-  _i5.Future<String?> getToken() =>
+  _i6.Future<String?> getToken() =>
       (super.noSuchMethod(
             Invocation.method(#getToken, []),
-            returnValue: _i5.Future<String?>.value(),
+            returnValue: _i6.Future<String?>.value(),
           )
-          as _i5.Future<String?>);
+          as _i6.Future<String?>);
 
   @override
   String getAttendanceExportUrl(
@@ -793,7 +816,7 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               [startDate, endDate],
               {#status: status, #token: token},
             ),
-            returnValue: _i4.dummyValue<String>(
+            returnValue: _i5.dummyValue<String>(
               this,
               Invocation.method(
                 #getAttendanceExportUrl,
@@ -805,74 +828,74 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
           as String);
 
   @override
-  _i5.Future<List<Map<String, dynamic>>> getEmployeeHours(
+  _i6.Future<List<Map<String, dynamic>>> getEmployeeHours(
     int? month,
     int? year,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#getEmployeeHours, [month, year]),
-            returnValue: _i5.Future<List<Map<String, dynamic>>>.value(
+            returnValue: _i6.Future<List<Map<String, dynamic>>>.value(
               <Map<String, dynamic>>[],
             ),
           )
-          as _i5.Future<List<Map<String, dynamic>>>);
+          as _i6.Future<List<Map<String, dynamic>>>);
 
   @override
-  _i5.Future<_i2.UserStats> getUserStats(String? userId) =>
+  _i6.Future<_i3.UserStats> getUserStats(String? userId) =>
       (super.noSuchMethod(
             Invocation.method(#getUserStats, [userId]),
-            returnValue: _i5.Future<_i2.UserStats>.value(
-              _FakeUserStats_3(
+            returnValue: _i6.Future<_i3.UserStats>.value(
+              _FakeUserStats_4(
                 this,
                 Invocation.method(#getUserStats, [userId]),
               ),
             ),
           )
-          as _i5.Future<_i2.UserStats>);
+          as _i6.Future<_i3.UserStats>);
 
   @override
-  _i5.Future<_i2.DashboardHome> getDashboardHome({DateTime? date}) =>
+  _i6.Future<_i3.DashboardHome> getDashboardHome({DateTime? date}) =>
       (super.noSuchMethod(
             Invocation.method(#getDashboardHome, [], {#date: date}),
-            returnValue: _i5.Future<_i2.DashboardHome>.value(
-              _FakeDashboardHome_4(
+            returnValue: _i6.Future<_i3.DashboardHome>.value(
+              _FakeDashboardHome_5(
                 this,
                 Invocation.method(#getDashboardHome, [], {#date: date}),
               ),
             ),
           )
-          as _i5.Future<_i2.DashboardHome>);
+          as _i6.Future<_i3.DashboardHome>);
 
   @override
-  _i5.Future<List<_i2.ShiftGiveaway>> getGiveaways() =>
+  _i6.Future<List<_i3.ShiftGiveaway>> getGiveaways() =>
       (super.noSuchMethod(
             Invocation.method(#getGiveaways, []),
-            returnValue: _i5.Future<List<_i2.ShiftGiveaway>>.value(
-              <_i2.ShiftGiveaway>[],
+            returnValue: _i6.Future<List<_i3.ShiftGiveaway>>.value(
+              <_i3.ShiftGiveaway>[],
             ),
           )
-          as _i5.Future<List<_i2.ShiftGiveaway>>);
+          as _i6.Future<List<_i3.ShiftGiveaway>>);
 
   @override
-  _i5.Future<void> reassignGiveaway(String? giveawayId, String? newUserId) =>
+  _i6.Future<void> reassignGiveaway(String? giveawayId, String? newUserId) =>
       (super.noSuchMethod(
             Invocation.method(#reassignGiveaway, [giveawayId, newUserId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> cancelGiveaway(String? giveawayId) =>
+  _i6.Future<void> cancelGiveaway(String? giveawayId) =>
       (super.noSuchMethod(
             Invocation.method(#cancelGiveaway, [giveawayId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<Map<String, dynamic>> submitBugReport({
+  _i6.Future<Map<String, dynamic>> submitBugReport({
     required String? title,
     required String? description,
     String? steps = '',
@@ -883,61 +906,71 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               #description: description,
               #steps: steps,
             }),
-            returnValue: _i5.Future<Map<String, dynamic>>.value(
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
             ),
           )
-          as _i5.Future<Map<String, dynamic>>);
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i5.Future<void> giveAwayShift(String? scheduleId) =>
+  _i6.Future<void> giveAwayShift(String? scheduleId) =>
       (super.noSuchMethod(
             Invocation.method(#giveAwayShift, [scheduleId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<Map<String, dynamic>> getGoogleCalendarStatus() =>
+  _i6.Future<Map<String, dynamic>> getGoogleCalendarStatus() =>
       (super.noSuchMethod(
             Invocation.method(#getGoogleCalendarStatus, []),
-            returnValue: _i5.Future<Map<String, dynamic>>.value(
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
             ),
           )
-          as _i5.Future<Map<String, dynamic>>);
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i5.Future<void> connectGoogleCalendar(String? authCode) =>
+  _i6.Future<void> connectGoogleCalendar(String? authCode) =>
       (super.noSuchMethod(
             Invocation.method(#connectGoogleCalendar, [authCode]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> disconnectGoogleCalendar() =>
+  _i6.Future<void> disconnectGoogleCalendar() =>
       (super.noSuchMethod(
             Invocation.method(#disconnectGoogleCalendar, []),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<List<_i2.LeaveRequest>> getMyLeaveRequests({String? status}) =>
+  _i6.Future<Map<String, dynamic>> syncGoogleCalendar() =>
       (super.noSuchMethod(
-            Invocation.method(#getMyLeaveRequests, [], {#status: status}),
-            returnValue: _i5.Future<List<_i2.LeaveRequest>>.value(
-              <_i2.LeaveRequest>[],
+            Invocation.method(#syncGoogleCalendar, []),
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
             ),
           )
-          as _i5.Future<List<_i2.LeaveRequest>>);
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i5.Future<void> createLeaveRequest(
+  _i6.Future<List<_i3.LeaveRequest>> getMyLeaveRequests({String? status}) =>
+      (super.noSuchMethod(
+            Invocation.method(#getMyLeaveRequests, [], {#status: status}),
+            returnValue: _i6.Future<List<_i3.LeaveRequest>>.value(
+              <_i3.LeaveRequest>[],
+            ),
+          )
+          as _i6.Future<List<_i3.LeaveRequest>>);
+
+  @override
+  _i6.Future<void> createLeaveRequest(
     DateTime? startDate,
     DateTime? endDate,
     String? reason,
@@ -948,63 +981,63 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               endDate,
               reason,
             ]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> cancelLeaveRequest(String? requestId) =>
+  _i6.Future<void> cancelLeaveRequest(String? requestId) =>
       (super.noSuchMethod(
             Invocation.method(#cancelLeaveRequest, [requestId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<List<_i2.LeaveRequest>> getAllLeaveRequests({String? status}) =>
+  _i6.Future<List<_i3.LeaveRequest>> getAllLeaveRequests({String? status}) =>
       (super.noSuchMethod(
             Invocation.method(#getAllLeaveRequests, [], {#status: status}),
-            returnValue: _i5.Future<List<_i2.LeaveRequest>>.value(
-              <_i2.LeaveRequest>[],
+            returnValue: _i6.Future<List<_i3.LeaveRequest>>.value(
+              <_i3.LeaveRequest>[],
             ),
           )
-          as _i5.Future<List<_i2.LeaveRequest>>);
+          as _i6.Future<List<_i3.LeaveRequest>>);
 
   @override
-  _i5.Future<void> approveLeaveRequest(String? requestId) =>
+  _i6.Future<void> approveLeaveRequest(String? requestId) =>
       (super.noSuchMethod(
             Invocation.method(#approveLeaveRequest, [requestId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<void> rejectLeaveRequest(String? requestId) =>
+  _i6.Future<void> rejectLeaveRequest(String? requestId) =>
       (super.noSuchMethod(
             Invocation.method(#rejectLeaveRequest, [requestId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<List<_i2.LeaveCalendarEntry>> getLeaveCalendar(
+  _i6.Future<List<_i3.LeaveCalendarEntry>> getLeaveCalendar(
     int? year,
     int? month,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#getLeaveCalendar, [year, month]),
-            returnValue: _i5.Future<List<_i2.LeaveCalendarEntry>>.value(
-              <_i2.LeaveCalendarEntry>[],
+            returnValue: _i6.Future<List<_i3.LeaveCalendarEntry>>.value(
+              <_i3.LeaveCalendarEntry>[],
             ),
           )
-          as _i5.Future<List<_i2.LeaveCalendarEntry>>);
+          as _i6.Future<List<_i3.LeaveCalendarEntry>>);
 
   @override
-  _i5.Future<List<_i2.AvailableEmployee>> getAvailableEmployeesForShift(
+  _i6.Future<List<_i3.AvailableEmployee>> getAvailableEmployeesForShift(
     DateTime? date,
     int? shiftDefId,
   ) =>
@@ -1013,14 +1046,14 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               date,
               shiftDefId,
             ]),
-            returnValue: _i5.Future<List<_i2.AvailableEmployee>>.value(
-              <_i2.AvailableEmployee>[],
+            returnValue: _i6.Future<List<_i3.AvailableEmployee>>.value(
+              <_i3.AvailableEmployee>[],
             ),
           )
-          as _i5.Future<List<_i2.AvailableEmployee>>);
+          as _i6.Future<List<_i3.AvailableEmployee>>);
 
   @override
-  _i5.Future<Map<String, dynamic>> getScheduleSummary({
+  _i6.Future<Map<String, dynamic>> getScheduleSummary({
     required int? year,
     required int? month,
     required DateTime? weekStart,
@@ -1033,69 +1066,69 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               #weekStart: weekStart,
               #weekEnd: weekEnd,
             }),
-            returnValue: _i5.Future<Map<String, dynamic>>.value(
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
             ),
           )
-          as _i5.Future<Map<String, dynamic>>);
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i5.Future<List<Map<String, dynamic>>> getEmployeeGiveaways() =>
+  _i6.Future<List<Map<String, dynamic>>> getEmployeeGiveaways() =>
       (super.noSuchMethod(
             Invocation.method(#getEmployeeGiveaways, []),
-            returnValue: _i5.Future<List<Map<String, dynamic>>>.value(
+            returnValue: _i6.Future<List<Map<String, dynamic>>>.value(
               <Map<String, dynamic>>[],
             ),
           )
-          as _i5.Future<List<Map<String, dynamic>>>);
+          as _i6.Future<List<Map<String, dynamic>>>);
 
   @override
-  _i5.Future<void> claimGiveaway(String? giveawayId) =>
+  _i6.Future<void> claimGiveaway(String? giveawayId) =>
       (super.noSuchMethod(
             Invocation.method(#claimGiveaway, [giveawayId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<List<_i2.RestaurantTable>> getTables({
+  _i6.Future<List<_i3.RestaurantTable>> getTables({
     bool? includeInactive = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#getTables, [], {
               #includeInactive: includeInactive,
             }),
-            returnValue: _i5.Future<List<_i2.RestaurantTable>>.value(
-              <_i2.RestaurantTable>[],
+            returnValue: _i6.Future<List<_i3.RestaurantTable>>.value(
+              <_i3.RestaurantTable>[],
             ),
           )
-          as _i5.Future<List<_i2.RestaurantTable>>);
+          as _i6.Future<List<_i3.RestaurantTable>>);
 
   @override
-  _i5.Future<_i2.RestaurantTable> createTable(String? name) =>
+  _i6.Future<_i3.RestaurantTable> createTable(String? name) =>
       (super.noSuchMethod(
             Invocation.method(#createTable, [name]),
-            returnValue: _i5.Future<_i2.RestaurantTable>.value(
-              _FakeRestaurantTable_5(
+            returnValue: _i6.Future<_i3.RestaurantTable>.value(
+              _FakeRestaurantTable_6(
                 this,
                 Invocation.method(#createTable, [name]),
               ),
             ),
           )
-          as _i5.Future<_i2.RestaurantTable>);
+          as _i6.Future<_i3.RestaurantTable>);
 
   @override
-  _i5.Future<void> deleteTable(String? tableId) =>
+  _i6.Future<void> deleteTable(String? tableId) =>
       (super.noSuchMethod(
             Invocation.method(#deleteTable, [tableId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<List<_i2.MenuItem>> getMenu({
+  _i6.Future<List<_i3.MenuItem>> getMenu({
     String? category,
     bool? includeInactive = false,
   }) =>
@@ -1104,70 +1137,70 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               #category: category,
               #includeInactive: includeInactive,
             }),
-            returnValue: _i5.Future<List<_i2.MenuItem>>.value(<_i2.MenuItem>[]),
+            returnValue: _i6.Future<List<_i3.MenuItem>>.value(<_i3.MenuItem>[]),
           )
-          as _i5.Future<List<_i2.MenuItem>>);
+          as _i6.Future<List<_i3.MenuItem>>);
 
   @override
-  _i5.Future<_i2.MenuItem> createMenuItem(
+  _i6.Future<_i3.MenuItem> createMenuItem(
     String? name,
     double? price,
     String? category,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#createMenuItem, [name, price, category]),
-            returnValue: _i5.Future<_i2.MenuItem>.value(
-              _FakeMenuItem_6(
+            returnValue: _i6.Future<_i3.MenuItem>.value(
+              _FakeMenuItem_7(
                 this,
                 Invocation.method(#createMenuItem, [name, price, category]),
               ),
             ),
           )
-          as _i5.Future<_i2.MenuItem>);
+          as _i6.Future<_i3.MenuItem>);
 
   @override
-  _i5.Future<_i2.MenuItem> updateMenuItem(
+  _i6.Future<_i3.MenuItem> updateMenuItem(
     String? itemId,
     Map<String, dynamic>? data,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#updateMenuItem, [itemId, data]),
-            returnValue: _i5.Future<_i2.MenuItem>.value(
-              _FakeMenuItem_6(
+            returnValue: _i6.Future<_i3.MenuItem>.value(
+              _FakeMenuItem_7(
                 this,
                 Invocation.method(#updateMenuItem, [itemId, data]),
               ),
             ),
           )
-          as _i5.Future<_i2.MenuItem>);
+          as _i6.Future<_i3.MenuItem>);
 
   @override
-  _i5.Future<void> deleteMenuItem(String? itemId) =>
+  _i6.Future<void> deleteMenuItem(String? itemId) =>
       (super.noSuchMethod(
             Invocation.method(#deleteMenuItem, [itemId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<_i2.KitchenOrder> createOrder(
+  _i6.Future<_i3.KitchenOrder> createOrder(
     String? tableId,
     List<Map<String, dynamic>>? items,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#createOrder, [tableId, items]),
-            returnValue: _i5.Future<_i2.KitchenOrder>.value(
-              _FakeKitchenOrder_7(
+            returnValue: _i6.Future<_i3.KitchenOrder>.value(
+              _FakeKitchenOrder_8(
                 this,
                 Invocation.method(#createOrder, [tableId, items]),
               ),
             ),
           )
-          as _i5.Future<_i2.KitchenOrder>);
+          as _i6.Future<_i3.KitchenOrder>);
 
   @override
-  _i5.Future<List<_i2.KitchenOrder>> getOrders({
+  _i6.Future<List<_i3.KitchenOrder>> getOrders({
     String? tableId,
     String? status,
   }) =>
@@ -1176,66 +1209,66 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               #tableId: tableId,
               #status: status,
             }),
-            returnValue: _i5.Future<List<_i2.KitchenOrder>>.value(
-              <_i2.KitchenOrder>[],
+            returnValue: _i6.Future<List<_i3.KitchenOrder>>.value(
+              <_i3.KitchenOrder>[],
             ),
           )
-          as _i5.Future<List<_i2.KitchenOrder>>);
+          as _i6.Future<List<_i3.KitchenOrder>>);
 
   @override
-  _i5.Future<_i2.KitchenOrder> updateOrderStatus(
+  _i6.Future<_i3.KitchenOrder> updateOrderStatus(
     String? orderId,
     String? status,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#updateOrderStatus, [orderId, status]),
-            returnValue: _i5.Future<_i2.KitchenOrder>.value(
-              _FakeKitchenOrder_7(
+            returnValue: _i6.Future<_i3.KitchenOrder>.value(
+              _FakeKitchenOrder_8(
                 this,
                 Invocation.method(#updateOrderStatus, [orderId, status]),
               ),
             ),
           )
-          as _i5.Future<_i2.KitchenOrder>);
+          as _i6.Future<_i3.KitchenOrder>);
 
   @override
-  _i5.Future<_i2.KitchenOrder> cancelOrder(String? orderId) =>
+  _i6.Future<_i3.KitchenOrder> cancelOrder(String? orderId) =>
       (super.noSuchMethod(
             Invocation.method(#cancelOrder, [orderId]),
-            returnValue: _i5.Future<_i2.KitchenOrder>.value(
-              _FakeKitchenOrder_7(
+            returnValue: _i6.Future<_i3.KitchenOrder>.value(
+              _FakeKitchenOrder_8(
                 this,
                 Invocation.method(#cancelOrder, [orderId]),
               ),
             ),
           )
-          as _i5.Future<_i2.KitchenOrder>);
+          as _i6.Future<_i3.KitchenOrder>);
 
   @override
-  _i5.Future<List<_i2.TableZone>> getZones() =>
+  _i6.Future<List<_i3.TableZone>> getZones() =>
       (super.noSuchMethod(
             Invocation.method(#getZones, []),
-            returnValue: _i5.Future<List<_i2.TableZone>>.value(
-              <_i2.TableZone>[],
+            returnValue: _i6.Future<List<_i3.TableZone>>.value(
+              <_i3.TableZone>[],
             ),
           )
-          as _i5.Future<List<_i2.TableZone>>);
+          as _i6.Future<List<_i3.TableZone>>);
 
   @override
-  _i5.Future<_i2.TableZone> createZone(String? name, {int? sortOrder = 0}) =>
+  _i6.Future<_i3.TableZone> createZone(String? name, {int? sortOrder = 0}) =>
       (super.noSuchMethod(
             Invocation.method(#createZone, [name], {#sortOrder: sortOrder}),
-            returnValue: _i5.Future<_i2.TableZone>.value(
-              _FakeTableZone_8(
+            returnValue: _i6.Future<_i3.TableZone>.value(
+              _FakeTableZone_9(
                 this,
                 Invocation.method(#createZone, [name], {#sortOrder: sortOrder}),
               ),
             ),
           )
-          as _i5.Future<_i2.TableZone>);
+          as _i6.Future<_i3.TableZone>);
 
   @override
-  _i5.Future<List<_i2.PosTable>> getTablesV2({
+  _i6.Future<List<_i3.PosTable>> getTablesV2({
     String? zoneId,
     String? status,
   }) =>
@@ -1244,12 +1277,12 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               #zoneId: zoneId,
               #status: status,
             }),
-            returnValue: _i5.Future<List<_i2.PosTable>>.value(<_i2.PosTable>[]),
+            returnValue: _i6.Future<List<_i3.PosTable>>.value(<_i3.PosTable>[]),
           )
-          as _i5.Future<List<_i2.PosTable>>);
+          as _i6.Future<List<_i3.PosTable>>);
 
   @override
-  _i5.Future<_i2.PosTable> createTableV2(
+  _i6.Future<_i3.PosTable> createTableV2(
     String? name, {
     String? zoneId,
     int? seats = 4,
@@ -1261,8 +1294,8 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               [name],
               {#zoneId: zoneId, #seats: seats, #sortOrder: sortOrder},
             ),
-            returnValue: _i5.Future<_i2.PosTable>.value(
-              _FakePosTable_9(
+            returnValue: _i6.Future<_i3.PosTable>.value(
+              _FakePosTable_10(
                 this,
                 Invocation.method(
                   #createTableV2,
@@ -1272,36 +1305,36 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               ),
             ),
           )
-          as _i5.Future<_i2.PosTable>);
+          as _i6.Future<_i3.PosTable>);
 
   @override
-  _i5.Future<_i2.PosTable> updateTableV2(
+  _i6.Future<_i3.PosTable> updateTableV2(
     String? tableId,
     Map<String, dynamic>? data,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#updateTableV2, [tableId, data]),
-            returnValue: _i5.Future<_i2.PosTable>.value(
-              _FakePosTable_9(
+            returnValue: _i6.Future<_i3.PosTable>.value(
+              _FakePosTable_10(
                 this,
                 Invocation.method(#updateTableV2, [tableId, data]),
               ),
             ),
           )
-          as _i5.Future<_i2.PosTable>);
+          as _i6.Future<_i3.PosTable>);
 
   @override
-  _i5.Future<List<_i2.PosCategory>> getCategories() =>
+  _i6.Future<List<_i3.PosCategory>> getCategories() =>
       (super.noSuchMethod(
             Invocation.method(#getCategories, []),
-            returnValue: _i5.Future<List<_i2.PosCategory>>.value(
-              <_i2.PosCategory>[],
+            returnValue: _i6.Future<List<_i3.PosCategory>>.value(
+              <_i3.PosCategory>[],
             ),
           )
-          as _i5.Future<List<_i2.PosCategory>>);
+          as _i6.Future<List<_i3.PosCategory>>);
 
   @override
-  _i5.Future<_i2.PosCategory> createCategory(
+  _i6.Future<_i3.PosCategory> createCategory(
     String? name, {
     String? colorHex = '#607D8B',
     String? iconName,
@@ -1312,8 +1345,8 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               [name],
               {#colorHex: colorHex, #iconName: iconName},
             ),
-            returnValue: _i5.Future<_i2.PosCategory>.value(
-              _FakePosCategory_10(
+            returnValue: _i6.Future<_i3.PosCategory>.value(
+              _FakePosCategory_11(
                 this,
                 Invocation.method(
                   #createCategory,
@@ -1323,36 +1356,36 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               ),
             ),
           )
-          as _i5.Future<_i2.PosCategory>);
+          as _i6.Future<_i3.PosCategory>);
 
   @override
-  _i5.Future<_i2.PosCategory> updateCategory(
+  _i6.Future<_i3.PosCategory> updateCategory(
     int? categoryId,
     Map<String, dynamic>? data,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#updateCategory, [categoryId, data]),
-            returnValue: _i5.Future<_i2.PosCategory>.value(
-              _FakePosCategory_10(
+            returnValue: _i6.Future<_i3.PosCategory>.value(
+              _FakePosCategory_11(
                 this,
                 Invocation.method(#updateCategory, [categoryId, data]),
               ),
             ),
           )
-          as _i5.Future<_i2.PosCategory>);
+          as _i6.Future<_i3.PosCategory>);
 
   @override
-  _i5.Future<List<_i2.PosMenuItem>> getMenuV2({int? categoryId}) =>
+  _i6.Future<List<_i3.PosMenuItem>> getMenuV2({int? categoryId}) =>
       (super.noSuchMethod(
             Invocation.method(#getMenuV2, [], {#categoryId: categoryId}),
-            returnValue: _i5.Future<List<_i2.PosMenuItem>>.value(
-              <_i2.PosMenuItem>[],
+            returnValue: _i6.Future<List<_i3.PosMenuItem>>.value(
+              <_i3.PosMenuItem>[],
             ),
           )
-          as _i5.Future<List<_i2.PosMenuItem>>);
+          as _i6.Future<List<_i3.PosMenuItem>>);
 
   @override
-  _i5.Future<_i2.PosMenuItem> createMenuItemV2(
+  _i6.Future<_i3.PosMenuItem> createMenuItemV2(
     String? name,
     double? price,
     int? categoryId, {
@@ -1365,8 +1398,8 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               [name, price, categoryId],
               {#description: description, #taxRate: taxRate},
             ),
-            returnValue: _i5.Future<_i2.PosMenuItem>.value(
-              _FakePosMenuItem_11(
+            returnValue: _i6.Future<_i3.PosMenuItem>.value(
+              _FakePosMenuItem_12(
                 this,
                 Invocation.method(
                   #createMenuItemV2,
@@ -1376,36 +1409,36 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               ),
             ),
           )
-          as _i5.Future<_i2.PosMenuItem>);
+          as _i6.Future<_i3.PosMenuItem>);
 
   @override
-  _i5.Future<_i2.PosMenuItem> updateMenuItemV2(
+  _i6.Future<_i3.PosMenuItem> updateMenuItemV2(
     String? itemId,
     Map<String, dynamic>? data,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#updateMenuItemV2, [itemId, data]),
-            returnValue: _i5.Future<_i2.PosMenuItem>.value(
-              _FakePosMenuItem_11(
+            returnValue: _i6.Future<_i3.PosMenuItem>.value(
+              _FakePosMenuItem_12(
                 this,
                 Invocation.method(#updateMenuItemV2, [itemId, data]),
               ),
             ),
           )
-          as _i5.Future<_i2.PosMenuItem>);
+          as _i6.Future<_i3.PosMenuItem>);
 
   @override
-  _i5.Future<List<_i2.ModifierGroup>> getModifierGroups() =>
+  _i6.Future<List<_i3.ModifierGroup>> getModifierGroups() =>
       (super.noSuchMethod(
             Invocation.method(#getModifierGroups, []),
-            returnValue: _i5.Future<List<_i2.ModifierGroup>>.value(
-              <_i2.ModifierGroup>[],
+            returnValue: _i6.Future<List<_i3.ModifierGroup>>.value(
+              <_i3.ModifierGroup>[],
             ),
           )
-          as _i5.Future<List<_i2.ModifierGroup>>);
+          as _i6.Future<List<_i3.ModifierGroup>>);
 
   @override
-  _i5.Future<_i2.ModifierGroup> createModifierGroup(
+  _i6.Future<_i3.ModifierGroup> createModifierGroup(
     String? name, {
     int? minSelect = 0,
     int? maxSelect = 1,
@@ -1421,8 +1454,8 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
                 #modifiers: modifiers,
               },
             ),
-            returnValue: _i5.Future<_i2.ModifierGroup>.value(
-              _FakeModifierGroup_12(
+            returnValue: _i6.Future<_i3.ModifierGroup>.value(
+              _FakeModifierGroup_13(
                 this,
                 Invocation.method(
                   #createModifierGroup,
@@ -1436,19 +1469,19 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               ),
             ),
           )
-          as _i5.Future<_i2.ModifierGroup>);
+          as _i6.Future<_i3.ModifierGroup>);
 
   @override
-  _i5.Future<void> linkModifierGroup(String? itemId, int? groupId) =>
+  _i6.Future<void> linkModifierGroup(String? itemId, int? groupId) =>
       (super.noSuchMethod(
             Invocation.method(#linkModifierGroup, [itemId, groupId]),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i5.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i5.Future<_i2.PosOrder> createOrderV2(
+  _i6.Future<_i3.PosOrder> createOrderV2(
     String? tableId,
     List<Map<String, dynamic>>? items, {
     int? guestCount = 1,
@@ -1460,8 +1493,8 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               [tableId, items],
               {#guestCount: guestCount, #notes: notes},
             ),
-            returnValue: _i5.Future<_i2.PosOrder>.value(
-              _FakePosOrder_13(
+            returnValue: _i6.Future<_i3.PosOrder>.value(
+              _FakePosOrder_14(
                 this,
                 Invocation.method(
                   #createOrderV2,
@@ -1471,10 +1504,10 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               ),
             ),
           )
-          as _i5.Future<_i2.PosOrder>);
+          as _i6.Future<_i3.PosOrder>);
 
   @override
-  _i5.Future<List<_i2.PosOrder>> getOrdersV2({
+  _i6.Future<List<_i3.PosOrder>> getOrdersV2({
     String? tableId,
     String? status,
     String? waiterId,
@@ -1485,54 +1518,54 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               #status: status,
               #waiterId: waiterId,
             }),
-            returnValue: _i5.Future<List<_i2.PosOrder>>.value(<_i2.PosOrder>[]),
+            returnValue: _i6.Future<List<_i3.PosOrder>>.value(<_i3.PosOrder>[]),
           )
-          as _i5.Future<List<_i2.PosOrder>>);
+          as _i6.Future<List<_i3.PosOrder>>);
 
   @override
-  _i5.Future<_i2.PosOrder> getOrderV2(String? orderId) =>
+  _i6.Future<_i3.PosOrder> getOrderV2(String? orderId) =>
       (super.noSuchMethod(
             Invocation.method(#getOrderV2, [orderId]),
-            returnValue: _i5.Future<_i2.PosOrder>.value(
-              _FakePosOrder_13(this, Invocation.method(#getOrderV2, [orderId])),
+            returnValue: _i6.Future<_i3.PosOrder>.value(
+              _FakePosOrder_14(this, Invocation.method(#getOrderV2, [orderId])),
             ),
           )
-          as _i5.Future<_i2.PosOrder>);
+          as _i6.Future<_i3.PosOrder>);
 
   @override
-  _i5.Future<_i2.PosOrder> addItemsToOrder(
+  _i6.Future<_i3.PosOrder> addItemsToOrder(
     String? orderId,
     List<Map<String, dynamic>>? items,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#addItemsToOrder, [orderId, items]),
-            returnValue: _i5.Future<_i2.PosOrder>.value(
-              _FakePosOrder_13(
+            returnValue: _i6.Future<_i3.PosOrder>.value(
+              _FakePosOrder_14(
                 this,
                 Invocation.method(#addItemsToOrder, [orderId, items]),
               ),
             ),
           )
-          as _i5.Future<_i2.PosOrder>);
+          as _i6.Future<_i3.PosOrder>);
 
   @override
-  _i5.Future<_i2.PosOrder> updateOrderStatusV2(
+  _i6.Future<_i3.PosOrder> updateOrderStatusV2(
     String? orderId,
     String? status,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#updateOrderStatusV2, [orderId, status]),
-            returnValue: _i5.Future<_i2.PosOrder>.value(
-              _FakePosOrder_13(
+            returnValue: _i6.Future<_i3.PosOrder>.value(
+              _FakePosOrder_14(
                 this,
                 Invocation.method(#updateOrderStatusV2, [orderId, status]),
               ),
             ),
           )
-          as _i5.Future<_i2.PosOrder>);
+          as _i6.Future<_i3.PosOrder>);
 
   @override
-  _i5.Future<_i2.PosOrder> applyDiscount(
+  _i6.Future<_i3.PosOrder> applyDiscount(
     String? orderId,
     double? discountPct,
     String? managerPin,
@@ -1543,8 +1576,8 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               discountPct,
               managerPin,
             ]),
-            returnValue: _i5.Future<_i2.PosOrder>.value(
-              _FakePosOrder_13(
+            returnValue: _i6.Future<_i3.PosOrder>.value(
+              _FakePosOrder_14(
                 this,
                 Invocation.method(#applyDiscount, [
                   orderId,
@@ -1554,34 +1587,34 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               ),
             ),
           )
-          as _i5.Future<_i2.PosOrder>);
+          as _i6.Future<_i3.PosOrder>);
 
   @override
-  _i5.Future<_i2.PosOrderItem> updateKdsItemStatus(
+  _i6.Future<_i3.PosOrderItem> updateKdsItemStatus(
     String? itemId,
     String? kdsStatus,
   ) =>
       (super.noSuchMethod(
             Invocation.method(#updateKdsItemStatus, [itemId, kdsStatus]),
-            returnValue: _i5.Future<_i2.PosOrderItem>.value(
-              _FakePosOrderItem_14(
+            returnValue: _i6.Future<_i3.PosOrderItem>.value(
+              _FakePosOrderItem_15(
                 this,
                 Invocation.method(#updateKdsItemStatus, [itemId, kdsStatus]),
               ),
             ),
           )
-          as _i5.Future<_i2.PosOrderItem>);
+          as _i6.Future<_i3.PosOrderItem>);
 
   @override
-  _i5.Future<List<dynamic>> getKdsItems({String? status}) =>
+  _i6.Future<List<dynamic>> getKdsItems({String? status}) =>
       (super.noSuchMethod(
             Invocation.method(#getKdsItems, [], {#status: status}),
-            returnValue: _i5.Future<List<dynamic>>.value(<dynamic>[]),
+            returnValue: _i6.Future<List<dynamic>>.value(<dynamic>[]),
           )
-          as _i5.Future<List<dynamic>>);
+          as _i6.Future<List<dynamic>>);
 
   @override
-  _i5.Future<_i2.PosPayment> createPayment(
+  _i6.Future<_i3.PosPayment> createPayment(
     String? orderId,
     String? method,
     double? amount, {
@@ -1593,8 +1626,8 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               [orderId, method, amount],
               {#tipAmount: tipAmount},
             ),
-            returnValue: _i5.Future<_i2.PosPayment>.value(
-              _FakePosPayment_15(
+            returnValue: _i6.Future<_i3.PosPayment>.value(
+              _FakePosPayment_16(
                 this,
                 Invocation.method(
                   #createPayment,
@@ -1604,18 +1637,18 @@ class MockApiService extends _i1.Mock implements _i3.ApiService {
               ),
             ),
           )
-          as _i5.Future<_i2.PosPayment>);
+          as _i6.Future<_i3.PosPayment>);
 
   @override
-  _i5.Future<_i2.TipSummary> getMyTips({String? date}) =>
+  _i6.Future<_i3.TipSummary> getMyTips({String? date}) =>
       (super.noSuchMethod(
             Invocation.method(#getMyTips, [], {#date: date}),
-            returnValue: _i5.Future<_i2.TipSummary>.value(
-              _FakeTipSummary_16(
+            returnValue: _i6.Future<_i3.TipSummary>.value(
+              _FakeTipSummary_17(
                 this,
                 Invocation.method(#getMyTips, [], {#date: date}),
               ),
             ),
           )
-          as _i5.Future<_i2.TipSummary>);
+          as _i6.Future<_i3.TipSummary>);
 }

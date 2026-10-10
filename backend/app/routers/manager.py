@@ -81,11 +81,23 @@ def create_shift_def(
 @router.get("/shifts", response_model=List[ShiftDefResponse])
 def get_shifts(
     session: Session = Depends(get_session), 
-    _: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(require_tenant),
 ):
-    from ..models import ShiftDefinition
-    return session.exec(select(ShiftDefinition).where(ShiftDefinition.tenant_id == tenant_id)).all()
+    from ..models import ShiftDefinition, RoleSystem
+    shifts = session.exec(select(ShiftDefinition).where(ShiftDefinition.tenant_id == tenant_id)).all()
+    
+    if current_user.role_system in (RoleSystem.MANAGER, RoleSystem.ADMIN):
+        return shifts
+        
+    user_role_ids = {r.id for r in current_user.job_roles}
+    visible_shifts = []
+    for s in shifts:
+        shift_role_ids = {r.id for r in getattr(s, 'allowed_roles', [])}
+        if not shift_role_ids or (shift_role_ids & user_role_ids):
+            visible_shifts.append(s)
+            
+    return visible_shifts
 
 @router.put("/shifts/{shift_id}", response_model=ShiftDefResponse)
 def update_shift(
