@@ -1,12 +1,35 @@
 # Architektura Systemu PlannerV2
 
+## Architektura Multi-Tenant (Wielodostępność)
+System działa w modelu wielodostępowym, pozwalającym na obsługę wielu restauracji (Tenantów) w ramach jednej instancji aplikacji.
+- **Tenant**: Każda restauracja to oddzielny byt (model `Tenant`) posiadający `name` oraz `slug` (tzw. Login ID).
+- **Izolacja danych**: Modele bazodanowe przypisane do konkretnej restauracji (np. pracownicy, definicje zmian, role) posiadają kolumnę `tenant_id`. Izolacja na poziomie API jest zapewniona przez zależność (Dependency) FastAPI `require_tenant`, która na podstawie tokenu automatycznie sprawdza uprawnienia i wstrzykuje kontekst restauracji do zapytań.
+- **Dual-Login (Podwójny tryb logowania)**: System autoryzacji pozwala na dwa sposoby logowania:
+  1. Za pomocą globalnie unikalnego adresu `email` i hasła.
+  2. Za pomocą kombinacji `username` + `Login ID` (slug tenanta) i hasła.
+- Payload tokenów JWT posiada izolowane dane (zawiera m.in. klucz `tenant_id` oprócz `user_id` i roli), zapewniając bezpieczne przełączanie kontekstu.
+
+## Superadmin i Panel Globalny
+- **Rola SUPERADMIN**: W systemie istnieje globalna rola użytkownika `SUPERADMIN` posiadająca pełen wgląd w całą instancję serwera (zazwyczaj nie przypisana do żadnego tenanta).
+- **Globalny Dashboard**: Superadmini mają dostęp do globalnego panelu sterowania (`/#/superadmin`).
+- **Możliwości**:
+  - Tworzenie oraz edycja restauracji (Tenantów).
+  - Wgląd w listę wszystkich użytkowników w całym systemie (Cross-Tenant).
+  - Dodawanie pierwszych kont typu Manager do nowo powstałych restauracji.
+  - Resetowanie haseł menedżerów.
+
+## Zarządzanie pracownikami i Role-Based Shifts
+- **Role-Based Shifts (Zmiany przypisane do ról)**: Zmiany w grafiku (model `ShiftDefinition`) są teraz powiązane z konkretnymi stanowiskami (model `JobRole`). Dzięki temu pracownicy widzą i mogą zgłaszać dostępność wyłącznie na te zmiany, które są adekwatne do ich umiejętności i przypisanych im ról.
+- **Aktualizacje Danych Pracowników**: Menedżerowie mają rozszerzone uprawnienia do zarządzania swoimi pracownikami, w tym m.in. mogą bezpośrednio dodawać oraz edytować adresy e-mail przypisane do kont pracowników, co wspiera działanie trybu logowania za pomocą poczty elektronicznej (Dual-Login).
+
 ## Diagram Komponentów
 
 ```mermaid
 graph TD
     subgraph FRONTEND["FRONTEND (Flutter Web/Mobile)"]
         direction TB
-        LOGIN["Login / Setup"]
+        LOGIN["Login / Setup (Dual-Login)"]
+        SUPERADMIN_UI["Superadmin UI (Global Panel)"]
         MANAGER_UI["Manager UI (8 zakładek)"]
         EMPLOYEE_UI["Employee Dashboard (5 ekranów)"]
         POS_UI["POS / KDS Screens"]
@@ -14,6 +37,7 @@ graph TD
         CONFIG_SVC["ConfigService (QR / Manual)"]
 
         LOGIN --> API_SVC
+        SUPERADMIN_UI --> API_SVC
         MANAGER_UI --> API_SVC
         EMPLOYEE_UI --> API_SVC
         POS_UI --> API_SVC
@@ -24,8 +48,8 @@ graph TD
 
     subgraph BACKEND["BACKEND (FastAPI)"]
         direction TB
-        ROUTERS["Routers Layer: auth | manager | employee | scheduler | pos | kitchen | notifications | health | bug"]
-        SERVICES["Services Layer: ManagerService | EmployeeService | SchedulerService | PosService | KDSService | PushService"]
+        ROUTERS["Routers Layer: auth | superadmin | manager | employee | scheduler | pos | kitchen | notifications | health | bug"]
+        SERVICES["Services Layer: SuperadminService | ManagerService | EmployeeService | SchedulerService | PosService | KDSService | PushService"]
         SOLVER["SolverService (OR-Tools CP-SAT)\n- Constraint Programming\n- Employee-Shift-Role Assignment\n- Soft Penalties > Hard Limits"]
         ORM["SQLModel (ORM) + Alembic"]
 
@@ -42,13 +66,21 @@ graph TD
 
 ```mermaid
 erDiagram
+    Tenant {
+        int id PK
+        string name
+        string slug UK "Login ID"
+        datetime created_at
+    }
+
     User {
         UUID id PK
-        string username UK
-        string email
+        int tenant_id FK "nullable for SUPERADMIN"
+        string username
+        string email UK "globally unique"
         string password_hash
         string full_name
-        enum role_system "MANAGER / EMPLOYEE"
+        enum role_system "SUPERADMIN / MANAGER / EMPLOYEE"
         bool is_active
         int target_hours_per_month
         int target_shifts_per_month
@@ -59,15 +91,22 @@ erDiagram
 
     JobRole {
         int id PK
+        int tenant_id FK
         string name
         string color_hex
     }
 
     ShiftDefinition {
         int id PK
+        int tenant_id FK
         string name
         time start_time
         time end_time
+    }
+    
+    ShiftRoleLink {
+        int shift_def_id FK
+        int role_id FK
     }
 
     ShiftDefinitionDayLink {
@@ -148,6 +187,7 @@ erDiagram
 
     RestaurantConfig {
         int id PK
+        int tenant_id FK
         string name
         string address
     }
@@ -162,6 +202,7 @@ erDiagram
 
     TableZone {
         UUID id PK
+        int tenant_id FK
         string name
         int sort_order
         bool is_active
@@ -177,6 +218,7 @@ erDiagram
 
     Category {
         int id PK
+        int tenant_id FK
         string name UK
         string color_hex
         int sort_order
@@ -195,6 +237,7 @@ erDiagram
 
     ModifierGroup {
         int id PK
+        int tenant_id FK
         string name
         int min_select
         int max_select
@@ -209,6 +252,7 @@ erDiagram
 
     Order {
         UUID id PK
+        int tenant_id FK
         UUID table_id FK
         UUID waiter_id FK
         enum status "OPEN / SENT / PARTIALLY_PAID / PAID / CANCELLED"
@@ -247,6 +291,11 @@ erDiagram
         bool is_undo
     }
 
+    Tenant ||--o{ User : "has"
+    Tenant ||--o{ JobRole : "has"
+    Tenant ||--o{ ShiftDefinition : "has"
+    Tenant ||--o{ Order : "has"
+    Tenant ||--o{ Category : "has"
     User ||--o{ Availability : "has"
     User ||--o{ Schedule : "assigned to"
     User ||--o{ Attendance : "registers"
@@ -255,6 +304,8 @@ erDiagram
     User ||--o{ UserDevice : "has devices"
     User }o--o{ JobRole : "has roles (M:N via UserJobRoleLink)"
     ShiftDefinition ||--o{ ShiftDefinitionDayLink : "applicable on"
+    ShiftDefinition ||--o{ ShiftRoleLink : "allowed for role"
+    JobRole ||--o{ ShiftRoleLink : "can perform"
     ShiftDefinition ||--o{ Availability : "for shift"
     ShiftDefinition ||--o{ Schedule : "uses"
     ShiftDefinition ||--o{ StaffingRequirement : "requires"
@@ -278,9 +329,10 @@ erDiagram
 
 | Serwis | Odpowiedzialność |
 |--------|-----------------|
-| `SolverService` | Generowanie grafiku (OR-Tools CP-SAT): ładowanie ograniczeń (dostępność, wymagania, cele godzinowe MTD), soft penalties za nadgodziny, priorytet wypełniania zmian nad limitami |
-| `ManagerService` | CRUD ról/zmian/users, statystyki, giveaway management, wymagania kadrowe, urlopy (approve/reject), dashboard, konfiguracja restauracji |
-| `EmployeeService` | Dostępność (+ status endpoint), grafik z listą współpracowników, obecność, integracja Google Calendar (OAuth 2.0) |
+| `SuperadminService` | Zarządzanie tenantami w całym systemie, podgląd wszystkich użytkowników (Cross-Tenant), dodawanie managerów dla nowych lokali, resetowanie haseł. |
+| `SolverService` | Generowanie grafiku (OR-Tools CP-SAT): ładowanie ograniczeń (dostępność, wymagania, cele godzinowe MTD, restrykcje **Role-Based Shifts**), soft penalties za nadgodziny, priorytet wypełniania zmian nad limitami |
+| `ManagerService` | CRUD ról/zmian/users (w tym **edycja emaili pracowników**), statystyki, giveaway management, wymagania kadrowe, urlopy (approve/reject), dashboard, konfiguracja restauracji w obrębie danego Tenanta |
+| `EmployeeService` | Dostępność (+ status endpoint), grafik z listą współpracowników, widok przefiltrowanych zmian wg przypisanych ról stanowiskowych, obecność, integracja Google Calendar (OAuth 2.0) |
 | `SchedulerService` | Zapis batch, listowanie, publikacja grafiku z powiadomieniami push |
 | `PosService` | CRUD stref/stołów/kategorii/menu/modyfikatorów, zarządzanie zamówieniami i płatnościami, snapshotowanie cen |
 | `KDSService` | **Monotoniczny sync batch** (walidacja wag stanów, anti-ghosting, audit log), **Pacing Engine** (anchor-based course staggering, `delay_start_sec`) |
@@ -298,7 +350,7 @@ sequenceDiagram
     M->>F: Klik "Generuj grafik"
     F->>B: POST /scheduler/generate
     B->>S: solve(start_date, end_date, save=False)
-    S->>S: Load: users, roles, shifts, requirements, availability
+    S->>S: Load: users, roles, shifts, requirements, availability (filtered by Tenant)
     S->>S: Fetch MTD hours (month-to-date)
     S->>S: CP-SAT Solver (constraints + soft penalties)
     Note over S: Priorytet: wypełnienie zmiany (+50k) > kara za nadgodziny (-2k)
@@ -331,7 +383,7 @@ sequenceDiagram
     B->>B: Create ShiftGiveaway (OPEN)
     B->>B: Notify managers + eligible employees (in-app + push)
     B-->>F: {id, status: created}
-    Note over B: Powiadomienia trafiają do managerów i kwalifikujących się pracowników
+    Note over B: Powiadomienia trafiają do managerów i kwalifikujących się pracowników (wg. JobRole)
 
     alt Pracownik przejmuje
         E2->>F: Widzi zmianę na giełdzie
@@ -387,18 +439,19 @@ System obsługuje powiadomienia push za pomocą Firebase Cloud Messaging:
 | Zdarzenie | Odbiorcy | Kanał |
 |-----------|----------|-------|
 | Opublikowanie grafiku | Pracownicy z przypisaniami | In-app + Push |
-| Nowa zmiana na giełdzie | Managerowie + kwalifikujący się pracownicy | In-app + Push |
+| Nowa zmiana na giełdzie | Managerowie + kwalifikujący się pracownicy (z odpowiednią rolą) | In-app + Push |
 | Zmiana przejęta z giełdy | Oddający pracownik + managerowie | In-app + Push |
 | Nowy wniosek urlopowy | Managerowie | In-app + Push |
 | Zatwierdzenie/odrzucenie urlopu | Wnioskujący pracownik | In-app + Push |
 
 ## Bezpieczeństwo
 
+- **Multi-Tenant Auth**: Logowanie wielodostępowe i token JWT izolowany dla zadanego Tenanta.
 - **JWT Auth**: Tokeny ważne 60 min (pbkdf2_sha256 password hashing)
 - **Manager PIN**: Konfigurowalny zmienną `MANAGER_REGISTRATION_PIN` (domyślnie `1234`)
-- **Rejestracja wyłączona**: Konta tworzy wyłącznie Manager (`POST /manager/users`)
+- **Rejestracja wyłączona**: Konta tworzy wyłącznie Manager (`POST /manager/users`) lub Superadmin.
 - **Aktywacja użytkowników**: Dezaktywowani użytkownicy nie mogą się zalogować (`is_active`)
-- **Role-Based Access**: Manager vs Employee — middleware sprawdza `role_system`
+- **Role-Based Access**: Różne obszary systemu na podstawie `role_system` (SUPERADMIN, MANAGER, EMPLOYEE)
 - **Encrypted Tokens**: Tokeny Google (access + refresh) szyfrowane Fernetem (`ENCRYPTION_KEY`)
 - **CORS**: Skonfigurowany na `*` (dev), do zawężenia w produkcji
 - **Google OAuth 2.0**: Klucze przechowywane jako zmienne środowiskowe
