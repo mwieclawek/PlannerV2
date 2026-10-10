@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**Kompleksowa aplikacja do automatycznego generowania grafików pracy, zarządzania zespołem i obsługi zamówień kuchennych dla restauracji i lokali gastronomicznych.**
+**Kompleksowa aplikacja do automatycznego generowania grafików pracy, zarządzania zespołem i obsługi zamówień kuchennych z obsługą wielu restauracji (Multi-Tenancy).**
 
 [![Backend](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi)](backend/)
 [![Frontend](https://img.shields.io/badge/Frontend-Flutter-02569B?logo=flutter)](frontend/)
@@ -14,7 +14,22 @@
 
 ---
 
+## 🏢 Architektura Wielodostępna (Multi-Tenancy)
+System wspiera wiele restauracji na pojedynczej instancji (model Tenant):
+- Każda restauracja (Tenant) posiada własną nazwę oraz unikalny identyfikator logowania (`slug` / Login ID).
+- **Dual-Login**: Logowanie odbywa się poprzez globalnie unikalny adres `email` LUB kombinację `username` + `Login ID` (tenant_slug).
+- Izolacja danych: Modele bazy danych oraz payload tokenów JWT są zabezpieczone i odseparowane z użyciem `tenant_id`.
+
+---
+
 ## ✨ Funkcjonalności
+
+### 👑 Panel Superadmina (Globalny)
+| Moduł | Opis |
+|-------|------|
+| 🌐 **Globalny Dashboard** | Dostęp pod `/#/superadmin` dla globalnych administratorów systemu. |
+| 🏢 **Zarządzanie Restauracjami** | Tworzenie, edycja i podgląd wszystkich lokali (Tenants) w systemie. |
+| 👥 **Konta Globalne** | Wgląd w bazę wszystkich użytkowników, tworzenie pierwszych kont managerów dla nowych restauracji, możliwość resetu hasła managera. |
 
 ### 👔 Panel Managera
 | Moduł | Opis |
@@ -22,8 +37,8 @@
 | 🏠 **Dashboard** | Podgląd dziennego grafiku, kalendarz, statystyki zespołu |
 | 🗓️ **Auto-Grafik** | Inteligentny generator OR-Tools CP-SAT z trybem szkicu (Draft → Save → Publish), ostrzeżenia kadrowe |
 | ✏️ **Edycja grafiku** | Ręczne przypisanie/usunięcie pracowników, batch save, widok wymagań kadrowych |
-| 👥 **Zarządzanie zespołem** | Tworzenie kont, przypisywanie ról, aktywacja/dezaktywacja, reset hasła, cele godzinowe/zmianowe |
-| ⚙️ **Konfiguracja** | Role (stanowiska), definicje zmian z dniami obowiązywania, wymagania kadrowe (globalne i per-datę), dane lokalu, godziny otwarcia |
+| 👥 **Zarządzanie zespołem** | Tworzenie kont, **dodawanie i edycja adresów e-mail pracowników**, przypisywanie ról, aktywacja/dezaktywacja, reset hasła, cele godzinowe/zmianowe |
+| ⚙️ **Konfiguracja** | Role (stanowiska), **definicje zmian z przypisaniem do konkretnych ról (Role-Based Shifts)**, wymagania kadrowe (globalne i per-datę), dane lokalu, godziny otwarcia |
 | 📋 **Obecności** | Ewidencja czasu pracy, zatwierdzanie/odrzucanie, ręczne dodawanie, eksport PDF |
 | 🔄 **Giełda Zmian** | Zarządzanie prośbami o oddanie zmiany, sugerowane zastępstwa, przydzielanie/anulowanie |
 | 🏖️ **Urlopy** | Przeglądanie wniosków urlopowych, zatwierdzanie/odrzucanie, widok kalendarza urlopów |
@@ -35,7 +50,7 @@
 | Moduł | Opis |
 |-------|------|
 | 📅 **Mój Grafik** | Kalendarz z opublikowanymi zmianami, lista współpracowników na zmianę |
-| 📝 **Dostępność** | Preferowany / Dostępny / Niedostępny — tygodniowy grid |
+| 📝 **Dostępność** | Preferowany / Dostępny / Niedostępny — tygodniowy grid. **Pracownicy widzą tylko zmiany relewantne dla przypisanych im ról**. |
 | ⏰ **Obecność** | Check-in / Check-out z domyślnymi godzinami z grafiku |
 | 🔄 **Oddawanie zmian** | Zgłoszenie oddania, śledzenie statusu, przejmowanie zmian innych pracowników |
 | 🏖️ **Urlopy** | Składanie wniosków urlopowych, śledzenie statusu |
@@ -90,9 +105,8 @@ flutter pub get
 flutter run -d web-server --web-port 5000
 ```
 
-> **Uwaga**: Samodzielna rejestracja jest wyłączona. Konta tworzy wyłącznie Manager.
-> Pierwszy manager musi być utworzony przez API: `POST /auth/register` z `manager_pin`.
-> PIN managera konfiguruje się zmienną `MANAGER_REGISTRATION_PIN` (domyślnie `1234`).
+> **Uwaga**: System wspiera teraz wielu tenantów. Konta pracowników i managerów lokalu zarządza Manager lub Superadmin.
+> Początkowy dostęp globalny może być przydzielony z uprawnieniami `SUPERADMIN`.
 
 ---
 
@@ -137,6 +151,7 @@ PlannerV2/
 │       │   ├── login_screen.dart
 │       │   ├── server_setup_screen.dart
 │       │   ├── privacy_policy_screen.dart
+│       │   ├── superadmin/         # Global dashboard dla ról SUPERADMIN
 │       │   ├── manager/            # Dashboard + 8 zakładek
 │       │   ├── employee/           # Dashboard + 5 ekranów
 │       │   └── pos/                # POS: waiter, kds, orders, setup
@@ -163,18 +178,18 @@ PlannerV2/
 ### Auth (`/auth`)
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
-| `POST` | `/auth/token` | Login (OAuth2 password flow) |
-| `POST` | `/auth/register` | Rejestracja managera (z PIN) |
-| `GET` | `/auth/me` | Dane zalogowanego użytkownika |
+| `POST` | `/auth/token` | Login (Dual-login: email lub username+tenant_slug) |
+| `POST` | `/auth/register` | Rejestracja globalnego administratora / menedżera |
+| `GET` | `/auth/me` | Dane zalogowanego użytkownika (z tenant_id i uprawnieniami) |
 | `PUT` | `/auth/change-password` | Zmiana hasła |
 
 ### Manager (`/manager`)
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
 | `CRUD` | `/manager/roles` | Role (stanowiska) |
-| `CRUD` | `/manager/shifts` | Definicje zmian |
+| `CRUD` | `/manager/shifts` | Definicje zmian (Role-Based Shifts) |
 | `GET/POST` | `/manager/requirements` | Wymagania kadrowe |
-| `GET/POST` | `/manager/users` | Lista / tworzenie pracowników |
+| `GET/POST` | `/manager/users` | Lista / tworzenie pracowników (możliwość edycji e-maila) |
 | `PUT` | `/manager/users/{id}` | Aktualizacja użytkownika |
 | `PUT` | `/manager/users/{id}/roles` | Przypisanie ról |
 | `PUT` | `/manager/users/{id}/password` | Reset hasła |
@@ -195,7 +210,7 @@ PlannerV2/
 ### Employee (`/employee`)
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
-| `GET/POST` | `/employee/availability` | Moja dostępność |
+| `GET/POST` | `/employee/availability` | Moja dostępność (zmiany wg ról) |
 | `GET` | `/employee/availability/status` | Status wysłanej dostępności |
 | `GET` | `/employee/my-schedule` | Mój grafik |
 | `GET` | `/employee/schedules/all` | Grafik całego zespołu |
@@ -261,7 +276,7 @@ PlannerV2/
 |---------|------|----------|
 | `DATABASE_URL` | Connection string bazy danych | ✅ (prod) |
 | `SECRET_KEY` | Klucz JWT | ✅ |
-| `MANAGER_REGISTRATION_PIN` | PIN do rejestracji managera | ❌ (domyślnie `1234`) |
+| `MANAGER_REGISTRATION_PIN` | PIN do rejestracji managera (opcjonalny dla starszej metody logowania) | ❌ |
 | `ENCRYPTION_KEY` | Klucz Fernet do szyfrowania tokenów Google | ❌ |
 | `GOOGLE_CLIENT_ID` | OAuth 2.0 Client ID | ❌ |
 | `GOOGLE_CLIENT_SECRET` | OAuth 2.0 Client Secret | ❌ |

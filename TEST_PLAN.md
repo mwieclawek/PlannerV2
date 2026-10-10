@@ -20,12 +20,13 @@ python -m pytest tests/ -v --junitxml=test-results/backend.xml
 backend/tests/
 ├── conftest.py                    # Fixtures: client, session, auth_headers, employee_headers
 ├── test_api.py                    # Podstawowe testy API (rejestracja, login, CRUD)
-├── test_auth_unit.py              # Testy jednostkowe: hash, verify, JWT
+├── test_auth_unit.py              # Testy jednostkowe: hash, verify, JWT, multi-tenant auth
 ├── test_employee.py               # Endpointy employee: dostępność, grafik, autoryzacja
-├── test_manager_edge_cases.py     # Edge cases: role, zmiany, RBAC
+├── test_manager_edge_cases.py     # Edge cases: role, zmiany z przypisanymi rolami, RBAC
 ├── test_manager_attendance.py     # Obecności: CRUD, filtrowanie, zatwierdzanie
 ├── test_manager_dashboard.py      # Dashboard: dashboard-home, statystyki
-├── test_manager_users.py          # Zarządzanie użytkownikami: tworzenie, update
+├── test_manager_users.py          # Zarządzanie użytkownikami: email, tworzenie, update
+├── test_superadmin.py             # Testy panelu Superadmina i izolacji danych Tenantów
 ├── test_user_update.py            # Aktualizacja użytkownika: dane, cele, is_active
 ├── test_scheduler_unit.py         # Scheduler: generowanie, batch save, publish
 ├── test_solver_unit.py            # Solver CP-SAT: constraints, preferencje, warnings
@@ -43,21 +44,22 @@ backend/tests/
 
 | Moduł | Plik testowy | Zakres |
 |-------|-------------|--------|
-| Auth | `test_auth_unit.py` | Hashowanie haseł, weryfikacja, tworzenie/walidacja JWT |
+| Auth | `test_auth_unit.py` | Hashowanie haseł, weryfikacja, tworzenie/walidacja JWT, **dual-login (email vs username+slug)** |
 | API (podstawy) | `test_api.py` | Rejestracja, login, CRUD ról/zmian, generowanie grafiku |
 | Employee | `test_employee.py` | Dostępność, grafik, autoryzacja |
-| Manager (RBAC) | `test_manager_edge_cases.py` | Edge cases ról/zmian, kontrola dostępu |
+| Manager (RBAC) | `test_manager_edge_cases.py` | Edge cases ról/zmian, kontrola dostępu, **powiązanie zmian z rolami** |
 | Manager (Attendance) | `test_manager_attendance.py` | Obecności CRUD, filtry, zatwierdzanie/odrzucanie |
 | Manager (Dashboard) | `test_manager_dashboard.py` | Dashboard home, statystyki |
-| Manager (Users) | `test_manager_users.py` | Tworzenie użytkowników |
+| Manager (Users) | `test_manager_users.py` | Tworzenie użytkowników, **dodawanie/edycja adresu email** |
+| **Superadmin & Tenant** | `test_superadmin.py` | **Rola SUPERADMIN, tworzenie Tenantów (slug), globalny dashboard, izolacja po tenant_id, reset haseł managerów** |
 | User Update | `test_user_update.py` | Edycja użytkownika, cele godzinowe, is_active |
 | Scheduler | `test_scheduler_unit.py` | Generowanie, batch save, publikacja, ręczne przypisania |
 | Solver | `test_solver_unit.py` | CP-SAT: puste dane, brak wymagań, niedostępność, preferencje, dopasowanie ról, ostrzeżenia |
 | Solver Edge | `test_solver_edge_cases.py` | Przypadki brzegowe solvera |
 | PDF | `test_pdf_export.py` | Eksport PDF obecności |
-| **KDS Sync** | `test_kds.py` | **Monotoniczny sync batch: walidacja wag stanów, anti-ghosting VOIDED, audit log KDSEventLog** |
-| **KDS Pacing** | `test_kds.py` | **Anchor-based pacing: obliczanie delay_start_sec per-kurs** |
-| **KDS API** | `test_kds_api.py` | **Integracja POST /pos/v2/kds/sync: izolowana baza SQLite, JWT auth, pełny przepływ sync** |
+| KDS Sync | `test_kds.py` | Monotoniczny sync batch: walidacja wag stanów, anti-ghosting VOIDED, audit log KDSEventLog |
+| KDS Pacing | `test_kds.py` | Anchor-based pacing: obliczanie delay_start_sec per-kurs |
+| KDS API | `test_kds_api.py` | Integracja POST /pos/v2/kds/sync: izolowana baza SQLite, JWT auth, pełny przepływ sync |
 
 ### Fixture'y (conftest.py)
 
@@ -80,19 +82,21 @@ flutter test
 ## Testy Manualne
 
 ### Scenariusz 1: Logowanie i Zarządzanie Kontem
-1. ✅ Zaloguj się jako manager
+1. ✅ Zaloguj się jako manager (sprawdź dual-login: przez email lub username + Login ID / slug)
 2. ✅ Utwórz konto pracownika (zakładka Zespół → +)
-3. ✅ Przypisz pracownikowi rolę
-4. ✅ Zaloguj się jako pracownik
-5. ✅ Dezaktywuj konto pracownika (jako manager)
-6. ✅ Sprawdź że dezaktywowany pracownik nie może się zalogować
+3. ✅ Dodaj i wyedytuj adres email pracownika
+4. ✅ Przypisz pracownikowi rolę
+5. ✅ Zaloguj się jako pracownik (przez przypisany email lub username + slug)
+6. ✅ Dezaktywuj konto pracownika (jako manager)
+7. ✅ Sprawdź że dezaktywowany pracownik nie może się zalogować
 
 ### Scenariusz 2: Konfiguracja
 1. ✅ Dodaj role (Barista, Kucharz) z kolorami
-2. ✅ Dodaj zmiany (8:00-16:00, 16:00-24:00)
-3. ✅ Sprawdź walidację duplikatów godzin
-4. ✅ Edytuj istniejącą rolę
-5. ✅ Usuń rolę
+2. ✅ Dodaj zmiany i przypisz je do konkretnych ról (Role-Based Shifts)
+3. ✅ Zaloguj się jako pracownik i upewnij się, że widzi w grafiku/dostępnościach tylko zmiany zgodne z jego rolami
+4. ✅ Sprawdź walidację duplikatów godzin
+5. ✅ Edytuj istniejącą rolę
+6. ✅ Usuń rolę
 
 ### Scenariusz 3: Grafik — Pełny Cykl
 1. ✅ Ustaw wymagania kadrowe
@@ -124,6 +128,15 @@ flutter test
 7. ⬜ Wyłącz Wi-Fi → spróbuj zmienić stan offline → włącz Wi-Fi → batch sync
 8. ⬜ Sprawdź że stale updates są odrzucane (monotonic validation)
 9. ⬜ Zapłać split payment (gotówka + karta)
+
+### Scenariusz 7: Architektura Multi-Tenant i Superadmin
+1. ✅ Zaloguj się na globalny dashboard (`/#/superadmin`) jako użytkownik z rolą `SUPERADMIN`.
+2. ✅ Utwórz nową restaurację (Tenant), nadając jej unikalną nazwę i `slug` (Login ID).
+3. ✅ Sprawdź poprawność widoku wszystkich użytkowników z różnych restauracji.
+4. ✅ Dodaj pierwszego managera do nowo utworzonej restauracji.
+5. ✅ Przetestuj funkcję resetowania hasła managera z panelu Superadmina.
+6. ✅ Zaloguj się na nowo utworzonego managera za pomocą jego emaila oraz (w osobnej próbie) za pomocą username + Login ID.
+7. ✅ Sprawdź izolację danych: upewnij się, że nowo dodany manager widzi wyłącznie pracowników, zmiany i dane swojej własnej restauracji (payload JWT zawiera poprawny `tenant_id`).
 
 ## CI/CD (Jenkins)
 
