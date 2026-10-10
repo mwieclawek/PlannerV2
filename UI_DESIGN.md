@@ -52,7 +52,8 @@
 
 ### Login (`/login`)
 - Logo aplikacji (widget `AppLogo`)
-- Pola: Login (username), Hasło
+- Obsługa architektury Multi-Tenancy (wielodostępność) - wiele restauracji na jednej instancji.
+- Pola: **Kod restauracji** (Login ID), **Login lub Email**, **Hasło**
 - Przycisk: **Zaloguj**
 - Brak opcji samodzielnej rejestracji
 
@@ -60,6 +61,18 @@
 - Skanowanie kodu QR z adresem serwera
 - Ręczne wpisanie URL backendu
 - Zapisywane w `ConfigService` (SharedPreferences)
+
+---
+
+### Superadmin Dashboard (`/#/superadmin`)
+- Dostępne dla użytkowników o globalnej roli `SUPERADMIN`.
+- Lista wszystkich restauracji (Tenantów) prezentowana w formie Kart.
+- Karty restauracji oferują:
+  - Toggla do edycji statusu.
+  - Ikonę ołówka do edycji nazwy i slug (identyfikatora/kodu restauracji).
+  - Przycisk **Użytkownicy** – otwiera okno dialogowe z listą użytkowników przypisanych do danej restauracji (wraz z opcją resetu hasła managera).
+  - Przycisk **Dodaj managera**.
+- Floating Action Button (+) pozwalający na akcję **Dodaj Restaurację**.
 
 ---
 
@@ -94,14 +107,14 @@ Bottom Navigation Bar z 6 zakładkami:
 - FAB (+) — tworzenie nowego konta pracownika
 - Kliknięcie → `EmployeeDetailDialog`:
   - Przypisywanie ról (checkboxy)
-  - Edycja danych (imię, email, cele godzinowe)
+  - Edycja danych (imię, **adres email**, cele godzinowe)
   - Reset hasła
   - Aktywacja / dezaktywacja (`is_active`)
 - Filtr: aktywni / wszyscy
 
 #### Setup Tab (Ustawienia)
 - **Sekcja Role**: lista + formularz dodawania (nazwa + kolor)
-- **Sekcja Zmiany**: lista + formularz (nazwa + godziny start/end)
+- **Sekcja Zmiany**: lista + formularz (nazwa + godziny start/end). *Zmiany (ShiftDefinition) są teraz przypisane do konkretnych ról (JobRoles).*
 - **Sekcja Restauracja**: nazwa, adres, godziny otwarcia
 - Inline edycja i usuwanie (ikony ołówka/kosza)
 
@@ -138,6 +151,7 @@ Bottom Navigation Bar z 3 zakładkami:
 
 #### Availability View Tab
 - Grid: Dni × Zmiany (tydzień)
+- **Widoczne są tylko zmiany istotne dla pracownika (powiązane z jego przypisanymi rolami).**
 - Tap-to-toggle statusu: ✅ Preferuję → ⚪ Neutralnie → ❌ Niedostępny
 - Nawigacja tygodniowa
 - Przycisk Zapisz
