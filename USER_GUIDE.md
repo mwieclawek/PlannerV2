@@ -14,6 +14,7 @@
 6. [Konfiguracja Serwera i Pierwsze Logowanie](#6-konfiguracja-serwera-i-pierwsze-logowanie)
 7. [Najczęstsze Pytania (FAQ)](#7-najczęstsze-pytania-faq)  
 8. [Pomoc i Zgłaszanie Błędów](#8-pomoc-i-zgłaszanie-błędów)
+9. [Panel SuperAdmina (Multi-Tenancy)](#9-panel-superadmina-multi-tenancy)
 
 ---
 
@@ -30,10 +31,16 @@ System rozróżnia dwie role:
 
 > **⚠️ Ważne**: Samodzielna rejestracja jest **wyłączona**. Konta tworzy wyłącznie Manager. Pierwszy Manager musi zostać utworzony przez API z użyciem kodu PIN.
 
-### 1.2 Logowanie
+### 1.2 Logowanie (Multi-Tenancy)
 
+System wspiera architekturę wielu restauracji (Tenantów) na jednej instancji. Logowanie może odbywać się na dwa sposoby:
+
+1. **Logowanie adresem e-mail** — używasz swojego globalnie unikalnego adresu e-mail oraz hasła. (Login ID restauracji nie jest wymagane).
+2. **Logowanie po nazwie użytkownika** — wpisujesz swój **Login** (username), **Hasło** oraz **Login ID** (slug) Twojej restauracji.
+
+Kroki logowania:
 1. Otwórz aplikację w przeglądarce lub na urządzeniu mobilnym.
-2. Podaj swój **Login** (username) i **Hasło**.
+2. Wypełnij odpowiednie pola logowania w zależności od wybranego sposobu (E-mail lub Login + Login ID).
 3. Kliknij **„Zaloguj"**.
 
 > **💡 Tip**: Jeśli aplikacja prosi o adres serwera, skontaktuj się z Managerem — może udostępnić konfigurację przez **kod QR** (ikona QR w panelu Managera).
@@ -134,6 +141,7 @@ Zmiany określają **przedziały czasowe** pracy (np. „Rano" 08:00–16:00).
 | Start (HH:MM) | Godzina rozpoczęcia | ✅ |
 | Koniec (HH:MM) | Godzina zakończenia | ✅ |
 | Dni obowiązywania | Zaznacz dni tygodnia (Pn–Nd), domyślnie: wszystkie | ✅ |
+| Role | Zmiany są powiązane z konkretnymi rolami (JobRoles). Pracownik widzi podczas zgłaszania dostępności tylko te zmiany, które odpowiadają jego stanowisku. | ✅ |
 
 - Kliknij **„Dodaj Zmianę"** → pojawi się na liście.
 - Aby edytować: kliknij ikonę ✏️ → zmień dane → **„Zapisz"**.
@@ -288,7 +296,7 @@ Kliknij **„+"** → wypełnij:
 | Login (username) | Unikalna nazwa użytkownika | ✅ |
 | Hasło | Min. 6 znaków | ✅ |
 | Imię i Nazwisko | Wyświetlane w grafiku | ✅ |
-| Email | Do kontaktu (opcjonalnie) | ❌ |
+| Email | Do kontaktu i globalnego logowania (Managerowie mogą dodawać/edytować email pracowników) | ❌ |
 
 #### Dialog szczegółów pracownika
 
@@ -410,6 +418,8 @@ Tygodniowy grid (dni × zmiany):
 
 3. Kliknij **„Zapisz"** — preferencje zostaną wysłane.
 
+> **ℹ️ Zmiany przypisane do ról**: Na liście zobaczysz wyłącznie te zmiany, które są powiązane z Twoimi przypisanymi rolami (JobRoles). Ułatwia to precyzyjne określanie dyspozycji tylko dla relevantnych zmian.
+
 > **⚠️ Ważne**: Jeśli **nie złożysz** dostępności na dany tydzień, algorytm **nie przypisze Cię do żadnej zmiany** w tym tygodniu! Algorytm interpretuje brak dyspozycji jako „pozycja nieznana" i bezpiecznie pomija.
 
 > **💡 Tip**: Złóż dostępność jak najwcześniej — Manager generuje grafik na podstawie Twoich preferencji. Im wcześniej, tym lepiej!
@@ -509,7 +519,7 @@ Przed rozpoczęciem pracy z POS, Manager musi skonfigurować środowisko w panel
 
 1. **Strefy** — dodaj strefy restauracji (np. „Sala Główna", „Ogródek").
 2. **Stoliki** — dodaj stoliki przypisane do stref z liczbą miejsc.
-3. **Kategorie** — utwórz dynamiczne kategorie menu (np. Przystawki, Dania Główne, Napoje) z kolorami i ikonami.
+3. **Kategorie** — utwórz dynamiczne kategorie menu (np. Przystawki, Dania Główne, Napoje) z kolorami i ikony.
 4. **Pozycje menu** — dodaj dania z cenami i **czasem przygotowania** (`prep_time_sec`) — kluczowe dla silnika pacingu KDS.
 5. **Grupy modyfikatorów** (opcjonalnie) — np. „Stopień Wysmażenia" z opcjami: Rare, Medium, Well Done.
 
@@ -658,6 +668,8 @@ Tak — system nie blokuje przejęcia na podstawie dostępności, tylko na podst
 
 W górnym pasku: ikona **❔** → dialog z najważniejszymi informacjami o obsłudze.
 
+Superadmini posiadają globalny dostęp (dashboard znajduje się pod adresem `/#/superadmin`).
+
 ### Zgłoszenie błędu
 
 1. Kliknij **❔** → **„Zgłoś błąd"**.
@@ -670,21 +682,21 @@ W górnym pasku: ikona **❔** → dialog z najważniejszymi informacjami o obs�
 
 Dostępna z ekranu logowania — link na dole strony.
 
-## Panel SuperAdmina (Multi-Tenancy)
-PlannerV2 od teraz posiada pe�ne wsparcie dla struktury Multi-Tenant z wbudowanym panelem w�a�ciciela systemu (SuperAdmin).
+## 9. Panel SuperAdmina (Multi-Tenancy)
+PlannerV2 od teraz posiada pełne wsparcie dla struktury Multi-Tenant z wbudowanym panelem właściciela systemu (SuperAdmin).
 
 Logowanie SuperAdmina:
-* Login: manager@default.pl (warto�� bazowa ustawiana przez seed bazy danych, w zale�no�ci od konfiguracji)
-* Has�o: zgodne z instrukcj� instalacji (domy�lnie "Manager1")
+* Login: manager@default.pl (wartość bazowa ustawiana przez seed bazy danych, w zależności od konfiguracji)
+* Hasło: zgodne z instrukcją instalacji (domyślnie "Manager1")
 
 Funkcje w panelu SuperAdmin:
-1. **Zarz�dzanie restauracjami:**
+1. **Zarządzanie restauracjami:**
    - Dodawanie nowych restauracji.
-   - Dezaktywowanie/aktywowanie dost�pu dla danej restauracji.
-   - Edycja danych (nazwa oraz unikalny ID/Slug restauracji u�ywany podczas logowania nazw� u�ytkownika).
-2. **Zarz�dzanie kontami:**
-   - Tworzenie pierwszego managera (w�a�ciciela) dla nowo dodanej restauracji.
-   - Przegl�danie listy wszystkich u�ytkownik�w i pracownik�w przypisanych do danej restauracji.
-   - Awaryjne resetowanie hase� dla wybranych u�ytkownik�w.
+   - Dezaktywowanie/aktywowanie dostępu dla danej restauracji.
+   - Edycja danych (nazwa oraz unikalny ID/Slug restauracji używany podczas logowania nazwą użytkownika).
+2. **Zarządzanie kontami:**
+   - Tworzenie pierwszego managera (właściciela) dla nowo dodanej restauracji.
+   - Przeglądanie listy wszystkich użytkowników i pracowników przypisanych do danej restauracji.
+   - Awaryjne resetowanie haseł dla wybranych użytkowników.
 
-Dzi�ki temu system pozwala na bezproblemow� obs�ug� wielu lokali gastronomicznych na jednej instancji serwera.
+Dzięki temu system pozwala na bezproblemową obsługę wielu lokali gastronomicznych na jednej instancji serwera.
