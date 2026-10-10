@@ -8,30 +8,7 @@ class SysAdminService {
   Future<List<Map<String, dynamic>>> getRestaurants() async {
     final response = await _dio.get('/sysadmin/restaurants');
     return List<Map<String, dynamic>>.from(response.data);
-  
-  Future<Map<String, dynamic>> updateRestaurant(int id, {String? name, String? loginId}) async {
-    final response = await _dio.put(
-      '/sysadmin/restaurants/',
-      data: {
-        if (name != null) 'name': name,
-        if (loginId != null) 'login_id': loginId,
-      },
-    );
-    return response.data;
   }
-
-  Future<List<Map<String, dynamic>>> getRestaurantUsers(int id) async {
-    final response = await _dio.get('/sysadmin/restaurants//users');
-    return List<Map<String, dynamic>>.from(response.data);
-  }
-
-  Future<void> resetUserPassword(String userId, String newPassword) async {
-    await _dio.put(
-      '/sysadmin/users//reset-password',
-      data: {'new_password': newPassword},
-    );
-  }
-}
 
   Future<Map<String, dynamic>> createRestaurant(String name, String loginId) async {
     final response = await _dio.post(
@@ -39,6 +16,17 @@ class SysAdminService {
       data: {
         'name': name,
         'login_id': loginId,
+      },
+    );
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateRestaurant(int id, {String? name, String? loginId}) async {
+    final response = await _dio.put(
+      '/sysadmin/restaurants/$id',
+      data: {
+        if (name != null) 'name': name,
+        if (loginId != null) 'login_id': loginId,
       },
     );
     return response.data;
@@ -71,25 +59,14 @@ class SysAdminService {
     return response.data;
   }
 
-  Future<Map<String, dynamic>> updateRestaurant(int id, {String? name, String? loginId}) async {
-    final response = await _dio.put(
-      '/sysadmin/restaurants/',
-      data: {
-        if (name != null) 'name': name,
-        if (loginId != null) 'login_id': loginId,
-      },
-    );
-    return response.data;
-  }
-
   Future<List<Map<String, dynamic>>> getRestaurantUsers(int id) async {
-    final response = await _dio.get('/sysadmin/restaurants//users');
+    final response = await _dio.get('/sysadmin/restaurants/$id/users');
     return List<Map<String, dynamic>>.from(response.data);
   }
 
   Future<void> resetUserPassword(String userId, String newPassword) async {
     await _dio.put(
-      '/sysadmin/users//reset-password',
+      '/sysadmin/users/$userId/reset-password',
       data: {'new_password': newPassword},
     );
   }

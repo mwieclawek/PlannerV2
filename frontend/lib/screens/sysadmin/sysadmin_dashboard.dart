@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../providers/providers.dart';
@@ -212,8 +212,6 @@ class _SysAdminDashboardScreenState
     );
   }
 
-  @override
-  
   void _showEditRestaurantDialog(int restaurantId, String currentName, String currentSlug) {
     final nameCtrl = TextEditingController(text: currentName);
     final slugCtrl = TextEditingController(text: currentSlug);
@@ -296,7 +294,8 @@ class _SysAdminDashboardScreenState
                 itemCount: users.length,
                 itemBuilder: (context, index) {
                   final user = users[index];
-                  final isManager = user['role_system'] == 'manager' || user['role_system'] == 'admin';
+                  final role = (user['role_system'] ?? '').toString().toLowerCase();
+                  final isManager = role == 'manager' || role == 'admin';
                   return ListTile(
                     leading: Icon(isManager ? Icons.admin_panel_settings : Icons.person),
                     title: Text('${user['full_name']} (${user['username']})'),
@@ -460,32 +459,6 @@ class _SysAdminDashboardScreenState
                               onPressed: () => _showAddManagerDialog(r['id'], r['name']),
                             ),
                           ],
-                        ),
-                        Text(
-                          'Login ID: ${r['slug']}',
-                          style: TextStyle(color: Colors.grey.shade700),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(Icons.people, size: 16, color: Colors.grey.shade600),
-                            const SizedBox(width: 4),
-                            Text('${r['user_count']} użytkowników'),
-                            const SizedBox(width: 16),
-                            Icon(Icons.admin_panel_settings,
-                                size: 16, color: Colors.grey.shade600),
-                            const SizedBox(width: 4),
-                            Text('${r['manager_count']} managerów'),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.person_add),
-                            label: const Text('Dodaj pierwszego managera'),
-                            onPressed: () => _showAddManagerDialog(r['id'], r['name']),
-                          ),
                         ),
                       ],
                     ),
