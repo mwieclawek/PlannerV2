@@ -3,7 +3,7 @@ uvicorn
 sqlmodel
 psycopg2-binary
 asyncpg
-python-jose[cryptography]
+PyJWT
 passlib[bcrypt]
 python-multipart
 ortools

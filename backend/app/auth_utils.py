@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import os
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError
+
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -69,7 +71,7 @@ def decode_token(token: str, expected_type: str) -> dict:
         if payload.get("type") != expected_type:
             raise credentials_exception
         return payload
-    except JWTError:
+    except PyJWTError:
         raise credentials_exception
 
 

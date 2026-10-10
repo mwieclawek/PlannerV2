@@ -1240,9 +1240,37 @@ class SysAdminRestaurantStatusUpdate(BaseModel):
     is_active: bool
 
 class SysAdminRestaurantUpdate(BaseModel):
+    """Partial update of a restaurant. `login_id` is accepted as an alias of `slug`."""
     name: Optional[str] = None
     slug: Optional[str] = None
     login_id: Optional[str] = None
+
+    @field_validator('name')
+    @classmethod
+    def name_not_blank(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError('Name must be at least 2 characters')
+        return v
+
+    @model_validator(mode='after')
+    def resolve_slug(self):
+        import re
+        raw = self.slug if self.slug is not None else self.login_id
+        if raw is None:
+            return self
+        raw = raw.strip().lower()
+        if not re.match(_SLUG_RE, raw):
+            raise ValueError(
+                'slug (login_id) must be 2-63 chars: lowercase letters, digits and hyphens, '
+                'starting with a letter or digit'
+            )
+        self.slug = raw
+        self.login_id = raw
+        return self
+
 
 class SysAdminUserResponse(BaseModel):
     id: UUID
@@ -1253,8 +1281,14 @@ class SysAdminUserResponse(BaseModel):
     is_active: bool
     created_at: Optional[datetime] = None
 
+
 class SysAdminPasswordReset(BaseModel):
     new_password: str
+
+    @field_validator('new_password')
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        return _validate_password_strength(v)
 
 
 class SysAdminRestaurantResponse(BaseModel):
