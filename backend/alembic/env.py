@@ -38,10 +38,13 @@ target_metadata = SQLModel.metadata
 
 def get_url():
     """Get database URL from environment or config file."""
-    return os.getenv(
+    url = os.getenv(
         "DATABASE_URL",
         config.get_main_option("sqlalchemy.url", "sqlite:///./planner.db")
     )
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
 
 
 def run_migrations_offline() -> None:

@@ -2,6 +2,7 @@ fastapi
 uvicorn
 sqlmodel
 psycopg2-binary
+psycopg[binary]
 asyncpg
 PyJWT
 passlib[bcrypt]

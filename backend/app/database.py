@@ -7,6 +7,8 @@ DB_PATH = os.path.join(BASE_DIR, "planner.db")
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL or DATABASE_URL in ("sqlite:///./planner.db", "sqlite:///planner.db"):
     DATABASE_URL = f"sqlite:///{DB_PATH}"
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 print(f"Using database at: {DATABASE_URL}")
 
 connect_args = {}
