@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from uuid import UUID
 from datetime import datetime, date, timedelta, timezone
 from sqlmodel import Session, select
@@ -24,6 +24,15 @@ class ManagerService:
         else:
             self.tenant_id = tenant_id
 
+    # --- Tenant-scoped lookups (IDOR protection) ---
+    def _get_user(self, user_id: UUID) -> User:
+        user = self.session.exec(
+            select(User).where(User.id == user_id, User.tenant_id == self.tenant_id)
+        ).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
+
     # --- User Management ---
     def create_user(self, user_in: "UserCreate") -> User:
         # Check if username exists
@@ -48,6 +57,7 @@ class ManagerService:
             password_hash=hashed_password,
             full_name=user_in.full_name,
             role_system=user_in.role_system,
+            is_active=user_in.is_active,
             target_hours_per_month=user_in.target_hours_per_month,
             target_shifts_per_month=user_in.target_shifts_per_month,
             manager_pin=hashed_pin,
@@ -73,7 +83,7 @@ class ManagerService:
 
     def update_role(self, role_id: int, role_in: JobRoleCreate) -> JobRole:
         role = self.session.get(JobRole, role_id)
-        if not role:
+        if not role or role.tenant_id != self.tenant_id:
             raise HTTPException(status_code=404, detail="Role not found")
         role.name = role_in.name
         role.color_hex = role_in.color_hex
@@ -85,7 +95,7 @@ class ManagerService:
 
     def delete_role(self, role_id: int):
         role = self.session.get(JobRole, role_id)
-        if not role:
+        if not role or role.tenant_id != self.tenant_id:
             raise HTTPException(status_code=404, detail="Role not found")
         try:
             self.session.delete(role)
@@ -132,11 +142,13 @@ class ManagerService:
         logger.info(f"Created new shift definition: {shift.name} (ID: {shift.id})")
         return shift
 
-    def update_shift(self, shift_id: int, shift_in: ShiftDefCreate) -> ShiftDefinition:
+    def update_shift(self, shift_id: int, shift_in: ShiftDefCreate, background_tasks=None, changed_by_user_id: Optional[UUID] = None) -> ShiftDefinition:
         shift = self.session.get(ShiftDefinition, shift_id)
-        if not shift:
+        if not shift or shift.tenant_id != self.tenant_id:
              raise HTTPException(status_code=404, detail="Shift not found")
         
+        old_val = f"{shift.name} {shift.start_time.strftime('%H:%M')}-{shift.end_time.strftime('%H:%M')}"
+
         s_time = datetime.strptime(shift_in.start_time, "%H:%M").time()
         e_time = datetime.strptime(shift_in.end_time, "%H:%M").time()
 
@@ -149,7 +161,7 @@ class ManagerService:
         if existing:
             raise HTTPException(status_code=400, detail="Shift with these hours already exists")
 
-        from ..models import ShiftDefinitionDayLink, JobRole
+        from ..models import ShiftDefinitionDayLink, JobRole, ShiftAuditLog
         shift.name = shift_in.name
         shift.start_time = s_time
         shift.end_time = e_time
@@ -168,14 +180,28 @@ class ManagerService:
             link = ShiftDefinitionDayLink(shift_def_id=shift.id, day_of_week=d)
             self.session.add(link)
             
+        new_val = f"{shift_in.name} {shift_in.start_time}-{shift_in.end_time}"
+        self.session.add(ShiftAuditLog(
+            restaurant_id=self.tenant_id,
+            shift_id=str(shift.id),
+            changed_by_user_id=changed_by_user_id,
+            action="UPDATE_SHIFT_HOURS",
+            old_value=old_val,
+            new_value=new_val
+        ))
+
         self.session.commit()
         self.session.refresh(shift)
         logger.info(f"Updated shift definition: {shift.name} (ID: {shift.id})")
+
+        # Changed hours/name must propagate to already-synced Google Calendar events
+        from .google_calendar_service import enqueue, resync_shift_definition_task
+        enqueue(background_tasks, resync_shift_definition_task, shift.id, self.tenant_id)
         return shift
 
     def delete_shift(self, shift_id: int):
         shift = self.session.get(ShiftDefinition, shift_id)
-        if not shift:
+        if not shift or shift.tenant_id != self.tenant_id:
             raise HTTPException(status_code=404, detail="Shift not found")
         try:
             self.session.delete(shift)
@@ -185,8 +211,20 @@ class ManagerService:
             raise HTTPException(status_code=400, detail=f"Cannot delete shift: {str(e)}")
 
     # --- Requirements ---
+    def _tenant_shift_ids(self) -> set:
+        return set(self.session.exec(
+            select(ShiftDefinition.id).where(ShiftDefinition.tenant_id == self.tenant_id)
+        ).all())
+
     def set_requirements(self, reqs: List[RequirementCreate]) -> List[StaffingRequirement]:
         results = []
+        tenant_shift_ids = self._tenant_shift_ids()
+        tenant_role_ids = set(self.session.exec(
+            select(JobRole.id).where(JobRole.tenant_id == self.tenant_id)
+        ).all())
+        for r in reqs:
+            if r.shift_def_id not in tenant_shift_ids or r.role_id not in tenant_role_ids:
+                raise HTTPException(status_code=404, detail="Shift or role not found")
         
         # Determine the scope of days to clear based on the incoming request
         # If the request contains dates, clear those dates. If day_of_week, clear those days.
@@ -203,7 +241,10 @@ class ManagerService:
         old_reqs_count = 0
         if dates_to_clear:
             old_reqs = self.session.exec(
-                select(StaffingRequirement).where(StaffingRequirement.date.in_(list(dates_to_clear)))
+                select(StaffingRequirement).where(
+                    StaffingRequirement.date.in_(list(dates_to_clear)),
+                    StaffingRequirement.shift_def_id.in_(tenant_shift_ids),
+                )
             ).all()
             for old in old_reqs:
                 self.session.delete(old)
@@ -211,7 +252,10 @@ class ManagerService:
                 
         if days_to_clear:
             old_reqs = self.session.exec(
-                select(StaffingRequirement).where(StaffingRequirement.day_of_week.in_(list(days_to_clear)))
+                select(StaffingRequirement).where(
+                    StaffingRequirement.day_of_week.in_(list(days_to_clear)),
+                    StaffingRequirement.shift_def_id.in_(tenant_shift_ids),
+                )
             ).all()
             for old in old_reqs:
                 self.session.delete(old)
@@ -243,13 +287,16 @@ class ManagerService:
         return results
 
     def get_requirements(self, start_date: date, end_date: date) -> List[StaffingRequirement]:
+        tenant_shift_ids = self._tenant_shift_ids()
         specific = self.session.exec(select(StaffingRequirement).where(
             StaffingRequirement.date >= start_date,
-            StaffingRequirement.date <= end_date
+            StaffingRequirement.date <= end_date,
+            StaffingRequirement.shift_def_id.in_(tenant_shift_ids),
         )).all()
         
         global_reqs = self.session.exec(select(StaffingRequirement).where(
-            StaffingRequirement.day_of_week != None
+            StaffingRequirement.day_of_week != None,
+            StaffingRequirement.shift_def_id.in_(tenant_shift_ids),
         )).all()
         
         return list(specific) + list(global_reqs)
@@ -325,9 +372,7 @@ class ManagerService:
 
     # --- User Role Management ---
     def update_user(self, user_id: UUID, update: UserUpdate) -> User:
-        user = self.session.get(User, user_id)
-        if not user:
-             raise HTTPException(status_code=404, detail="User not found")
+        user = self._get_user(user_id)
              
         # Use exclude_unset=False to allow explicitly passed None fields 
         # But wait, if we use exclude_unset=False we overwrite everything with None!
@@ -362,17 +407,39 @@ class ManagerService:
             if new_full_name:
                 data["full_name"] = new_full_name
 
+        # Mass-assignment guard: only these columns may ever be written through this endpoint.
+        allowed = {"full_name", "email", "role_system", "target_hours_per_month",
+                   "target_shifts_per_month", "is_active"}
+        was_active = user.is_active
         for key, value in data.items():
-            setattr(user, key, value)
+            if key in allowed:
+                setattr(user, key, value)
         self.session.add(user)
+
+        # Deactivated users must stop receiving push notifications
+        if was_active and user.is_active is False:
+            self.purge_user_devices(user.id)
+
         self.session.commit()
         self.session.refresh(user)
         return user
 
+    def purge_user_devices(self, user_id: UUID) -> int:
+        """Delete all FCM device tokens of a user (does not commit)."""
+        from ..models import UserDevice
+        devices = self.session.exec(select(UserDevice).where(UserDevice.user_id == user_id)).all()
+        for d in devices:
+            self.session.delete(d)
+        return len(devices)
+
     def update_user_roles(self, user_id: UUID, role_ids: List[int]):
-        user = self.session.get(User, user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        user = self._get_user(user_id)
+        if role_ids:
+            valid = set(self.session.exec(
+                select(JobRole.id).where(JobRole.id.in_(role_ids), JobRole.tenant_id == self.tenant_id)
+            ).all())
+            if valid != set(role_ids):
+                raise HTTPException(status_code=404, detail="Role not found")
 
         existing_links = self.session.exec(select(UserJobRoleLink).where(UserJobRoleLink.user_id == user_id)).all()
         for link in existing_links:
@@ -422,7 +489,10 @@ class ManagerService:
                 "target_hours_per_month": user.target_hours_per_month,
             "target_shifts_per_month": user.target_shifts_per_month,
             "is_active": user.is_active,
-            "job_roles": [r.id for r in user.job_roles]
+            "job_roles": [r.id for r in user.job_roles],
+            "is_google_calendar_connected": bool(
+                user.encrypted_google_access_token or user.encrypted_google_refresh_token
+            ),
             }
             
             if next_shift:
@@ -444,6 +514,7 @@ class ManagerService:
 
     def get_user_stats(self, user_id: UUID) -> dict:
         from sqlalchemy import func
+        self._get_user(user_id)
 
         
         # 1. Total shifts completed (from Attendance)
@@ -761,52 +832,155 @@ class ManagerService:
                 "role_name": role.name if role else None,
                 "start_time": shift.start_time.strftime("%H:%M") if shift else None,
                 "end_time": shift.end_time.strftime("%H:%M") if shift else None,
+                "target_shift_id": g.target_shift_id,
                 "suggestions": suggestions
             })
         
         return result
 
-    def reassign_giveaway(self, giveaway_id: UUID, new_user_id: UUID) -> dict:
-        from ..models import ShiftGiveaway, GiveawayStatus
-        
-        giveaway = self.session.get(ShiftGiveaway, giveaway_id)
+    def _get_giveaway(self, giveaway_id: UUID):
+        from ..models import ShiftGiveaway
+        giveaway = self.session.exec(
+            select(ShiftGiveaway)
+            .join(Schedule, ShiftGiveaway.schedule_id == Schedule.id)
+            .join(User, Schedule.user_id == User.id)
+            .where(ShiftGiveaway.id == giveaway_id, User.tenant_id == self.tenant_id)
+        ).first()
         if not giveaway:
             raise HTTPException(status_code=404, detail="Giveaway not found")
+        return giveaway
+
+    def reassign_giveaway(
+        self,
+        giveaway_id: UUID,
+        new_user_id: Optional[UUID] = None,
+        target_shift_id: Optional[Union[UUID, str]] = None,
+        background_tasks=None,
+        changed_by_user_id: Optional[UUID] = None
+    ) -> dict:
+        from ..models import GiveawayStatus, Schedule, ShiftRoleLink, JobRole, ShiftAuditLog
         
+        giveaway = self._get_giveaway(giveaway_id)
         if giveaway.status != GiveawayStatus.OPEN:
             raise HTTPException(status_code=400, detail="Giveaway is not open")
         
         schedule = giveaway.schedule
         if not schedule:
             raise HTTPException(status_code=404, detail="Schedule not found")
-        
-        # Reassign the schedule to the new user
+
+        target_id = target_shift_id or giveaway.target_shift_id
+        if target_id:
+            # Direct Shift Swap (A <-> B)
+            try:
+                target_uuid = UUID(str(target_id))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid target shift id")
+            
+            target_schedule = self.session.get(Schedule, target_uuid)
+            if not target_schedule:
+                raise HTTPException(status_code=404, detail="Target shift not found")
+            
+            user_a_id = giveaway.offered_by
+            user_b_id = target_schedule.user_id
+            if user_a_id == user_b_id:
+                raise HTTPException(status_code=400, detail="Cannot swap with your own shift")
+            
+            user_a = self._get_user(user_a_id)
+            user_b = self._get_user(user_b_id)
+            if not user_a.is_active or not user_b.is_active:
+                raise HTTPException(status_code=400, detail="One of the users is not active")
+            if user_a.tenant_id != self.tenant_id or user_b.tenant_id != self.tenant_id:
+                raise HTTPException(status_code=404, detail="User not found in tenant")
+
+            # Validate matching roles
+            user_a_role_ids = {r.id for r in user_a.job_roles}
+            user_b_role_ids = {r.id for r in user_b.job_roles}
+
+            if target_schedule.role_id not in user_a_role_ids:
+                raise HTTPException(status_code=400, detail="Employees do not have matching roles for shift swap")
+            if schedule.role_id not in user_b_role_ids:
+                raise HTTPException(status_code=400, detail="Employees do not have matching roles for shift swap")
+
+            allowed_a = set(self.session.exec(select(ShiftRoleLink.role_id).where(ShiftRoleLink.shift_def_id == schedule.shift_def_id)).all())
+            if allowed_a and schedule.role_id not in allowed_a:
+                raise HTTPException(status_code=400, detail="Employees do not have matching roles for shift swap")
+
+            allowed_b = set(self.session.exec(select(ShiftRoleLink.role_id).where(ShiftRoleLink.shift_def_id == target_schedule.shift_def_id)).all())
+            if allowed_b and target_schedule.role_id not in allowed_b:
+                raise HTTPException(status_code=400, detail="Employees do not have matching roles for shift swap")
+
+            # Atomic swap in a single DB transaction
+            schedule.user_id = user_b_id
+            target_schedule.user_id = user_a_id
+            giveaway.status = GiveawayStatus.TAKEN
+            giveaway.taken_by = user_b_id
+
+            self.session.add(schedule)
+            self.session.add(target_schedule)
+            self.session.add(giveaway)
+
+            self.session.add(ShiftAuditLog(
+                restaurant_id=self.tenant_id,
+                shift_id=str(schedule.id),
+                changed_by_user_id=changed_by_user_id,
+                action="SWAP_ASSIGNMENT",
+                old_value=str(user_a_id),
+                new_value=str(user_b_id)
+            ))
+            self.session.add(ShiftAuditLog(
+                restaurant_id=self.tenant_id,
+                shift_id=str(target_schedule.id),
+                changed_by_user_id=changed_by_user_id,
+                action="SWAP_ASSIGNMENT",
+                old_value=str(user_b_id),
+                new_value=str(user_a_id)
+            ))
+            self.session.commit()
+
+            # Google Calendar updates for both schedules
+            from .google_calendar_service import enqueue, reassign_event_task
+            enqueue(background_tasks, reassign_event_task, schedule.id, user_a_id, user_b_id, self.tenant_id)
+            enqueue(background_tasks, reassign_event_task, target_schedule.id, user_b_id, user_a_id, self.tenant_id)
+
+            return {
+                "status": "swapped",
+                "message": "Shifts swapped successfully",
+                "user_a_id": str(user_a_id),
+                "user_b_id": str(user_b_id)
+            }
+
+        # Standard Giveaway Reassign
+        if not new_user_id:
+            raise HTTPException(status_code=400, detail="new_user_id is required")
+
+        new_user_check = self._get_user(new_user_id)
+        if not new_user_check.is_active:
+            raise HTTPException(status_code=400, detail="User is not active")
+
         old_user_id = giveaway.offered_by
         schedule.user_id = new_user_id
         giveaway.status = GiveawayStatus.TAKEN
         giveaway.taken_by = new_user_id
-        
+
         self.session.add(schedule)
         self.session.add(giveaway)
+        self.session.add(ShiftAuditLog(
+            restaurant_id=self.tenant_id,
+            shift_id=str(schedule.id),
+            changed_by_user_id=changed_by_user_id,
+            action="REASSIGN",
+            old_value=str(old_user_id),
+            new_value=str(new_user_id)
+        ))
         self.session.commit()
-        
-        new_user = self.session.get(User, new_user_id)
-        old_user = self.session.get(User, old_user_id) if old_user_id else None
 
-        # Sync Google Calendars
-        from .google_calendar_service import GoogleCalendarService
-        try:
-            cal_svc = GoogleCalendarService(self.session)
-            if old_user:
-                cal_svc.delete_calendar_event(old_user, schedule.id)
-            if new_user:
-                cal_svc.sync_schedule_to_calendar(new_user, schedule)
-        except Exception as e:
-            logger.warning(f"Error syncing Google Calendar after manager reassign_giveaway: {e}")
+        # Google Calendar: delete the giver's event, create the taker's (background, own session)
+        from .google_calendar_service import enqueue, reassign_event_task
+        enqueue(background_tasks, reassign_event_task, schedule.id, old_user_id, new_user_id, self.tenant_id)
 
         return {
             "status": "reassigned",
-            "new_user_name": new_user.full_name if new_user else ""
+            "new_user_name": new_user_check.full_name
         }
 
     def get_available_employees_for_shift(self, date_in: date, shift_def_id: int) -> List[dict]:
@@ -941,11 +1115,9 @@ class ManagerService:
         return result
 
     def cancel_giveaway(self, giveaway_id: UUID):
-        from ..models import ShiftGiveaway, GiveawayStatus
+        from ..models import GiveawayStatus
         
-        giveaway = self.session.get(ShiftGiveaway, giveaway_id)
-        if not giveaway:
-            raise HTTPException(status_code=404, detail="Giveaway not found")
+        giveaway = self._get_giveaway(giveaway_id)
         
         giveaway.status = GiveawayStatus.CANCELLED
         self.session.add(giveaway)
@@ -972,7 +1144,11 @@ class ManagerService:
         from ..models import LeaveRequest, LeaveStatus, Availability, AvailabilityStatus, ShiftDefinition
         from datetime import datetime, timedelta, timezone
         
-        req = self.session.get(LeaveRequest, request_id)
+        req = self.session.exec(
+            select(LeaveRequest)
+            .join(User, LeaveRequest.user_id == User.id)
+            .where(LeaveRequest.id == request_id, User.tenant_id == self.tenant_id)
+        ).first()
         if not req:
             raise HTTPException(status_code=404, detail="Leave request not found")
             
@@ -988,7 +1164,9 @@ class ManagerService:
         
         if approved:
             # Auto-Set Availability on Approval
-            shifts = self.session.exec(select(ShiftDefinition)).all()
+            shifts = self.session.exec(
+                select(ShiftDefinition).where(ShiftDefinition.tenant_id == self.tenant_id)
+            ).all()
             
             curr_date = req.start_date
             while curr_date <= req.end_date:

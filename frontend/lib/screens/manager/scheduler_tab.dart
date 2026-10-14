@@ -17,6 +17,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
   DateTime _selectedWeekStart = _getMonday(DateTime.now());
   bool _isGenerating = false;
   bool _isSaving = false;
+  bool _isPublishing = false;
   bool _hasUnsavedChanges = false;
   Map<String, dynamic>? _lastResult;
   List<ScheduleEntry> _scheduleEntries = [];
@@ -728,6 +729,154 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     }
   }
 
+  Future<void> _publishSchedule() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Publikacja Grafiku'),
+        content: const Text(
+          'Czy na pewno chcesz opublikować grafik na ten tydzień? '
+          'Pracownicy zobaczą swoje zmiany i otrzymają powiadomienia, a grafik zostanie zsynchronizowany z Google Calendar.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Anuluj'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Opublikuj'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _isPublishing = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final res = await api.publishSchedule(_selectedWeekStart, _selectedWeekEnd);
+      final count = res['count'] ?? 0;
+      await _loadSchedule();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✓ Opublikowano grafik ($count zmian). Powiadomienia zostały wysłane.'),
+            backgroundColor: Colors.teal.shade700,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Błąd publikacji grafiku: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isPublishing = false);
+      }
+    }
+  }
+
+  Map<String, String> _computeShiftWarnings() {
+    final Map<String, String> warnings = {};
+
+    // Group schedules by user
+    final Map<String, List<ScheduleEntry>> byUser = {};
+    for (final s in _scheduleEntries) {
+      byUser.putIfAbsent(s.userId, () => []).add(s);
+    }
+
+    final Map<String, TeamMember> userMap = {for (final u in _users) u.id: u};
+
+    // Calculate monthly hours per user from _employeeHours
+    final Map<String, double> userMonthHours = {};
+    for (final stat in _employeeHours) {
+      final uid = stat['user_id'] as String?;
+      final hrs = (stat['total_hours'] as num?)?.toDouble() ?? 0.0;
+      if (uid != null) userMonthHours[uid] = hrs;
+    }
+
+    for (final entry in byUser.entries) {
+      final uid = entry.key;
+      final userShifts = entry.value;
+      final user = userMap[uid];
+
+      // Sort user shifts chronologically
+      userShifts.sort((a, b) {
+        final c = a.date.compareTo(b.date);
+        if (c != 0) return c;
+        return a.startTime.compareTo(b.startTime);
+      });
+
+      // 1. Check 11-hour daily rest between consecutive shifts ("Clopening")
+      for (int i = 0; i < userShifts.length - 1; i++) {
+        final curr = userShifts[i];
+        final next = userShifts[i + 1];
+
+        final currParts = curr.startTime.split(':');
+        final currEndParts = curr.endTime.split(':');
+        final nextParts = next.startTime.split(':');
+
+        if (currParts.length == 2 && currEndParts.length == 2 && nextParts.length == 2) {
+          final currStart = DateTime(
+            curr.date.year,
+            curr.date.month,
+            curr.date.day,
+            int.tryParse(currParts[0]) ?? 0,
+            int.tryParse(currParts[1]) ?? 0,
+          );
+          var currEnd = DateTime(
+            curr.date.year,
+            curr.date.month,
+            curr.date.day,
+            int.tryParse(currEndParts[0]) ?? 0,
+            int.tryParse(currEndParts[1]) ?? 0,
+          );
+          if (currEnd.isBefore(currStart) || currEnd.isAtSameMomentAs(currStart)) {
+            currEnd = currEnd.add(const Duration(days: 1));
+          }
+
+          final nextStart = DateTime(
+            next.date.year,
+            next.date.month,
+            next.date.day,
+            int.tryParse(nextParts[0]) ?? 0,
+            int.tryParse(nextParts[1]) ?? 0,
+          );
+
+          if (nextStart.isAfter(currEnd)) {
+            final restHours = nextStart.difference(currEnd).inMinutes / 60.0;
+            if (restHours < 11.0) {
+              const msg = 'Naruszenie normy odpoczynku dobowego (< 11h)';
+              warnings[curr.id] = msg;
+              warnings[next.id] = msg;
+            }
+          }
+        }
+      }
+
+      // 2. Check monthly target hours limit
+      if (user != null && user.targetHoursPerMonth != null) {
+        final totalHrs = userMonthHours[uid] ?? 0.0;
+        if (totalHrs > user.targetHoursPerMonth!) {
+          for (final s in userShifts) {
+            final existing = warnings[s.id];
+            final targetMsg =
+                'Przekroczono miesięczny cel godzin (${totalHrs.toStringAsFixed(1)}/${user.targetHoursPerMonth}h)';
+            warnings[s.id] = existing != null ? '$existing\n$targetMsg' : targetMsg;
+          }
+        }
+      }
+    }
+
+    return warnings;
+  }
+
   Future<void> _generateSchedule() async {
     // Warning if unsaved changes
     if (_hasUnsavedChanges) {
@@ -1033,6 +1182,39 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                       ),
                     ),
                   ],
+                  if (_scheduleEntries.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed:
+                            _isPublishing || _isSaving ? null : _publishSchedule,
+                        icon:
+                            _isPublishing
+                                ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                : const Icon(Icons.send_rounded),
+                        label: Text(
+                          _isPublishing ? 'Publikowanie...' : 'Opublikuj grafik',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal.shade700,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1048,6 +1230,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               roles: _roles,
               weekStart: _selectedWeekStart,
               warnings: _warnings,
+              shiftWarnings: _computeShiftWarnings(),
               onEmptyCellTap: _showAddAssignmentDialog,
               onAssignmentTap: _showEditAssignmentDialog,
             ),

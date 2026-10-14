@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../providers/config_provider.dart';
+import '../utils/server_url_validator.dart';
 
 class ServerSetupScreen extends ConsumerStatefulWidget {
   const ServerSetupScreen({super.key});
@@ -73,8 +74,8 @@ class _ServerSetupScreenState extends ConsumerState<ServerSetupScreen> with Widg
         _showError('Invalid QR Code format. Expected JSON with "apiUrl".');
       }
     } catch (e) {
-      // Not JSON? Maybe just a raw URL?
-      if (data.startsWith('http')) {
+      // Not JSON? Maybe just a raw URL? (scheme is strictly validated in _validateAndSave)
+      if (data.trim().toLowerCase().startsWith('http')) {
         _validateAndSave(data);
       } else {
         _showError('Invalid data format.');
@@ -85,10 +86,11 @@ class _ServerSetupScreenState extends ConsumerState<ServerSetupScreen> with Widg
   void _validateAndSave(String url) async {
     if (url.isEmpty) return;
     
-    // Basic validation
-    final uri = Uri.tryParse(url);
-    if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
-      _showError('Invalid URL.');
+    // Anti-phishing validation: only well-formed URLs; https:// is mandatory in release builds
+    // (a malicious QR code must not be able to redirect credentials to an arbitrary server).
+    final validUrl = ServerUrlValidator.normalize(url);
+    if (validUrl == null) {
+      _showError(ServerUrlValidator.errorFor(url) ?? 'Invalid URL.');
       return;
     }
 
@@ -96,7 +98,7 @@ class _ServerSetupScreenState extends ConsumerState<ServerSetupScreen> with Widg
       // Pause scanner while validating/saving
       await _scannerController.stop();
       
-      await ref.read(configProvider.notifier).setBaseUrl(url);
+      await ref.read(configProvider.notifier).setBaseUrl(validUrl);
       
       if (mounted) {
         // Router will handle redirection

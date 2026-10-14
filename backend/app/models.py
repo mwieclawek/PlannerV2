@@ -4,7 +4,7 @@ from typing import Optional, List
 from enum import Enum
 from pydantic import EmailStr, computed_field
 from sqlmodel import SQLModel, Field, Relationship, col
-from sqlalchemy import Column, Date, Integer, UniqueConstraint
+from sqlalchemy import Column, Date, Integer, String, UniqueConstraint
 from sqlalchemy import false as sa_false
 
 class RoleSystem(str, Enum):
@@ -196,8 +196,31 @@ class Schedule(SQLModel, table=True):
     role_id: int = Field(foreign_key="jobrole.id")
     is_published: bool = Field(default=False)
 
-
     user: User = Relationship(back_populates="schedules")
+
+# Alias Shift to Schedule for consistency across models and routers
+Shift = Schedule
+
+class ShiftAuditLog(SQLModel, table=True):
+    __tablename__ = "shiftauditlog"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    restaurant_id: int = Field(foreign_key="restaurantconfig.id", index=True)
+    shift_id: str = Field(index=True)
+    changed_by_user_id: Optional[UUID] = Field(default=None, foreign_key="user.id")
+    action: str
+    old_value: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
+    new_value: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    changed_by_user: Optional[User] = Relationship()
+
+    @property
+    def tenant_id(self) -> int:
+        return self.restaurant_id
+
+    @tenant_id.setter
+    def tenant_id(self, val: int):
+        self.restaurant_id = val
 
 class SystemSettings(SQLModel, table=True):
     __tablename__ = "system_settings"
@@ -240,6 +263,7 @@ class ShiftGiveaway(SQLModel, table=True):
     status: GiveawayStatus = Field(default=GiveawayStatus.OPEN)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     taken_by: Optional[UUID] = Field(default=None, foreign_key="user.id")
+    target_shift_id: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
 
     schedule: Schedule = Relationship()
 
@@ -656,5 +680,5 @@ def _auto_set_tenant_id(mapper, connection, target):
             except Exception:
                 pass
 
-for _model in [User, JobRole, ShiftDefinition, SystemSettings, TableZone, PosTable, Category, MenuItem, ModifierGroup, Order, Payment, RestaurantTable, KitchenOrder]:
+for _model in [User, JobRole, ShiftDefinition, SystemSettings, ShiftAuditLog, TableZone, PosTable, Category, MenuItem, ModifierGroup, Order, Payment, RestaurantTable, KitchenOrder]:
     event.listen(_model, 'before_insert', _auto_set_tenant_id)

@@ -61,7 +61,7 @@ class EmployeeService:
         from ..models import User
 
         user = self.session.get(User, user_id)
-        if not user:
+        if not user or (self.tenant_id is not None and user.tenant_id != self.tenant_id):
             raise HTTPException(status_code=404, detail="User not found")
 
         # 1. If auth_code is already an access token (from Flutter Web GoogleSignIn, starts with ya29.)
@@ -75,6 +75,10 @@ class EmployeeService:
                     user.google_access_token = auth_code
                     self.session.add(user)
                     self.session.commit()
+                    logger.warning(
+                        f"User {user_id} linked Google Calendar with a bare access token "
+                        "(no refresh_token): sync will stop after ~1h. Client must send a serverAuthCode."
+                    )
                     return
                 else:
                     try:
@@ -108,9 +112,16 @@ class EmployeeService:
             token_data = response.json()
             
             user.google_access_token = token_data.get("access_token")
-            # Refresh token is typically only returned on the first authorization
+            # Refresh token is returned only when the consent URL used access_type=offline
+            # (+ prompt=consent). Without it background sync dies after ~1h.
             if "refresh_token" in token_data:
                 user.google_refresh_token = token_data.get("refresh_token")
+            else:
+                logger.error(
+                    f"Google did not return a refresh_token for user {user_id}; "
+                    "calendar sync will stop when the access token expires. "
+                    "Re-link with access_type=offline & prompt=consent."
+                )
             self.session.add(user)
             self.session.commit()
         except httpx.HTTPStatusError as e:
@@ -173,10 +184,11 @@ class EmployeeService:
 
         # Fetch all published schedules in range (for coworker data)
         all_schedules_in_range = self.session.exec(
-            select(Schedule).where(
+            select(Schedule).join(User, Schedule.user_id == User.id).where(
                 Schedule.date >= start_date,
                 Schedule.date <= end_date,
-                Schedule.is_published == True
+                Schedule.is_published == True,
+                User.tenant_id == self.tenant_id
             )
         ).all()
         
@@ -193,7 +205,9 @@ class EmployeeService:
         all_user_ids = set(uid for entries in shift_workers_map.values() for uid, _ in entries)
         users_map: dict = {}
         if all_user_ids:
-            users = self.session.exec(select(User).where(User.id.in_(all_user_ids))).all()
+            users = self.session.exec(
+                select(User).where(User.id.in_(all_user_ids), User.tenant_id == self.tenant_id)
+            ).all()
             users_map = {u.id: u.full_name for u in users}
 
         # Fetch all role names we might need

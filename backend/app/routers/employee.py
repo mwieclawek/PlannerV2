@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 from datetime import date
 import logging
@@ -34,7 +34,7 @@ def link_google_calendar(
     service.link_google_calendar(current_user.id, request.auth_code)
     # Immediately sync current and upcoming shifts to the connected calendar
     cal_service = GoogleCalendarService(session)
-    sync_result = cal_service.sync_user_schedules(current_user.id)
+    sync_result = cal_service.sync_user_schedules(current_user.id, tenant_id=current_user.tenant_id)
     return {
         "status": "success",
         "message": "Google Calendar linked successfully",
@@ -47,7 +47,7 @@ def sync_google_calendar(
     session: Session = Depends(get_session)
 ):
     cal_service = GoogleCalendarService(session)
-    result = cal_service.sync_user_schedules(current_user.id)
+    result = cal_service.sync_user_schedules(current_user.id, tenant_id=current_user.tenant_id)
     return result
 
 @router.get("/google-calendar/status")
@@ -282,16 +282,19 @@ def get_my_attendance(
 # Shift Giveaway Endpoints
 from uuid import UUID
 from fastapi import HTTPException
-from ..models import ShiftGiveaway, GiveawayStatus, JobRole
+from ..models import ShiftGiveaway, GiveawayStatus, JobRole, ShiftRoleLink
+from ..schemas import OfferGiveawayRequest
 
 @router.post("/giveaway/{schedule_id}")
 def offer_shift_giveaway(
     schedule_id: UUID,
     background_tasks: BackgroundTasks,
+    payload: Optional[OfferGiveawayRequest] = None,
+    target_shift_id: Optional[str] = None,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Mark a shift as available for giveaway"""
+    """Mark a shift as available for giveaway or direct swap"""
     # Verify the schedule belongs to this user and is in the future
     schedule = session.exec(
         select(Schedule).where(
@@ -316,10 +319,52 @@ def offer_shift_giveaway(
     
     if existing:
         raise HTTPException(status_code=400, detail="This shift is already offered for giveaway")
-    
+
+    resolved_target_id = None
+    target_schedule = None
+    target_user = None
+    if payload and payload.target_shift_id:
+        resolved_target_id = str(payload.target_shift_id)
+    elif target_shift_id:
+        resolved_target_id = str(target_shift_id)
+
+    if resolved_target_id:
+        try:
+            target_uuid = UUID(resolved_target_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid target shift id")
+
+        target_schedule = session.get(Schedule, target_uuid)
+        if not target_schedule:
+            raise HTTPException(status_code=404, detail="Target shift not found")
+        if target_schedule.user_id == current_user.id:
+            raise HTTPException(status_code=400, detail="Cannot swap with your own shift")
+
+        target_user = session.get(User, target_schedule.user_id)
+        if not target_user or target_user.tenant_id != current_user.tenant_id:
+            raise HTTPException(status_code=404, detail="Target user not found")
+
+        # Validate matching roles
+        user_a_role_ids = {r.id for r in current_user.job_roles}
+        user_b_role_ids = {r.id for r in target_user.job_roles}
+
+        if target_schedule.role_id not in user_a_role_ids:
+            raise HTTPException(status_code=400, detail="Employees do not have matching roles for shift swap")
+        if schedule.role_id not in user_b_role_ids:
+            raise HTTPException(status_code=400, detail="Employees do not have matching roles for shift swap")
+
+        allowed_a = set(session.exec(select(ShiftRoleLink.role_id).where(ShiftRoleLink.shift_def_id == schedule.shift_def_id)).all())
+        if allowed_a and schedule.role_id not in allowed_a:
+            raise HTTPException(status_code=400, detail="Employees do not have matching roles for shift swap")
+
+        allowed_b = set(session.exec(select(ShiftRoleLink.role_id).where(ShiftRoleLink.shift_def_id == target_schedule.shift_def_id)).all())
+        if allowed_b and target_schedule.role_id not in allowed_b:
+            raise HTTPException(status_code=400, detail="Employees do not have matching roles for shift swap")
+
     giveaway = ShiftGiveaway(
         schedule_id=schedule_id,
         offered_by=current_user.id,
+        target_shift_id=str(target_schedule.id) if target_schedule else None,
     )
     session.add(giveaway)
     
@@ -386,7 +431,11 @@ def cancel_giveaway(
     current_user: User = Depends(get_current_user)
 ):
     """Cancel a giveaway offer"""
-    giveaway = session.get(ShiftGiveaway, giveaway_id)
+    giveaway = session.exec(
+        select(ShiftGiveaway)
+        .join(User, ShiftGiveaway.offered_by == User.id)
+        .where(ShiftGiveaway.id == giveaway_id, User.tenant_id == current_user.tenant_id)
+    ).first()
     
     if not giveaway:
         raise HTTPException(status_code=404, detail="Giveaway not found")
@@ -430,6 +479,7 @@ def get_my_giveaways(
             "role_name": role.name if role else None,
             "start_time": shift.start_time.strftime("%H:%M") if shift else None,
             "end_time": shift.end_time.strftime("%H:%M") if shift else None,
+            "target_shift_id": str(g.target_shift_id) if g.target_shift_id else None,
             "created_at": g.created_at.isoformat(),
         })
     
@@ -520,6 +570,7 @@ def get_open_giveaways_for_employee(
             "offered_by_name": offerer.full_name if offerer else "Unknown",
             "conflict_type": conflict_type,
             "availability_hint": availability_hint,
+            "target_shift_id": str(g.target_shift_id) if g.target_shift_id else None,
             "created_at": g.created_at.isoformat(),
         })
 
@@ -534,7 +585,13 @@ def claim_giveaway(
     current_user: User = Depends(get_current_user),
 ):
     """Employee claims an open giveaway shift."""
-    giveaway = session.get(ShiftGiveaway, giveaway_id)
+    # Tenant isolation: the giveaway's schedule must belong to the caller's restaurant
+    giveaway = session.exec(
+        select(ShiftGiveaway)
+        .join(Schedule, ShiftGiveaway.schedule_id == Schedule.id)
+        .join(User, Schedule.user_id == User.id)
+        .where(ShiftGiveaway.id == giveaway_id, User.tenant_id == current_user.tenant_id)
+    ).first()
     if not giveaway:
         raise HTTPException(status_code=404, detail="Giveaway not found")
     if giveaway.status != GiveawayStatus.OPEN:
@@ -618,15 +675,12 @@ def claim_giveaway(
 
     session.commit()
 
-    # Sync Google Calendars (remove from previous owner, add to new owner)
-    try:
-        cal_svc = GoogleCalendarService(session)
-        old_user = session.get(User, old_user_id) if old_user_id else None
-        if old_user:
-            cal_svc.delete_calendar_event(old_user, schedule.id)
-        cal_svc.sync_schedule_to_calendar(current_user, schedule)
-    except Exception as e:
-        logger.warning(f"Error syncing Google Calendar after giveaway claim: {e}")
+    # Sync Google Calendars in the background (primitive IDs only, own DB session):
+    # remove the event from the previous owner, create it for the new one.
+    from ..services.google_calendar_service import reassign_event_task
+    background_tasks.add_task(
+        reassign_event_task, schedule.id, old_user_id, current_user.id, current_user.tenant_id
+    )
 
     return {"status": "claimed", "schedule_id": str(schedule.id)}
 
@@ -734,7 +788,11 @@ def cancel_leave_request(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    req = session.get(LeaveRequest, request_id)
+    req = session.exec(
+        select(LeaveRequest)
+        .join(User, LeaveRequest.user_id == User.id)
+        .where(LeaveRequest.id == request_id, User.tenant_id == current_user.tenant_id)
+    ).first()
     if not req:
         raise HTTPException(status_code=404, detail="Leave request not found")
     if req.user_id != current_user.id:

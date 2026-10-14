@@ -9,7 +9,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from sqlmodel import Session, select
 from ..database import get_session
-from ..models import User, JobRole, ShiftDefinition, StaffingRequirement, RoleSystem, RestaurantConfig, Attendance, AttendanceStatus
+from ..models import User, JobRole, ShiftDefinition, StaffingRequirement, RoleSystem, RestaurantConfig, Attendance, AttendanceStatus, Schedule
 from ..auth_utils import get_current_user, verify_user_token
 from ..schemas import (
     JobRoleCreate, JobRoleResponse, 
@@ -103,10 +103,11 @@ def get_shifts(
 def update_shift(
     shift_id: int, 
     shift_in: ShiftDefCreate, 
+    background_tasks: BackgroundTasks,
     service: ManagerService = Depends(get_manager_service), 
-    _: User = Depends(get_manager_user)
+    current_user: User = Depends(get_manager_user)
 ):
-    return service.update_shift(shift_id, shift_in)
+    return service.update_shift(shift_id, shift_in, background_tasks=background_tasks, changed_by_user_id=current_user.id)
 
 @router.delete("/shifts/{shift_id}")
 def delete_shift(
@@ -149,14 +150,16 @@ def reset_user_password(
     user_id: UUID, 
     reset: PasswordReset,
     session: Session = Depends(get_session),
-    _: User = Depends(get_manager_user)
+    current_user: User = Depends(get_manager_user)
 ):
     # This involves auth_utils, maybe leave in router or move to UserService? 
     # For now stay here but use schemas.
     from ..auth_utils import get_password_hash
     
-    user = session.get(User, user_id)
-    if not user:
+    user = session.exec(
+        select(User).where(User.id == user_id, User.tenant_id == current_user.tenant_id)
+    ).first()
+    if not user or user.is_superadmin:
         raise HTTPException(status_code=404, detail="User not found")
         
     user.password_hash = get_password_hash(reset.new_password)
@@ -267,6 +270,15 @@ def get_available_employees(
 # Attendance Management Endpoints
 from ..models import Attendance, AttendanceStatus
 
+
+def _get_tenant_attendance(session: Session, attendance_id: UUID, current_user: User):
+    """Fetch an attendance record only if its employee belongs to the caller's restaurant."""
+    return session.exec(
+        select(Attendance)
+        .join(User, Attendance.user_id == User.id)
+        .where(Attendance.id == attendance_id, User.tenant_id == current_user.tenant_id)
+    ).first()
+
 @router.get("/attendance/pending")
 def get_pending_attendance(
     session: Session = Depends(get_session),
@@ -294,35 +306,53 @@ def get_pending_attendance(
 
 @router.put("/attendance/{attendance_id}/confirm")
 def confirm_attendance(
-    attendance_id: str,
+    attendance_id: UUID,
     session: Session = Depends(get_session),
-    _: User = Depends(get_manager_user)
+    current_user: User = Depends(get_manager_user)
 ):
     """Manager confirms unscheduled attendance"""
-    from uuid import UUID
-    attendance = session.get(Attendance, UUID(attendance_id))
+    attendance = _get_tenant_attendance(session, attendance_id, current_user)
     if not attendance:
         raise HTTPException(status_code=404, detail="Attendance not found")
     
+    old_status = attendance.status.value
     attendance.status = AttendanceStatus.CONFIRMED
     session.add(attendance)
+    from ..models import ShiftAuditLog
+    session.add(ShiftAuditLog(
+        restaurant_id=current_user.tenant_id,
+        shift_id=str(attendance.schedule_id or attendance.id),
+        changed_by_user_id=current_user.id,
+        action="CONFIRM_ATTENDANCE",
+        old_value=old_status,
+        new_value=AttendanceStatus.CONFIRMED.value
+    ))
     session.commit()
     return {"status": "confirmed"}
 
 @router.put("/attendance/{attendance_id}/reject")
 def reject_attendance(
-    attendance_id: str,
+    attendance_id: UUID,
     session: Session = Depends(get_session),
-    _: User = Depends(get_manager_user)
+    current_user: User = Depends(get_manager_user)
 ):
     """Manager rejects unscheduled attendance"""
-    from uuid import UUID
-    attendance = session.get(Attendance, UUID(attendance_id))
+    attendance = _get_tenant_attendance(session, attendance_id, current_user)
     if not attendance:
         raise HTTPException(status_code=404, detail="Attendance not found")
     
+    old_status = attendance.status.value
     attendance.status = AttendanceStatus.REJECTED
     session.add(attendance)
+    from ..models import ShiftAuditLog
+    session.add(ShiftAuditLog(
+        restaurant_id=current_user.tenant_id,
+        shift_id=str(attendance.schedule_id or attendance.id),
+        changed_by_user_id=current_user.id,
+        action="REJECT_ATTENDANCE",
+        old_value=old_status,
+        new_value=AttendanceStatus.REJECTED.value
+    ))
     session.commit()
     return {"status": "rejected"}
 
@@ -496,9 +526,21 @@ def get_all_attendance(
 def create_attendance(
     attendance_in: AttendanceCreate,
     session: Session = Depends(get_session),
-    _: User = Depends(get_manager_user)
+    current_user: User = Depends(get_manager_user)
 ):
     """Manually register attendance for an employee"""
+    employee = session.exec(
+        select(User).where(User.id == attendance_in.user_id, User.tenant_id == current_user.tenant_id)
+    ).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="User not found")
+    if attendance_in.schedule_id:
+        sched = session.exec(
+            select(Schedule).join(User, Schedule.user_id == User.id)
+            .where(Schedule.id == attendance_in.schedule_id, User.tenant_id == current_user.tenant_id)
+        ).first()
+        if not sched:
+            raise HTTPException(status_code=404, detail="Schedule not found")
     attendance = Attendance(**attendance_in.dict())
     session.add(attendance)
     session.commit()
@@ -606,11 +648,35 @@ def get_giveaways(
 def reassign_giveaway(
     giveaway_id: UUID,
     request: GiveawayReassignRequest,
+    background_tasks: BackgroundTasks,
     service: ManagerService = Depends(get_manager_service),
-    _: User = Depends(get_manager_user)
+    current_user: User = Depends(get_manager_user)
 ):
-    """Reassign a giveaway shift to a new user"""
-    return service.reassign_giveaway(giveaway_id, request.new_user_id)
+    """Reassign a giveaway shift to a new user or execute direct swap"""
+    return service.reassign_giveaway(
+        giveaway_id,
+        request.new_user_id,
+        target_shift_id=request.target_shift_id,
+        background_tasks=background_tasks,
+        changed_by_user_id=current_user.id
+    )
+
+@router.post("/giveaways/{giveaway_id}/swap")
+def swap_giveaway(
+    giveaway_id: UUID,
+    request: GiveawayReassignRequest,
+    background_tasks: BackgroundTasks,
+    service: ManagerService = Depends(get_manager_service),
+    current_user: User = Depends(get_manager_user)
+):
+    """Execute direct shift swap (A <-> B)"""
+    return service.reassign_giveaway(
+        giveaway_id,
+        request.new_user_id,
+        target_shift_id=request.target_shift_id,
+        background_tasks=background_tasks,
+        changed_by_user_id=current_user.id
+    )
 
 @router.delete("/giveaways/{giveaway_id}")
 def cancel_giveaway(
@@ -679,3 +745,65 @@ def get_leave_calendar(
 ):
     """Returns calendar entries for leave requests"""
     return service.get_leave_calendar(year, month)
+
+# --- Schedule Publishing & Audit Log ---
+from ..schemas import PublishScheduleRequest, ShiftAuditLogResponse
+from ..models import ShiftAuditLog
+
+@router.post("/schedules/publish")
+def publish_schedules(
+    background_tasks: BackgroundTasks,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    payload: Optional[PublishScheduleRequest] = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_manager_user)
+):
+    """Publish schedules in date range (marks is_published=True, sends push, syncs Google Calendar)"""
+    s_date = (payload.start_date if payload and payload.start_date else None) or start_date
+    e_date = (payload.end_date if payload and payload.end_date else None) or end_date
+    if not s_date or not e_date:
+        raise HTTPException(status_code=400, detail="start_date and end_date are required")
+
+    from ..services.scheduler_service import SchedulerService
+    sched_service = SchedulerService(session, current_user.tenant_id)
+    count = sched_service.publish_schedule(s_date, e_date, background_tasks, changed_by_user_id=current_user.id)
+    return {"status": "published", "count": count}
+
+@router.get("/shifts/{shift_id}/audit-log", response_model=List[ShiftAuditLogResponse])
+def get_shift_audit_log(
+    shift_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_manager_user)
+):
+    """Get audit log for a shift or schedule (tenant-filtered)"""
+    logs = session.exec(
+        select(ShiftAuditLog)
+        .where(
+            ShiftAuditLog.restaurant_id == current_user.tenant_id,
+            ShiftAuditLog.shift_id == str(shift_id)
+        )
+        .order_by(ShiftAuditLog.created_at.desc())
+    ).all()
+
+    res = []
+    for l in logs:
+        u_name = None
+        if l.changed_by_user_id:
+            u = session.get(User, l.changed_by_user_id)
+            if u:
+                u_name = u.full_name
+        res.append(
+            ShiftAuditLogResponse(
+                id=l.id,
+                restaurant_id=l.restaurant_id,
+                shift_id=l.shift_id,
+                changed_by_user_id=l.changed_by_user_id,
+                changed_by_user_name=u_name,
+                action=l.action,
+                old_value=l.old_value,
+                new_value=l.new_value,
+                created_at=l.created_at
+            )
+        )
+    return res

@@ -8,14 +8,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SolverService:
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, tenant_id: int | None = None):
         self.session = session
+        self.tenant_id = tenant_id
 
     def solve(self, start_date: date, end_date: date, save: bool = True):
         # 1. Fetch Data
-        employees = self.session.exec(select(User).where(User.is_active == True)).all()
-        shifts = self.session.exec(select(ShiftDefinition)).all()
-        roles = self.session.exec(select(JobRole)).all()
+        tid = self.tenant_id
+        emp_q = select(User).where(User.is_active == True)
+        shift_q = select(ShiftDefinition)
+        role_q = select(JobRole)
+        if tid is not None:
+            emp_q = emp_q.where(User.tenant_id == tid)
+            shift_q = shift_q.where(ShiftDefinition.tenant_id == tid)
+            role_q = role_q.where(JobRole.tenant_id == tid)
+        employees = self.session.exec(emp_q).all()
+        shifts = self.session.exec(shift_q).all()
+        roles = self.session.exec(role_q).all()
+        tenant_shift_ids = {s.id for s in shifts}
         
         # Helper to get range of dates
         delta = end_date - start_date
@@ -27,6 +37,9 @@ class SolverService:
         availabilities = self.session.exec(select(Availability).where(
             Availability.date >= start_date, Availability.date <= end_date
         )).all()
+        if tid is not None:
+            emp_ids = {e.id for e in employees}
+            availabilities = [a for a in availabilities if a.user_id in emp_ids]
         
         # Map availability: (str(user_id), date, shift_id) -> status string
         avail_map = {}
@@ -39,11 +52,15 @@ class SolverService:
             StaffingRequirement.date >= start_date, 
             StaffingRequirement.date <= end_date
         )).all()
+        if tid is not None:
+            specific_reqs = [r for r in specific_reqs if r.shift_def_id in tenant_shift_ids]
 
         # Fetch global requirements (where day_of_week is NOT NULL)
         global_reqs = self.session.exec(select(StaffingRequirement).where(
             StaffingRequirement.day_of_week != None
         )).all()
+        if tid is not None:
+            global_reqs = [r for r in global_reqs if r.shift_def_id in tenant_shift_ids]
         
         # Fetch month-to-date schedules for hours calculation
         month_start_date = start_date.replace(day=1)
@@ -51,6 +68,8 @@ class SolverService:
             Schedule.date >= month_start_date,
             Schedule.date < start_date
         )).all()
+        if tid is not None:
+            mtd_schedules = [s for s in mtd_schedules if s.user_id in emp_ids]
         
         # Calculate already scheduled hours per employee
         mtd_hours = {}
@@ -145,6 +164,21 @@ class SolverService:
                     # Allow overlap if <= 30 minutes (e.g. handover) AND not enveloped
                     if overlap_duration > 30 or is_enveloped:
                         shift_overlaps.append((s1.id, s2.id))
+
+        # Helper: Calculate pairs of consecutive shifts with < 11h rest ("Clopening")
+        clopening_pairs = []  # (s1_id, s2_id) where rest between end of s1 and start of s2 < 11h
+        dummy_d0 = date(2026, 1, 1)
+        dummy_d1 = date(2026, 1, 2)
+        for s1 in shifts:
+            start1 = datetime.combine(dummy_d0, s1.start_time)
+            end1 = datetime.combine(dummy_d0, s1.end_time)
+            if end1 <= start1:
+                end1 += timedelta(days=1)
+            for s2 in shifts:
+                start2 = datetime.combine(dummy_d1, s2.start_time)
+                rest_hours = (start2 - end1).total_seconds() / 3600.0
+                if rest_hours < 11.0:
+                    clopening_pairs.append((s1.id, s2.id))
 
         # C1. No overlapping shifts per employee per day & Max 1 role per shift
         for e in employees:
@@ -294,6 +328,31 @@ class SolverService:
                     penalty_weight = 50
                     objective_terms.append(shifts_worked * (-penalty_weight))
                     objective_terms.append(is_working * penalty_weight)
+
+        # 3. Labor Law Compliance – 11-hour Daily Rest ("Clopening") Soft Penalty
+        for e in employees:
+            for i in range(len(days) - 1):
+                d_curr = days[i]
+                d_next = days[i + 1]
+                if (d_next - d_curr).days != 1:
+                    continue
+
+                for s1_id, s2_id in clopening_pairs:
+                    vars_s1 = [
+                        work[(e.id, d_curr, s1_id, r.id)]
+                        for r in roles
+                        if (e.id, d_curr, s1_id, r.id) in work
+                    ]
+                    vars_s2 = [
+                        work[(e.id, d_next, s2_id, r.id)]
+                        for r in roles
+                        if (e.id, d_next, s2_id, r.id) in work
+                    ]
+                    if vars_s1 and vars_s2:
+                        violation_var = model.NewBoolVar(f"clopening_{e.id}_{d_curr}_{s1_id}_{s2_id}")
+                        model.Add(violation_var >= sum(vars_s1) + sum(vars_s2) - 1)
+                        # High penalty of -25000: strongly avoids clopening unless absolutely no other worker exists
+                        objective_terms.append(violation_var * -25000)
 
         model.Maximize(sum(objective_terms))
 

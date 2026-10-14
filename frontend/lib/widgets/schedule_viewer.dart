@@ -9,6 +9,7 @@ class ScheduleViewer extends StatelessWidget {
   final List<JobRole> roles;
   final DateTime weekStart;
   final List<StaffingWarning> warnings;
+  final Map<String, String> shiftWarnings;
   final void Function(DateTime date, int shiftId)? onEmptyCellTap;
   final void Function(ScheduleEntry entry)? onAssignmentTap;
 
@@ -19,6 +20,7 @@ class ScheduleViewer extends StatelessWidget {
     required this.roles,
     required this.weekStart,
     this.warnings = const [],
+    this.shiftWarnings = const {},
     this.onEmptyCellTap,
     this.onAssignmentTap,
   });
@@ -354,6 +356,36 @@ class ScheduleViewer extends StatelessWidget {
                                                                         color: Colors.purple.shade800,
                                                                         fontWeight: FontWeight.bold,
                                                                       ),
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                                if (!schedule.isPublished) ...[
+                                                                  const SizedBox(width: 4),
+                                                                  Container(
+                                                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                                                    decoration: BoxDecoration(
+                                                                      color: Colors.amber.shade100,
+                                                                      borderRadius: BorderRadius.circular(4),
+                                                                      border: Border.all(color: Colors.amber.shade400),
+                                                                    ),
+                                                                    child: Text(
+                                                                      'Szkic',
+                                                                      style: GoogleFonts.inter(
+                                                                        fontSize: 8,
+                                                                        color: Colors.amber.shade900,
+                                                                        fontWeight: FontWeight.bold,
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                                if (shiftWarnings.containsKey(schedule.id)) ...[
+                                                                  const SizedBox(width: 4),
+                                                                  Tooltip(
+                                                                    message: shiftWarnings[schedule.id]!,
+                                                                    child: Icon(
+                                                                      Icons.warning_amber_rounded,
+                                                                      size: 14,
+                                                                      color: Colors.amber.shade900,
                                                                     ),
                                                                   ),
                                                                 ],

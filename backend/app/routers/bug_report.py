@@ -7,7 +7,7 @@ import os
 import logging
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from ..auth_utils import get_current_user
 from ..models import User
 
@@ -20,9 +20,10 @@ GITHUB_REPO = "PlannerV2"
 
 
 class BugReportRequest(BaseModel):
-    title: str
-    description: str
-    steps_to_reproduce: str = ""
+    # Bounded to prevent oversized payloads being proxied to the GitHub API (DoS / abuse)
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=1, max_length=2000)
+    steps_to_reproduce: str = Field(default="", max_length=2000)
 
 
 class BugReportResponse(BaseModel):

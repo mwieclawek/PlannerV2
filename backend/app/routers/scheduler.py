@@ -1,5 +1,6 @@
 from datetime import date
 from typing import List
+from uuid import UUID
 from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlmodel import Session
 from ..database import get_session
@@ -15,7 +16,6 @@ from ..schemas import (
 router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 
 from ..tenant_context import require_tenant
-from uuid import UUID
 
 def get_scheduler_service(
     session: Session = Depends(get_session),
@@ -27,9 +27,10 @@ def get_scheduler_service(
 def generate_schedule(
     req: GenerateRequest,
     session: Session = Depends(get_session),
-    _: User = Depends(get_manager_user)
+    current_user: User = Depends(get_manager_user),
+    tenant_id: int = Depends(require_tenant),
 ):
-    service = SolverService(session)
+    service = SolverService(session, tenant_id=tenant_id)
     # Draft Mode: Do not save to DB immediately
     result = service.solve(req.start_date, req.end_date, save=False)
     return result
@@ -37,10 +38,11 @@ def generate_schedule(
 @router.post("/save_batch")
 def save_batch_schedule(
     batch: BatchSaveRequest,
+    background_tasks: BackgroundTasks,
     service: SchedulerService = Depends(get_scheduler_service),
     _: User = Depends(get_manager_user)
 ):
-    count = service.save_batch(batch)
+    count = service.save_batch(batch, background_tasks)
     return {"status": "saved", "count": count}
 
 @router.get("/list", response_model=List[ScheduleResponse])
@@ -58,80 +60,29 @@ def publish_schedule(
     end_date: date,
     background_tasks: BackgroundTasks,
     service: SchedulerService = Depends(get_scheduler_service),
-    _: User = Depends(get_manager_user)
+    current_user: User = Depends(get_manager_user)
 ):
-    count = service.publish_schedule(start_date, end_date, background_tasks)
+    count = service.publish_schedule(start_date, end_date, background_tasks, changed_by_user_id=current_user.id)
     return {"status": "published", "count": count}
 
 @router.post("/assignment")
 def manual_assign(
     assign: ManualAssignment,
-    session: Session = Depends(get_session),
+    background_tasks: BackgroundTasks,
+    service: SchedulerService = Depends(get_scheduler_service),
     current_user: User = Depends(get_manager_user)
 ):
-    # This logic is small enough for now, or could move to SchedulerService
-    # Keeping it simple for the moment but using schema
-    from ..models import Schedule, User
-    from sqlmodel import select
-    
-    # ensure user belongs to same tenant
-    assignee = session.get(User, assign.user_id)
-    if not assignee or assignee.tenant_id != current_user.tenant_id:
-        return {"status": "error", "message": "User not in tenant"}
-        
-    existing_daily = session.exec(select(Schedule).where(
-        Schedule.date == assign.date,
-        Schedule.user_id == assign.user_id
-    )).first()
-
-    if existing_daily:
-        existing_daily.shift_def_id = assign.shift_def_id
-        existing_daily.role_id = assign.role_id
-        session.add(existing_daily)
-        session.commit()
-        if existing_daily.is_published and existing_daily.user:
-            from ..services.google_calendar_service import GoogleCalendarService
-            try:
-                GoogleCalendarService(session).sync_schedule_to_calendar(existing_daily.user, existing_daily)
-            except Exception:
-                pass
-        return {"status": "updated", "id": str(existing_daily.id)}
-    else:
-        new_entry = Schedule(
-            date=assign.date,
-            shift_def_id=assign.shift_def_id,
-            user_id=assign.user_id,
-            role_id=assign.role_id,
-            is_published=False 
-        )
-        session.add(new_entry)
-        session.commit()
-        session.refresh(new_entry)
-        return {"status": "created", "id": str(new_entry.id)}
+    return service.assign(assign, background_tasks, changed_by_user_id=current_user.id)
 
 @router.delete("/assignment/{schedule_id}")
 def remove_assignment(
-    schedule_id: str, # UUIDs are strings in path
-    session: Session = Depends(get_session),
-    _: User = Depends(get_manager_user)
+    schedule_id: str,  # kept as str: a malformed id yields {"status": "not_found"} (API contract)
+    background_tasks: BackgroundTasks,
+    service: SchedulerService = Depends(get_scheduler_service),
+    current_user: User = Depends(get_manager_user)
 ):
-    from ..models import Schedule
-    import uuid
-    
     try:
-        u_id = uuid.UUID(schedule_id)
-        entry = session.get(Schedule, u_id)
-        if entry:
-            if entry.user and entry.is_published:
-                from ..services.google_calendar_service import GoogleCalendarService
-                try:
-                    GoogleCalendarService(session).delete_calendar_event(entry.user, entry.id)
-                except Exception:
-                    pass
-            session.delete(entry)
-            session.commit()
-            return {"status": "deleted"}
+        sched_uuid = UUID(schedule_id)
     except ValueError:
-        pass
-        
-    return {"status": "not_found"}
+        return {"status": "not_found"}
+    return service.remove_assignment(sched_uuid, background_tasks, changed_by_user_id=current_user.id)

@@ -406,6 +406,21 @@ class ApiService {
     );
   }
 
+  // Publish Schedule (Manager)
+  Future<Map<String, dynamic>> publishSchedule(
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
+    final sStr = startDate.toIso8601String().split('T').first;
+    final eStr = endDate.toIso8601String().split('T').first;
+    final response = await _dio.post(
+      '/manager/schedules/publish',
+      queryParameters: {'start_date': sStr, 'end_date': eStr},
+      data: {'start_date': sStr, 'end_date': eStr},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
   // Update Role
   Future<void> updateRole(int roleId, String name, String colorHex) async {
     await _dio.put(

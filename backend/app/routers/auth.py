@@ -4,6 +4,7 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel
 from sqlmodel import Session, select
 from datetime import timedelta
 from ..database import get_session
@@ -170,10 +171,35 @@ def refresh_access_token(
 
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid or inactive user")
+    ensure_tenant_active(user)
 
     new_access = create_access_token(data={"sub": user.username, "tenant_id": str(user.tenant_id) if user.tenant_id else None})
     new_refresh = create_refresh_token(data={"sub": user.username, "tenant_id": str(user.tenant_id) if user.tenant_id else None})
     return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
+
+
+class LogoutRequest(BaseModel):
+    fcm_token: Optional[str] = None
+
+
+@router.post("/logout")
+def logout(
+    payload: LogoutRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Unregister this device's FCM token so a logged-out user gets no more pushes."""
+    if payload.fcm_token:
+        from ..models import UserDevice
+        device = session.exec(
+            select(UserDevice).where(
+                UserDevice.fcm_token == payload.fcm_token, UserDevice.user_id == current_user.id
+            )
+        ).first()
+        if device:
+            session.delete(device)
+            session.commit()
+    return {"status": "logged_out"}
 
 
 @router.get("/me", response_model=UserResponse)
@@ -193,6 +219,9 @@ def read_users_me(current_user: User = Depends(get_current_user)):
         "tenant_slug": current_user.tenant.slug if current_user.tenant else None,
         "tenant_name": current_user.tenant.name if current_user.tenant else None,
         "is_superadmin": bool(current_user.is_superadmin),
+        "is_google_calendar_connected": bool(
+            current_user.encrypted_google_access_token or current_user.encrypted_google_refresh_token
+        ),
     }
 
 

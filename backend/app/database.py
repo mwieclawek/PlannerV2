@@ -4,8 +4,10 @@ import os
 # Use absolute path to ensure consistency regardless of CWD
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DB_PATH = os.path.join(BASE_DIR, "planner.db")
-DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
-print(f"Using database at: {DB_PATH}")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL or DATABASE_URL in ("sqlite:///./planner.db", "sqlite:///planner.db"):
+    DATABASE_URL = f"sqlite:///{DB_PATH}"
+print(f"Using database at: {DATABASE_URL}")
 
 connect_args = {}
 if "sqlite" in DATABASE_URL:

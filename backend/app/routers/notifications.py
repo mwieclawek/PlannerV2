@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from typing import List
 from ..database import get_session
 from ..models import User, Notification, UserDevice
 from .auth import get_current_user
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
@@ -39,15 +40,28 @@ def mark_notification_read(
     current_user: User = Depends(get_current_user),
 ):
     """Mark a notification as read."""
-    n = session.get(Notification, notification_id)
-    if n and n.user_id == current_user.id:
+    try:
+        nid = UUID(notification_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    # Scoped to the owner AND the owner's restaurant
+    n = session.exec(
+        select(Notification)
+        .join(User, Notification.user_id == User.id)
+        .where(
+            Notification.id == nid,
+            Notification.user_id == current_user.id,
+            User.tenant_id == current_user.tenant_id,
+        )
+    ).first()
+    if n:
         n.is_read = True
         session.add(n)
         session.commit()
     return {"status": "ok"}
 
 class DeviceToken(BaseModel):
-    token: str
+    token: str = Field(min_length=1, max_length=4096)
 
 @router.post("/devices")
 def register_device(
@@ -69,6 +83,24 @@ def register_device(
         session.add(new_device)
     session.commit()
     return {"status": "ok"}
+
+@router.post("/devices/unregister")
+def unregister_device_post(
+    payload: DeviceToken,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Remove an FCM token (body variant - keeps long tokens out of URLs/logs). Call on logout."""
+    existing = session.exec(
+        select(UserDevice).where(
+            UserDevice.fcm_token == payload.token, UserDevice.user_id == current_user.id
+        )
+    ).first()
+    if existing:
+        session.delete(existing)
+        session.commit()
+    return {"status": "ok"}
+
 
 @router.delete("/devices/{token}")
 def unregister_device(

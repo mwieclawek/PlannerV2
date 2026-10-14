@@ -35,6 +35,23 @@ def session_fixture() -> Generator[Session, None, None]:
         yield session
     SQLModel.metadata.drop_all(engine)
 
+@pytest.fixture(autouse=True)
+def _calendar_background_uses_test_session(request, monkeypatch):
+    """Background calendar workers open their own session; in tests point them at the shared
+    in-memory session (without closing it) so they never touch a real database file."""
+    if "session" not in request.fixturenames:
+        return
+    from contextlib import contextmanager
+    from app.services import google_calendar_service as gcs
+    test_session = request.getfixturevalue("session")
+
+    @contextmanager
+    def _bg():
+        yield test_session
+
+    monkeypatch.setattr(gcs, "background_session", _bg)
+
+
 @pytest.fixture(name="test_tenant")
 def test_tenant_fixture(session: Session):
     """Return the primary test tenant for all tests."""

@@ -13,8 +13,14 @@ from .models import User
 
 # ── JWT Configuration ──────────────────────────────────────────────────────────
 
+# Values that must never be used to sign tokens outside local development
+_INSECURE_SECRET_MARKERS = ("change-me", "dev-only-insecure", "changeme", "secret")
+_IS_PRODUCTION = os.getenv("APP_ENV", "").strip().lower() in ("prod", "production")
+
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not SECRET_KEY:
+    if _IS_PRODUCTION:
+        raise RuntimeError("JWT_SECRET_KEY must be set when APP_ENV=production")
     import warnings
     warnings.warn(
         "JWT_SECRET_KEY environment variable is not set! "
@@ -22,6 +28,20 @@ if not SECRET_KEY:
         stacklevel=1,
     )
     SECRET_KEY = "dev-only-insecure-key-change-in-production"
+elif any(m in SECRET_KEY.lower() for m in _INSECURE_SECRET_MARKERS) or len(SECRET_KEY) < 32:
+    if _IS_PRODUCTION:
+        raise RuntimeError(
+            "JWT_SECRET_KEY looks like a placeholder or is shorter than 32 chars. "
+            "Generate one with: openssl rand -hex 32"
+        )
+    import warnings
+    warnings.warn(
+        "JWT_SECRET_KEY looks like a placeholder or is shorter than 32 characters. "
+        "Generate a strong one (openssl rand -hex 32) before deploying.",
+        stacklevel=1,
+    )
+
+INACTIVE_DETAIL = "Inactive user or tenant"
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
@@ -96,11 +116,18 @@ async def verify_user_token(token: str, session: Session) -> User:
     user = session.exec(query).first()
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate credentials")
-    ensure_tenant_active(user)
+    # A deactivated account must lose access immediately, not only at next login:
+    # its (still unexpired) JWT would otherwise keep working.
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=INACTIVE_DETAIL)
+    ensure_tenant_active(user, detail=INACTIVE_DETAIL)
     return user
 
 
-def ensure_tenant_active(user: User) -> None:
+def ensure_tenant_active(
+    user: User,
+    detail: str = "Restauracja została zablokowana. Skontaktuj się z administratorem systemu.",
+) -> None:
     """Raise 403 if the user's restaurant has been blocked by the system owner.
 
     Superadmins are exempt so they can never lock themselves out of the panel.
@@ -109,10 +136,7 @@ def ensure_tenant_active(user: User) -> None:
         return
     restaurant = user.restaurant_config
     if restaurant is not None and not restaurant.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Restauracja została zablokowana. Skontaktuj się z administratorem systemu.",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
 async def get_current_user(

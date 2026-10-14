@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../providers/config_provider.dart';
+import '../utils/server_url_validator.dart';
 
 class QrConfigDialog extends ConsumerWidget {
   const QrConfigDialog({super.key});
@@ -11,7 +12,13 @@ class QrConfigDialog extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     debugPrint('Building QrConfigDialog...');
-    final baseUrl = ref.watch(configProvider);
+    final rawBaseUrl = ref.watch(configProvider);
+    // Never publish a QR code for an insecure/invalid server address (release: https only),
+    // otherwise employees could be led to scan a config that the app itself would reject.
+    final baseUrl = ServerUrlValidator.normalize(rawBaseUrl);
+    final urlError = rawBaseUrl != null && baseUrl == null
+        ? ServerUrlValidator.errorFor(rawBaseUrl)
+        : null;
     
     // Create the JSON string for the QR code
     final configJson = jsonEncode({'apiUrl': baseUrl});
@@ -30,6 +37,14 @@ class QrConfigDialog extends ConsumerWidget {
               style: TextStyle(fontSize: 14),
             ),
             const SizedBox(height: 20),
+            if (urlError != null) ...[
+              Text(
+                urlError,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+            ],
             if (baseUrl != null) ...[
               Container(
                 padding: const EdgeInsets.all(12),

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 from datetime import datetime, date as date_type, time
-from typing import List, Optional
+from typing import List, Optional, Union
 from uuid import UUID
 from .models import (
     RoleSystem, AvailabilityStatus, AttendanceStatus, GiveawayStatus, LeaveStatus,
@@ -127,11 +127,19 @@ class UserResponse(UserBase):
     # applies every submitted field via setattr, so exposing it there would let any
     # restaurant manager promote themselves to system owner.
     is_superadmin: bool = False
+    # Computed flag. The Google tokens themselves (access/refresh/expiry) and password hashes
+    # are NEVER part of any response schema.
+    is_google_calendar_connected: bool = False
 
     @model_validator(mode='before')
     @classmethod
     def extract_role_ids(cls, data):
-        """Convert JobRole ORM objects to plain int IDs."""
+        """Convert JobRole ORM objects to plain int IDs and derive the Google-connected flag."""
+        if hasattr(data, 'encrypted_google_access_token') or hasattr(data, 'encrypted_google_refresh_token'):
+            data.__dict__['is_google_calendar_connected'] = bool(
+                getattr(data, 'encrypted_google_access_token', None)
+                or getattr(data, 'encrypted_google_refresh_token', None)
+            )
         if hasattr(data, 'job_roles'):
             roles = data.job_roles
             if roles and hasattr(roles[0], 'id'):
@@ -299,6 +307,11 @@ class BatchSaveRequest(BaseModel):
     start_date: date_type
     end_date: date_type
     items: List[ScheduleBatchItem]
+    is_published: bool = False
+
+class PublishScheduleRequest(BaseModel):
+    start_date: Optional[date_type] = None
+    end_date: Optional[date_type] = None
 
 class ScheduleResponse(BaseModel):
     id: UUID
@@ -427,6 +440,9 @@ class AttendanceResponse(AttendanceBase):
         from_attributes = True
 
 # --- Shift Giveaway ---
+class OfferGiveawayRequest(BaseModel):
+    target_shift_id: Optional[Union[UUID, str]] = None
+
 class ShiftGiveawayResponse(BaseModel):
     id: UUID
     schedule_id: UUID
@@ -436,6 +452,7 @@ class ShiftGiveawayResponse(BaseModel):
     created_at: datetime
     taken_by: Optional[UUID] = None
     taken_by_name: Optional[str] = None
+    target_shift_id: Optional[Union[UUID, str]] = None
     # Schedule details
     date: Optional[date_type] = None
     shift_name: Optional[str] = None
@@ -455,7 +472,23 @@ class ShiftGiveawayWithSuggestions(ShiftGiveawayResponse):
     suggestions: List[GiveawaySuggestion] = []
 
 class GiveawayReassignRequest(BaseModel):
-    new_user_id: UUID
+    new_user_id: Optional[UUID] = None
+    target_shift_id: Optional[Union[UUID, str]] = None
+
+# --- Shift Audit Log ---
+class ShiftAuditLogResponse(BaseModel):
+    id: int
+    restaurant_id: int
+    shift_id: str
+    changed_by_user_id: Optional[UUID] = None
+    changed_by_user_name: Optional[str] = None
+    action: str
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class DashboardHomeResponse(BaseModel):
     working_today: List[ScheduleResponse]

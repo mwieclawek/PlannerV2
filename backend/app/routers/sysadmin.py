@@ -140,6 +140,12 @@ def update_restaurant_status(
     restaurant = _get_restaurant_or_404(session, restaurant_id)
     restaurant.is_active = payload.is_active
     session.add(restaurant)
+    if not payload.is_active:
+        # Blocked tenant: its users must stop receiving push notifications
+        from ..models import UserDevice
+        tenant_user_ids = select(User.id).where(User.tenant_id == restaurant.id)
+        for device in session.exec(select(UserDevice).where(UserDevice.user_id.in_(tenant_user_ids))).all():
+            session.delete(device)
     session.commit()
     session.refresh(restaurant)
 

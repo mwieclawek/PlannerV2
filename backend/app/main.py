@@ -39,6 +39,12 @@ async def lifespan(app: FastAPI):
     if not os.getenv("MANAGER_REGISTRATION_PIN"):
         raise ValueError("SECURITY STOP: MANAGER_REGISTRATION_PIN is not set!")
 
+    if not os.getenv("ENCRYPTION_KEY"):
+        logger.warning(
+            "ENCRYPTION_KEY is not set: Google OAuth tokens are stored UNENCRYPTED. "
+            "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        )
+
     logger.info("Application startup complete.")
     yield
     from .database import engine
