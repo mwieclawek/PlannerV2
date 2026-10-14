@@ -43,16 +43,40 @@ class _EmployeeGiveawayTabState extends ConsumerState<EmployeeGiveawayTab> {
   }
 
   Future<void> _claim(Map<String, dynamic> g) async {
+    final isDirectSwap = g['target_shift_id'] != null;
     // Show confirm dialog
     final confirm = await showDialog<bool>(
       context: context,
       builder:
           (ctx) => AlertDialog(
-            title: const Text('Wziąć zmianę?'),
+            title: Text(isDirectSwap ? 'Potwierdź wymianę zmiany' : 'Wziąć zmianę?'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (isDirectSwap) ...[
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.teal.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.swap_horiz, color: Colors.teal.shade700, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Jest to bezpośrednia wymiana zmian (A ↔ B). Twoja zmiana zostanie przekazana pracownikowi ${g['offered_by_name'] ?? ''}, a Ty przejmiesz poniższą zmianę.',
+                            style: TextStyle(fontSize: 12, color: Colors.teal.shade900),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 Text(
                   '${g['shift_name'] ?? ''} — ${g['date'] ?? ''}',
                   style: const TextStyle(fontWeight: FontWeight.bold),
@@ -61,6 +85,10 @@ class _EmployeeGiveawayTabState extends ConsumerState<EmployeeGiveawayTab> {
                 const SizedBox(height: 8),
                 Text(
                   'Od: ${g['offered_by_name'] ?? ''}',
+                  style: TextStyle(color: Colors.grey.shade600),
+                ),
+                Text(
+                  'Rola: ${g['role_name'] ?? ''}',
                   style: TextStyle(color: Colors.grey.shade600),
                 ),
                 if (g['conflict_type'] == 'same_day') ...[
@@ -229,18 +257,40 @@ class _EmployeeGiveawayTabState extends ConsumerState<EmployeeGiveawayTab> {
         itemBuilder: (context, index) {
           final g = _giveaways[index];
           final conflictType = g['conflict_type'] as String?;
-          final isBlocked = conflictType == 'overlap';
+          final roleId = g['role_id'] as int?;
+          final roleName = g['role_name'] as String? ?? 'Brak roli';
+          final currentUser = ref.watch(currentUserProvider).value ?? ref.watch(authProvider).value;
+          final hasRequiredRole = roleId == null || (currentUser?.jobRoleIds.contains(roleId) ?? false);
+          final isDirectSwap = g['target_shift_id'] != null;
+          final isBlocked = (conflictType == 'overlap') || !hasRequiredRole;
           final availHint = _availabilityHint(
             g['availability_hint'] as String?,
           );
+
+          String buttonLabel = 'Weź zmianę';
+          IconData buttonIcon = Icons.add_task;
+          if (!hasRequiredRole) {
+            buttonLabel = 'Brak wymaganej roli ($roleName)';
+            buttonIcon = Icons.lock_outline;
+          } else if (conflictType == 'overlap') {
+            buttonLabel = 'Nie możesz wziąć tej zmiany';
+            buttonIcon = Icons.block;
+          } else if (isDirectSwap) {
+            buttonLabel = 'Wymień zmianę';
+            buttonIcon = Icons.swap_horiz;
+          }
 
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
               side:
-                  isBlocked
+                  !hasRequiredRole
+                      ? BorderSide(color: Colors.red.shade300, width: 1.5)
+                      : isBlocked
                       ? BorderSide(color: Colors.red.shade200, width: 1.5)
+                      : isDirectSwap
+                      ? BorderSide(color: Colors.teal.shade300, width: 1.5)
                       : conflictType == 'same_day'
                       ? BorderSide(color: Colors.orange.shade200, width: 1.5)
                       : BorderSide.none,
@@ -253,10 +303,14 @@ class _EmployeeGiveawayTabState extends ConsumerState<EmployeeGiveawayTab> {
                   Row(
                     children: [
                       CircleAvatar(
-                        backgroundColor: colorScheme.primaryContainer,
+                        backgroundColor: isDirectSwap 
+                            ? Colors.teal.shade100 
+                            : colorScheme.primaryContainer,
                         child: Icon(
-                          Icons.swap_horiz,
-                          color: colorScheme.onPrimaryContainer,
+                          isDirectSwap ? Icons.swap_horiz : Icons.add_task,
+                          color: isDirectSwap 
+                              ? Colors.teal.shade800 
+                              : colorScheme.onPrimaryContainer,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -265,7 +319,7 @@ class _EmployeeGiveawayTabState extends ConsumerState<EmployeeGiveawayTab> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '${g['shift_name'] ?? ''} · ${g['role_name'] ?? ''}',
+                              '${g['shift_name'] ?? ''} · $roleName',
                               style: GoogleFonts.inter(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
@@ -291,6 +345,62 @@ class _EmployeeGiveawayTabState extends ConsumerState<EmployeeGiveawayTab> {
                     ],
                   ),
                   const SizedBox(height: 10),
+
+                  // Direct Swap Badge
+                  if (isDirectSwap) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.teal.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.swap_horiz, size: 14, color: Colors.teal.shade700),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Wymiana bezpośrednia (A ↔ B)',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: Colors.teal.shade800,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // Role requirement badge if missing
+                  if (!hasRequiredRole) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.lock_outline, size: 14, color: Colors.red.shade700),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Wymagana rola: $roleName (brak w Twoim profilu)',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: Colors.red.shade800,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
 
                   // Conflict badge
                   Row(
@@ -347,18 +457,16 @@ class _EmployeeGiveawayTabState extends ConsumerState<EmployeeGiveawayTab> {
                     child: FilledButton.icon(
                       onPressed: isBlocked ? null : () => _claim(g),
                       icon: Icon(
-                        isBlocked ? Icons.block : Icons.add_task,
+                        buttonIcon,
                         size: 16,
                       ),
-                      label: Text(
-                        isBlocked
-                            ? 'Nie możesz wziąć tej zmiany'
-                            : 'Weź zmianę',
-                      ),
+                      label: Text(buttonLabel),
                       style: FilledButton.styleFrom(
                         backgroundColor:
                             isBlocked
                                 ? Colors.grey.shade300
+                                : isDirectSwap
+                                ? Colors.teal.shade700
                                 : conflictType == 'same_day'
                                 ? Colors.orange
                                 : colorScheme.primary,

@@ -48,6 +48,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ? _tenantSlugController.text.trim() 
                 : null,
           );
+      TextInput.finishAutofillContext();
     } catch (e) {
       if (mounted) {
         String message = 'Wystąpił błąd';
@@ -157,52 +158,65 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 32),
-                        TextField(
-                          controller: _tenantSlugController,
-                          decoration: InputDecoration(
-                            labelText: 'Kod restauracji',
-                            prefixIcon: const Icon(Icons.restaurant),
-                            helperText: 'Wymagane przy logowaniu loginem',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                        AutofillGroup(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextField(
+                                controller: _tenantSlugController,
+                                decoration: InputDecoration(
+                                  labelText: 'Kod restauracji',
+                                  prefixIcon: const Icon(Icons.restaurant),
+                                  helperText: 'Wymagane przy logowaniu loginem',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                keyboardType: TextInputType.text,
+                                textInputAction: TextInputAction.next,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(RegExp(r'[a-z0-9-]')),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Przy logowaniu emailem kod restauracji nie jest wymagany',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                              ),
+                              const SizedBox(height: 16),
+                              TextField(
+                                controller: _usernameController,
+                                decoration: InputDecoration(
+                                  labelText: 'Login lub Email',
+                                  prefixIcon: const Icon(Icons.person_outline),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                keyboardType: TextInputType.emailAddress,
+                                textInputAction: TextInputAction.next,
+                                autofillHints: const [
+                                  AutofillHints.username,
+                                  AutofillHints.email,
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              TextField(
+                                controller: _passwordController,
+                                decoration: InputDecoration(
+                                  labelText: 'Hasło',
+                                  prefixIcon: const Icon(Icons.lock),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                obscureText: true,
+                                textInputAction: TextInputAction.done,
+                                autofillHints: const [AutofillHints.password],
+                                onSubmitted: (_) => _submit(),
+                              ),
+                            ],
                           ),
-                          keyboardType: TextInputType.text,
-                          textInputAction: TextInputAction.next,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'[a-z0-9-]')),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Przy logowaniu emailem kod restauracji nie jest wymagany',
-                          style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _usernameController,
-                          decoration: InputDecoration(
-                            labelText: 'Login lub Email',
-                            prefixIcon: const Icon(Icons.person_outline),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _passwordController,
-                          decoration: InputDecoration(
-                            labelText: 'Hasło',
-                            prefixIcon: const Icon(Icons.lock),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          obscureText: true,
-                          onSubmitted: (_) => _submit(),
                         ),
                         const SizedBox(height: 24),
                         SizedBox(

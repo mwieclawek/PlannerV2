@@ -53,6 +53,14 @@ final shiftsProvider = FutureProvider.autoDispose<List<ShiftDefinition>>((
   return await api.getShifts();
 });
 
+// All Shifts Provider (unfiltered by role, for full restaurant schedule view)
+final allShiftsProvider = FutureProvider.autoDispose<List<ShiftDefinition>>((
+  ref,
+) async {
+  final api = ref.watch(apiServiceProvider);
+  return await api.getShifts(allShifts: true);
+});
+
 // Availability Provider (for a specific week)
 final availabilityProvider = FutureProvider.autoDispose
     .family<List<Availability>, DateRange>((ref, dateRange) async {
@@ -125,7 +133,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       } else {
         state = const AsyncValue.data(null);
       }
-    } catch (e, stack) {
+    } catch (e) {
       // Fallback for unexpected errors
       state = const AsyncValue.data(null);
     }
@@ -138,7 +146,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       final user = await _api.getCurrentUser();
       state = AsyncValue.data(user);
       _pushService.initialize();
-    } catch (e, stack) {
+    } catch (e) {
       state = const AsyncValue.data(null);
       rethrow; // Rethrow so UI can show SnackBar
     }
@@ -163,7 +171,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       final user = await _api.getCurrentUser();
       state = AsyncValue.data(user);
       _pushService.initialize();
-    } catch (e, stack) {
+    } catch (e) {
       state = const AsyncValue.data(null);
       rethrow; // Rethrow so UI can show SnackBar
     }

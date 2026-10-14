@@ -77,6 +77,8 @@ def world(session: Session, test_tenant):
     e1 = mk("emp_one")
     e2 = mk("emp_two")
     role = JobRole(tenant_id=test_tenant.id, name="Kelner", color_hex="#fff")
+    e1.job_roles.append(role)
+    e2.job_roles.append(role)
     day = ShiftDefinition(tenant_id=test_tenant.id, name="Poranna", start_time=time(8, 0), end_time=time(16, 0))
     night = ShiftDefinition(tenant_id=test_tenant.id, name="Nocna", start_time=time(22, 0), end_time=time(6, 0))
     session.add_all([role, day, night])

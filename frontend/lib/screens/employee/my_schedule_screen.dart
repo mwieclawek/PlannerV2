@@ -248,121 +248,157 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Schedule List
-                  if (_scheduleEntries.isEmpty) ...[
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(48),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.event_busy,
-                              size: 64,
-                              color: Colors.grey.shade400,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Brak przypisanych zmian',
-                              style: GoogleFonts.outfit(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Grafik nie został jeszcze opublikowany',
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                color: Colors.grey.shade500,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _showCoworkers ? 'Cała załoga' : 'Twoje zmiany',
+                        style: GoogleFonts.outfit(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-                  ] else ...[
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _showCoworkers ? 'Cała załoga' : 'Twoje zmiany',
-                          style: GoogleFonts.outfit(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      TextButton.icon(
+                        onPressed: () {
+                          _loadSchedule();
+                          if (_showCoworkers) _loadTeamSchedule();
+                        },
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Odśwież'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // View mode toggle
+                  Center(
+                    child: SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment(
+                          value: false,
+                          label: Text('Moje zmiany'),
+                          icon: Icon(Icons.person),
                         ),
-                        TextButton.icon(
-                          onPressed: _loadSchedule,
-                          icon: const Icon(Icons.refresh, size: 18),
-                          label: const Text('Odśwież'),
+                        ButtonSegment(
+                          value: true,
+                          label: Text('Cała załoga'),
+                          icon: Icon(Icons.people),
+                        ),
+                      ],
+                      selected: {_showCoworkers},
+                      onSelectionChanged: (v) {
+                        final newVal = v.first;
+                        setState(() => _showCoworkers = newVal);
+                        if (newVal) _loadTeamSchedule();
+                      },
+                      style: SegmentedButton.styleFrom(
+                        selectedBackgroundColor:
+                            Theme.of(context).colorScheme.primaryContainer,
+                        selectedForegroundColor:
+                            Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (_showCoworkers) ...[
+                    // Sub-toggle: list vs grid
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _viewModeButton(Icons.view_list_rounded, !_teamGridView, () => setState(() => _teamGridView = false)),
+                              _viewModeButton(Icons.grid_view_rounded, _teamGridView, () => setState(() => _teamGridView = true)),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 8),
-
-                    // View mode toggle
-                    Center(
-                      child: SegmentedButton<bool>(
-                        segments: const [
-                          ButtonSegment(
-                            value: false,
-                            label: Text('Moje zmiany'),
-                            icon: Icon(Icons.person),
+                    if (_teamLoading)
+                      const Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_teamEntries.isEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(48),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.people_outline,
+                                size: 64,
+                                color: Colors.grey.shade400,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Brak zaplanowanych zmian zespołu',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'W tym tygodniu żaden pracownik nie ma jeszcze opublikowanego grafiku.',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade500,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
-                          ButtonSegment(
-                            value: true,
-                            label: Text('Cała załoga'),
-                            icon: Icon(Icons.people),
+                        ),
+                      )
+                    else if (_teamGridView)
+                      _buildTeamGridView()
+                    else
+                      _buildTeamWeekView(),
+                  ] else ...[
+                    if (_scheduleEntries.isEmpty) ...[
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(48),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.event_busy,
+                                size: 64,
+                                color: Colors.grey.shade400,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Brak przypisanych zmian',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Grafik nie został jeszcze opublikowany lub nie masz zmian w tym tygodniu. Przełącz na "Cała załoga", aby sprawdzić grafik współpracowników.',
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade500,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
-                        ],
-                        selected: {_showCoworkers},
-                        onSelectionChanged: (v) {
-                          final newVal = v.first;
-                          setState(() => _showCoworkers = newVal);
-                          if (newVal && _teamEntries.isEmpty) _loadTeamSchedule();
-                        },
-                        style: SegmentedButton.styleFrom(
-                          selectedBackgroundColor:
-                              Theme.of(context).colorScheme.primaryContainer,
-                          selectedForegroundColor:
-                              Theme.of(context).colorScheme.onPrimaryContainer,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    if (_showCoworkers) ...[
-                      // Sub-toggle: list vs grid
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _viewModeButton(Icons.view_list_rounded, !_teamGridView, () => setState(() => _teamGridView = false)),
-                                _viewModeButton(Icons.grid_view_rounded, _teamGridView, () => setState(() => _teamGridView = true)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      if (_teamLoading)
-                        const Padding(
-                          padding: EdgeInsets.all(32),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else if (_teamGridView)
-                        _buildTeamGridView()
-                      else
-                        _buildTeamWeekView(),
                     ] else ...[
                       // Group by date (original "Moje zmiany" view)
                       ...(_groupByDate(_scheduleEntries).entries.map((entry) {
@@ -784,7 +820,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
   }
 
   Widget _buildTeamGridView() {
-    final shiftsAsync = ref.watch(shiftsProvider);
+    final shiftsAsync = ref.watch(allShiftsProvider);
     final rolesAsync = ref.watch(rolesProvider);
 
     return shiftsAsync.when(
@@ -1114,43 +1150,221 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     }
   }
 
-  void _showGiveawayConfirmation(EmployeeScheduleEntry shift) {
+  void _showGiveawayConfirmation(EmployeeScheduleEntry shift) async {
+    List<ScheduleEntry> team = List.from(_teamEntries);
+    if (team.isEmpty) {
+      try {
+        team = await ref
+            .read(apiServiceProvider)
+            .getTeamSchedule(_selectedWeekStart, _selectedWeekEnd);
+      } catch (_) {}
+    }
+
+    final user = ref.read(authProvider).value;
+    final currentUserId = user?.id ?? '';
+    final coworkerShifts = team.where((e) => e.userId != currentUserId).toList();
+
+    bool isDirectSwap = false;
+    String? selectedTargetShiftId;
+
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder:
-          (context) => AlertDialog(
-            title: const Text('Oddać zmianę?'),
-            content: Text(
-              'Czy na pewno chcesz oddać zmianę ${shift.shiftName} w dniu ${DateFormat('d MMMM', 'pl_PL').format(shift.date)}?\n\n'
-              'Zmiana zostanie oznaczona jako dostępna dla innych pracowników. Musisz pracować, dopóki ktoś jej nie przejmie lub manager nie zatwierdzi zmiany.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Anuluj'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _submitGiveaway(shift.id);
-                },
-                child: const Text('Potwierdź oddanie'),
-              ),
-            ],
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(
+                      Icons.swap_horiz,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Oddanie / wymiana zmiany'),
+                  ],
+                ),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Twoja zmiana: ${shift.shiftName} (${shift.startTime} - ${shift.endTime})',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        'Data: ${DateFormat('EEEE, d MMMM yyyy', 'pl_PL').format(shift.date)}',
+                        style: GoogleFonts.inter(
+                          color: Colors.grey.shade600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Wybierz rodzaj oferty:',
+                        style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      RadioListTile<bool>(
+                        title: const Text('Otwarta giełda'),
+                        subtitle: const Text(
+                          'Każdy pracownik z odpowiednią rolą może przejąć tę zmianę.',
+                        ),
+                        value: false,
+                        groupValue: isDirectSwap,
+                        onChanged: (val) {
+                          setDialogState(() {
+                            isDirectSwap = val ?? false;
+                            selectedTargetShiftId = null;
+                          });
+                        },
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      RadioListTile<bool>(
+                        title: const Text('Wymiana bezpośrednia (A ↔ B)'),
+                        subtitle: const Text(
+                          'Zaproponuj zamianę z konkretną zmianą współpracownika.',
+                        ),
+                        value: true,
+                        groupValue: isDirectSwap,
+                        onChanged:
+                            coworkerShifts.isEmpty
+                                ? null
+                                : (val) {
+                                  setDialogState(() {
+                                    isDirectSwap = val ?? true;
+                                    if (selectedTargetShiftId == null &&
+                                        coworkerShifts.isNotEmpty) {
+                                      selectedTargetShiftId =
+                                          coworkerShifts.first.id;
+                                    }
+                                  });
+                                },
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      if (isDirectSwap) ...[
+                        const SizedBox(height: 8),
+                        if (coworkerShifts.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Text(
+                              'Brak dostępnych zmian współpracowników w tym tygodniu.',
+                              style: TextStyle(
+                                color: Colors.orange.shade800,
+                                fontSize: 12,
+                              ),
+                            ),
+                          )
+                        else ...[
+                          Text(
+                            'Wybierz zmianę współpracownika:',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            value: selectedTargetShiftId,
+                            decoration: InputDecoration(
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                            ),
+                            items:
+                                coworkerShifts.map((c) {
+                                  final dateStr = DateFormat(
+                                    'E, d MMM',
+                                    'pl_PL',
+                                  ).format(c.date);
+                                  return DropdownMenuItem<String>(
+                                    value: c.id,
+                                    child: Text(
+                                      '${c.userName}: $dateStr ${c.startTime.substring(0, 5)}-${c.endTime.substring(0, 5)} (${c.roleName})',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  );
+                                }).toList(),
+                            onChanged: (val) {
+                              setDialogState(
+                                () => selectedTargetShiftId = val,
+                              );
+                            },
+                          ),
+                        ],
+                      ],
+                      const SizedBox(height: 12),
+                      Text(
+                        isDirectSwap
+                            ? 'Wskazany współpracownik zobaczy dedykowaną ofertę wymiany. Po jej akceptacji nastąpi automatyczna obustronna zamiana grafików.'
+                            : 'Zmiana pojawi się na ogólnej giełdzie. Musisz pracować, dopóki ktoś jej nie przejmie.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Anuluj'),
+                  ),
+                  FilledButton(
+                    onPressed:
+                        isDirectSwap && selectedTargetShiftId == null
+                            ? null
+                            : () {
+                              Navigator.pop(context);
+                              _submitGiveaway(
+                                shift.id,
+                                targetShiftId:
+                                    isDirectSwap ? selectedTargetShiftId : null,
+                              );
+                            },
+                    child: Text(
+                      isDirectSwap
+                          ? 'Zaproponuj wymianę'
+                          : 'Wystaw na giełdę',
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
     );
   }
 
-  Future<void> _submitGiveaway(String scheduleId) async {
+  Future<void> _submitGiveaway(String scheduleId, {String? targetShiftId}) async {
     setState(() => _isLoading = true);
     try {
-      await ref.read(apiServiceProvider).giveAwayShift(scheduleId);
+      await ref
+          .read(apiServiceProvider)
+          .giveAwayShift(scheduleId, targetShiftId: targetShiftId);
       await _loadSchedule(); // Refresh to show "On Giveaway" status
+      if (_showCoworkers) await _loadTeamSchedule();
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✓ Zmiana wystawiona na giełdę'),
+          SnackBar(
+            content: Text(
+              targetShiftId != null
+                  ? '✓ Zaproponowano bezpośrednią wymianę (A ↔ B)'
+                  : '✓ Zmiana wystawiona na giełdę',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -1167,22 +1381,4 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
       }
     }
   }
-}
-
-class _TeamEntry {
-  final String userName;
-  final String roleName;
-  final String shiftName;
-  final String startTime;
-  final String endTime;
-  final bool isCurrentUser;
-
-  _TeamEntry({
-    required this.userName,
-    required this.roleName,
-    required this.shiftName,
-    required this.startTime,
-    required this.endTime,
-    this.isCurrentUser = false,
-  });
 }

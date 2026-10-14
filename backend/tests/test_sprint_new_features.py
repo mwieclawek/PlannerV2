@@ -8,6 +8,7 @@ from app.models import (
     ShiftGiveaway, GiveawayStatus, ShiftRoleLink, UserJobRoleLink,
     Attendance, AttendanceStatus, ShiftAuditLog, RoleSystem
 )
+from app.auth_utils import create_access_token
 
 @pytest.mark.asyncio
 class TestDraftScheduleAndPublish:
@@ -480,3 +481,166 @@ class TestShiftSwapAndAuditLog:
         assert res.status_code == 200
         # Must be empty because it belongs to test_tenant, not tenant2
         assert len(res.json()) == 0
+
+    @pytest.mark.asyncio
+    async def test_giveaway_claim_role_validation(self, client: AsyncClient, session: Session, test_tenant):
+        """Employee can only claim a giveaway shift if they possess the required role (or more, including that one)."""
+        role_kucharz = JobRole(tenant_id=test_tenant.id, name="Kucharz", color_hex="#111111")
+        role_kelner = JobRole(tenant_id=test_tenant.id, name="Kelner", color_hex="#222222")
+        role_barman = JobRole(tenant_id=test_tenant.id, name="Barman", color_hex="#333333")
+        session.add_all([role_kucharz, role_kelner, role_barman])
+        session.commit()
+
+        shift_kucharz = ShiftDefinition(
+            tenant_id=test_tenant.id,
+            name="Zmiana Kucharz",
+            start_time=time(10, 0),
+            end_time=time(18, 0),
+        )
+        session.add(shift_kucharz)
+        session.commit()
+
+        # Offerer (Kucharz 1)
+        u_offerer = User(
+            username=f"kucharz1_{uuid4().hex[:6]}",
+            email=f"k1_{uuid4().hex[:6]}@test.com",
+            password_hash="fakehash",
+            full_name="Kucharz One",
+            role_system=RoleSystem.EMPLOYEE,
+            tenant_id=test_tenant.id,
+            is_active=True
+        )
+        u_offerer.job_roles.append(role_kucharz)
+        session.add(u_offerer)
+
+        # Claimant A: Only Kelner (does NOT have Kucharz role)
+        u_kelner = User(
+            username=f"kelner_{uuid4().hex[:6]}",
+            email=f"kelner_{uuid4().hex[:6]}@test.com",
+            password_hash="fakehash",
+            full_name="Kelner Only",
+            role_system=RoleSystem.EMPLOYEE,
+            tenant_id=test_tenant.id,
+            is_active=True
+        )
+        u_kelner.job_roles.append(role_kelner)
+        session.add(u_kelner)
+
+        # Claimant B: Multi-role (Barman AND Kucharz)
+        u_multi = User(
+            username=f"multi_{uuid4().hex[:6]}",
+            email=f"multi_{uuid4().hex[:6]}@test.com",
+            password_hash="fakehash",
+            full_name="Multi Role User",
+            role_system=RoleSystem.EMPLOYEE,
+            tenant_id=test_tenant.id,
+            is_active=True
+        )
+        u_multi.job_roles.extend([role_barman, role_kucharz])
+        session.add(u_multi)
+        session.commit()
+
+        # Schedule for offerer
+        sched = Schedule(
+            tenant_id=test_tenant.id,
+            user_id=u_offerer.id,
+            shift_def_id=shift_kucharz.id,
+            role_id=role_kucharz.id,
+            date=date.today() + timedelta(days=5),
+            is_published=True
+        )
+        session.add(sched)
+        session.commit()
+
+        giveaway = ShiftGiveaway(
+            schedule_id=sched.id,
+            offered_by=u_offerer.id,
+            status=GiveawayStatus.OPEN
+        )
+        session.add(giveaway)
+        session.commit()
+
+        headers_kelner = {"Authorization": f"Bearer {create_access_token(data={'sub': u_kelner.username, 'tenant_id': test_tenant.id})}"}
+        headers_multi = {"Authorization": f"Bearer {create_access_token(data={'sub': u_multi.username, 'tenant_id': test_tenant.id})}"}
+
+        # 1. Kelner attempts to claim Kucharz shift -> MUST FAIL
+        res_fail = await client.post(f"/employee/giveaways/{giveaway.id}/claim", headers=headers_kelner)
+        assert res_fail.status_code == 400
+        assert "Brak wymaganej roli" in res_fail.json()["detail"]
+
+        # Verify schedule still belongs to offerer
+        session.refresh(sched)
+        assert sched.user_id == u_offerer.id
+
+        # 2. Multi-role user (possessing Kucharz) claims -> MUST SUCCEED
+        res_ok = await client.post(f"/employee/giveaways/{giveaway.id}/claim", headers=headers_multi)
+        assert res_ok.status_code == 200
+        assert res_ok.json()["status"] == "claimed"
+
+        session.refresh(sched)
+        assert sched.user_id == u_multi.id
+
+        # Verify ShiftAuditLog was recorded
+        audit_log = session.exec(
+            select(ShiftAuditLog).where(ShiftAuditLog.shift_id == str(sched.id))
+        ).first()
+        assert audit_log is not None
+        assert audit_log.action == "CLAIMED"
+        assert audit_log.changed_by_user_id == u_multi.id
+
+    @pytest.mark.asyncio
+    async def test_get_shifts_all_shifts_parameter(self, client: AsyncClient, session: Session, test_tenant):
+        """Non-manager gets filtered shifts by default, but can fetch all shifts if all_shifts=true."""
+        role_a = JobRole(tenant_id=test_tenant.id, name="Rola A", color_hex="#aaaaaa")
+        role_b = JobRole(tenant_id=test_tenant.id, name="Rola B", color_hex="#bbbbbb")
+        session.add_all([role_a, role_b])
+        session.commit()
+
+        shift_a = ShiftDefinition(
+            tenant_id=test_tenant.id,
+            name="Zmiana A",
+            start_time=time(8, 0),
+            end_time=time(16, 0),
+        )
+        shift_a.allowed_roles.append(role_a)
+
+        shift_b = ShiftDefinition(
+            tenant_id=test_tenant.id,
+            name="Zmiana B",
+            start_time=time(16, 0),
+            end_time=time(23, 0),
+        )
+        shift_b.allowed_roles.append(role_b)
+
+        session.add_all([shift_a, shift_b])
+        session.commit()
+
+        user_emp = User(
+            username=f"emp_a_{uuid4().hex[:6]}",
+            email=f"emp_a_{uuid4().hex[:6]}@test.com",
+            password_hash="fakehash",
+            full_name="Employee A",
+            role_system=RoleSystem.EMPLOYEE,
+            tenant_id=test_tenant.id,
+            is_active=True
+        )
+        user_emp.job_roles.append(role_a)
+        session.add(user_emp)
+        session.commit()
+
+        headers_emp = {"Authorization": f"Bearer {create_access_token(data={'sub': user_emp.username, 'tenant_id': test_tenant.id})}"}
+
+        # Default GET /manager/shifts -> only visible shifts for role_a
+        res_default = await client.get("/manager/shifts", headers=headers_emp)
+        assert res_default.status_code == 200
+        names_default = [s["name"] for s in res_default.json()]
+        assert "Zmiana A" in names_default
+        assert "Zmiana B" not in names_default
+
+        # With all_shifts=true -> returns all shifts in restaurant
+        res_all = await client.get("/manager/shifts?all_shifts=true", headers=headers_emp)
+        assert res_all.status_code == 200
+        names_all = [s["name"] for s in res_all.json()]
+        assert "Zmiana A" in names_all
+        assert "Zmiana B" in names_all
+

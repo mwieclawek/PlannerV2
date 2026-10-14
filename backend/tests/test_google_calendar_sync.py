@@ -245,6 +245,13 @@ def test_sync_schedule_summary_with_restaurant_config(session: Session, test_use
 
 @pytest.mark.asyncio
 async def test_claim_giveaway_syncs_calendars(client: AsyncClient, session: Session, employee_headers: dict, shift_def_day: ShiftDefinition, test_job_role: JobRole, monkeypatch):
+    from sqlmodel import select
+    emp = session.exec(select(User).where(User.username == "employee_test")).first()
+    if emp and test_job_role not in emp.job_roles:
+        emp.job_roles.append(test_job_role)
+        session.add(emp)
+        session.commit()
+
     giver = User(
         username="giver_user",
         email="giver@example.com",

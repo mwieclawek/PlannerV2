@@ -12,6 +12,7 @@ class User {
   final String? tenantSlug;
   final String? tenantName;
   final bool isSuperadmin;
+  final List<int> jobRoleIds;
 
   User({
     required this.id,
@@ -27,6 +28,7 @@ class User {
     this.tenantSlug,
     this.tenantName,
     this.isSuperadmin = false,
+    this.jobRoleIds = const [],
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -45,6 +47,10 @@ class User {
       tenantSlug: json['tenant_slug'],
       tenantName: json['tenant_name'],
       isSuperadmin: json['is_superadmin'] == true,
+      jobRoleIds: (json['job_roles'] as List<dynamic>?)
+              ?.map((e) => (e as num).toInt())
+              .toList() ??
+          [],
     );
   }
 
@@ -63,6 +69,7 @@ class User {
       'tenant_slug': tenantSlug,
       'tenant_name': tenantName,
       'is_superadmin': isSuperadmin,
+      'job_roles': jobRoleIds,
     };
   }
 

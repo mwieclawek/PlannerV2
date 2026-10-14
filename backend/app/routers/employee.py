@@ -603,6 +603,41 @@ def claim_giveaway(
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule entry not found")
 
+    # Check if claimant has the required role for the shift
+    if schedule.role_id is not None:
+        user_role_ids = {r.id for r in current_user.job_roles}
+        if schedule.role_id not in user_role_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="Brak wymaganej roli do przejęcia tej zmiany. Wymagana rola musi być przypisana do Twojego profilu."
+            )
+
+    target_schedule = None
+    if giveaway.target_shift_id:
+        try:
+            target_uuid = UUID(str(giveaway.target_shift_id))
+            target_schedule = session.get(Schedule, target_uuid)
+        except ValueError:
+            target_schedule = None
+
+        if not target_schedule:
+            raise HTTPException(status_code=404, detail="Docelowa zmiana do wymiany nie została znaleziona")
+
+        if target_schedule.user_id != current_user.id:
+            raise HTTPException(
+                status_code=400,
+                detail="Ta oferta wymiany jest skierowana do innego pracownika / innej zmiany."
+            )
+
+        offerer = session.get(User, giveaway.offered_by)
+        if offerer and target_schedule.role_id is not None:
+            offerer_role_ids = {r.id for r in offerer.job_roles}
+            if target_schedule.role_id not in offerer_role_ids:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Wystawiający zmianę nie posiada roli wymaganej do Twojej zmiany."
+                )
+
     shift = session.get(ShiftDefinition, schedule.shift_def_id)
 
     # Hard-block: overlap > 30 min
@@ -617,6 +652,9 @@ def claim_giveaway(
         def to_minutes(t) -> int:
             return t.hour * 60 + t.minute
         for ms in my_shifts_on_day:
+            if target_schedule and ms.id == target_schedule.id:
+                # Exclude the shift we are giving away in direct swap
+                continue
             my_shift = session.get(ShiftDefinition, ms.shift_def_id)
             if not my_shift:
                 continue
@@ -628,14 +666,43 @@ def claim_giveaway(
                     detail="You already have a shift that overlaps with this one by more than 30 minutes"
                 )
 
+    old_user_id = giveaway.offered_by
+
     # Reassign the schedule to the current user
     schedule.user_id = current_user.id
     session.add(schedule)
+
+    if target_schedule:
+        target_schedule.user_id = old_user_id
+        session.add(target_schedule)
 
     # Mark giveaway as taken
     giveaway.status = GiveawayStatus.TAKEN
     giveaway.taken_by = current_user.id
     session.add(giveaway)
+
+    from ..models import ShiftAuditLog
+    session.add(
+        ShiftAuditLog(
+            restaurant_id=current_user.tenant_id,
+            shift_id=str(schedule.id),
+            changed_by_user_id=current_user.id,
+            action="SWAPPED" if target_schedule else "CLAIMED",
+            old_value=str(old_user_id),
+            new_value=str(current_user.id),
+        )
+    )
+    if target_schedule:
+        session.add(
+            ShiftAuditLog(
+                restaurant_id=current_user.tenant_id,
+                shift_id=str(target_schedule.id),
+                changed_by_user_id=current_user.id,
+                action="SWAPPED",
+                old_value=str(current_user.id),
+                new_value=str(old_user_id),
+            )
+        )
     
     from ..models import Notification, RoleSystem
     from ..services.push_service import PushService, send_push_to_tokens
@@ -670,8 +737,6 @@ def claim_giveaway(
         m_tokens = push_svc._get_user_tokens(m.id)
         if m_tokens:
             background_tasks.add_task(send_push_to_tokens, m_tokens, m_title, m_body)
-        
-    old_user_id = giveaway.offered_by
 
     session.commit()
 
@@ -681,6 +746,10 @@ def claim_giveaway(
     background_tasks.add_task(
         reassign_event_task, schedule.id, old_user_id, current_user.id, current_user.tenant_id
     )
+    if target_schedule:
+        background_tasks.add_task(
+            reassign_event_task, target_schedule.id, current_user.id, old_user_id, current_user.tenant_id
+        )
 
     return {"status": "claimed", "schedule_id": str(schedule.id)}
 

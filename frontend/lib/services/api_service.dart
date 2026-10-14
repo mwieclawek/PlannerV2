@@ -124,8 +124,11 @@ class ApiService {
   }
 
   // Shifts
-  Future<List<ShiftDefinition>> getShifts() async {
-    final response = await _dio.get('/manager/shifts');
+  Future<List<ShiftDefinition>> getShifts({bool allShifts = false}) async {
+    final response = await _dio.get(
+      '/manager/shifts',
+      queryParameters: allShifts ? {'all_shifts': 'true'} : null,
+    );
     return (response.data as List)
         .map((e) => ShiftDefinition.fromJson(e))
         .toList();
@@ -726,8 +729,16 @@ class ApiService {
     return response.data as Map<String, dynamic>;
   }
 
-  Future<void> giveAwayShift(String scheduleId) async {
-    await _dio.post('/employee/giveaway/$scheduleId');
+  Future<void> giveAwayShift(String scheduleId, {String? targetShiftId}) async {
+    await _dio.post(
+      '/employee/giveaway/$scheduleId',
+      data: targetShiftId != null ? {'target_shift_id': targetShiftId} : null,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getShiftAuditLog(String shiftId) async {
+    final response = await _dio.get('/manager/shifts/$shiftId/audit-log');
+    return (response.data as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
   // --- Google Calendar Integration ---

@@ -624,7 +624,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       context: context,
       builder:
           (context) => AlertDialog(
-            title: Text('Edytuj przypisanie'),
+            title: const Text('Edytuj przypisanie'),
             content: SizedBox(
               width: 300,
               child: Column(
@@ -642,6 +642,14 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               ),
             ),
             actions: [
+              TextButton.icon(
+                icon: const Icon(Icons.history, size: 16),
+                label: const Text('Historia zmian'),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showAuditLogDialog(entry);
+                },
+              ),
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Zamknij'),
@@ -661,6 +669,111 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               ),
             ],
           ),
+    );
+  }
+
+  Future<void> _showAuditLogDialog(ScheduleEntry entry) async {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.history, size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Historia: ${entry.userName} (${DateFormat('d MMM', 'pl_PL').format(entry.date)})',
+                style: const TextStyle(fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 450,
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: ref.read(apiServiceProvider).getShiftAuditLog(entry.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()),
+                );
+              }
+              if (snapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('Błąd pobierania historii: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+                );
+              }
+              final logs = snapshot.data ?? [];
+              if (logs.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: Text('Brak wpisów w historii dla tej zmiany')),
+                );
+              }
+              return ListView.separated(
+                shrinkWrap: true,
+                itemCount: logs.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, idx) {
+                  final log = logs[idx];
+                  final action = log['action'] ?? 'UNKNOWN';
+                  final author = log['changed_by_user_name'] ?? 'System';
+                  final createdStr = log['created_at'] != null
+                      ? DateFormat('d MMM yyyy HH:mm', 'pl_PL').format(DateTime.parse(log['created_at']))
+                      : '';
+                  final oldVal = log['old_value'];
+                  final newVal = log['new_value'];
+
+                  Color badgeColor = Colors.blue.shade100;
+                  Color textColor = Colors.blue.shade900;
+                  if (action == 'DELETED') {
+                    badgeColor = Colors.red.shade100;
+                    textColor = Colors.red.shade900;
+                  } else if (action == 'CREATED') {
+                    badgeColor = Colors.green.shade100;
+                    textColor = Colors.green.shade900;
+                  } else if (action == 'SWAPPED') {
+                    badgeColor = Colors.purple.shade100;
+                    textColor = Colors.purple.shade900;
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: badgeColor, borderRadius: BorderRadius.circular(4)),
+                              child: Text(action, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: textColor)),
+                            ),
+                            const Spacer(),
+                            Text(createdStr, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text('Zmienione przez: $author', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                        if (oldVal != null || newVal != null)
+                          Text('${oldVal ?? "brak"} → ${newVal ?? "brak"}', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Zamknij'),
+          ),
+        ],
+      ),
     );
   }
 
