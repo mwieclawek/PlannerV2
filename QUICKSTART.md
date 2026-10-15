@@ -43,10 +43,11 @@ uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 > **Domyślne dane logowania po wygenerowaniu danych (seed):**
-> **Superadmin / Pierwszy Manager**: `manager@default.pl` / hasło: `Manager1`
+> **Superadmin / Pierwszy Manager**: `manager@default.pl` / hasło: `Manager123`
 > (Superadmin posiada również uprawnienia managera testowej restauracji).
 >
-> Pracownicy mogą logować się przypisanym emailem lub przez `username` + `Login ID` (tenant slug). Domyślne hasło pracowników testowych to `123`.
+> Pracownicy mogą logować się przypisanym emailem lub przez `username` + `Login ID` (tenant slug). Domyślne hasło pracowników testowych to `Employee123`.
+> Wymagania dla haseł: minimum 8 znaków, co najmniej jedna wielka litera i jedna cyfra.
 
 Backend będzie dostępny pod: http://127.0.0.1:8000
 Dokumentacja API (Swagger): http://127.0.0.1:8000/docs
@@ -63,6 +64,11 @@ flutter pub get
 flutter run -d web-server --web-hostname=127.0.0.1 --web-port=5000
 ```
 
+Dla powiadomień Web Push można opcjonalnie przekazać klucz VAPID:
+```bash
+flutter run -d web-server --web-hostname=127.0.0.1 --web-port=5000 --dart-define=FCM_VAPID_KEY=twoj_klucz_vapid
+```
+
 Aplikacja będzie dostępna pod: http://127.0.0.1:5000
 
 ## Role i Konfiguracja Systemu
@@ -77,7 +83,7 @@ Możliwości Superadmina:
 
 ### 2. Panel Managera i Zarządzanie Pracownikami
 Manager danej restauracji zarządza swoim lokalem:
-- **Zarządzanie personelem:** Managerowie mogą teraz dodawać oraz edytować adresy email swoich pracowników (zakładka Zespół).
+- **Zarządzanie personelem:** Managerowie mogą dodawać oraz edytować adresy email swoich pracowników (zakładka Zespół).
 - **Konfiguracja ról i zmian:** Manager konfiguruje stanowiska (JobRoles) oraz zmiany (ShiftDefinition). Zmiany są przypisywane do ról, co oznacza, że pracownicy widzą tylko te zmiany (w grafiku i na liście zmian), które są powiązane z ich rolami.
 
 ## Przepływ Pracy (Workflow)
@@ -95,6 +101,7 @@ Manager danej restauracji zarządza swoim lokalem:
    - Manager weryfikuje szkic (Draft), zapisuje i publikuje grafik.
 4. **Odbiór (Pracownik)**:
    - Pracownik loguje się (przez email, lub slug + username) i widzi w swoim panelu zmiany przypisane wyłącznie do jego stanowisk.
+   - Może włączyć powiadomienia push w oknie dialogowym dzwoneczka (dostępne również jako aplikacja PWA na iOS/Android).
 
 ## Docker (Produkcja)
 
@@ -109,7 +116,7 @@ docker-compose up -d
 ```
 
 Aplikacja będzie dostępna pod: http://localhost (port 80)
-- Nginx serwuje frontend i proxy'uje `/api` do backendu
+- Nginx serwuje frontend z regułami no-cache dla service workerów i proxy'uje `/api` do backendu
 - PostgreSQL używany jest jako baza danych
 - Migracje Alembic uruchamiają się automatycznie przy starcie kontenerów
 
@@ -127,7 +134,9 @@ Aplikacja będzie dostępna pod: http://localhost (port 80)
 |---------|-------------|
 | 401 Unauthorized | Token wygasł — wyloguj się i zaloguj ponownie |
 | Nieudane logowanie użytkownika | Sprawdź czy użyto poprawnego formatu (email lub username+slug restauracji) |
-| Pracownik nie widzi zmian | Zmiany (Role-Based Shifts) są teraz przypisane do ról. Upewnij się, że pracownik posiada rolę powiązaną z daną zmianą |
+| Błąd walidacji hasła | Hasło musi mieć co najmniej 8 znaków, 1 wielką literę i 1 cyfrę |
+| Pracownik nie widzi zmian | Zmiany (Role-Based Shifts) są przypisane do ról. Upewnij się, że pracownik posiada rolę powiązaną z daną zmianą |
+| Brak powiadomień w Safari iOS | Dodaj aplikację do ekranu początkowego (PWA Standalone) i kliknij „Włącz powiadomienia” w oknie dzwonka |
 | Brak dostępu do `/superadmin` | Tylko użytkownik z uprawnieniem `SUPERADMIN` (np. ten z pliku seed) ma tam dostęp |
 | Błąd migracji Alembic | `alembic upgrade head` — upewnij się że baza jest poprawnie skonfigurowana |
 | Baza zablokowana (SQLite locked) | Zamknij uvicorn, odpal `python reset_db_alembic.py` i ponownie wygeneruj dane: `python seed_test_data.py` |

@@ -1,20 +1,20 @@
-# 📖 Podręcznik Użytkownika — PlannerV2
+# Podręcznik Użytkownika — PlannerV2
 
-> Kompleksowa instrukcja obsługi systemu do zarządzania grafikami pracy, zespołem i zamówieniami kuchennymi.
+Kompleksowa instrukcja obsługi systemu do zarządzania grafikami pracy, personelem, powiadomieniami i zamówieniami kuchennymi.
 
 ---
 
-## 📑 Spis Treści
+## Spis Treści
 
 1. [Pierwsze Kroki](#1-pierwsze-kroki)  
 2. [Panel Managera](#2-panel-managera)  
 3. [Panel Pracownika](#3-panel-pracownika)  
 4. [Moduł POS / Kitchen Display System](#4-moduł-pos--kitchen-display-system)  
-5. [System Powiadomień](#5-system-powiadomień)  
-6. [Konfiguracja Serwera i Pierwsze Logowanie](#6-konfiguracja-serwera-i-pierwsze-logowanie)
+5. [System Powiadomień i Web Push](#5-system-powiadomień-i-web-push)  
+6. [Konfiguracja Serwera i Pierwsze Logowanie](#6-konfiguracja-serwera-i-pierwsze-logowanie)  
 7. [Najczęstsze Pytania (FAQ)](#7-najczęstsze-pytania-faq)  
-8. [Pomoc i Zgłaszanie Błędów](#8-pomoc-i-zgłaszanie-błędów)
-9. [Panel SuperAdmina (Multi-Tenancy)](#9-panel-superadmina-multi-tenancy)
+8. [Pomoc i Zgłaszanie Błędów](#8-pomoc-i-zgłaszanie-błędów)  
+9. [Panel SuperAdmina (Multi-Tenancy)](#9-panel-superadmina-multi-tenancy)  
 
 ---
 
@@ -22,681 +22,307 @@
 
 ### 1.1 Kto może korzystać z systemu?
 
-System rozróżnia dwie role:
+System rozróżnia trzy główne role:
 
 | Rola | Uprawnienia |
 |------|-------------|
-| **Manager** | Pełna kontrola: konfiguracja, zespół, grafiki, obecności, POS, urlopy |
-| **Pracownik** | Podgląd grafiku, zgłaszanie dostępności, obecność, giełda zmian, urlopy |
+| **Superadmin** | Zarządzanie globalnymi instancjami lokali (Tenants), tworzenie pierwszych managerów, podgląd wszystkich użytkowników |
+| **Manager** | Pełna kontrola nad lokalem: konfiguracja, personel, grafiki, obecności, POS, urlopy |
+| **Pracownik** | Podgląd grafiku, zgłaszanie dostępności, rejestracja obecności, wymiana i giełda zmian, wnioski urlopowe |
 
-> **⚠️ Ważne**: Samodzielna rejestracja jest **wyłączona**. Konta tworzy wyłącznie Manager. Pierwszy Manager musi zostać utworzony przez API z użyciem kodu PIN.
+> **Ważne**: Samodzielna rejestracja użytkowników jest wyłączona. Konta w lokalu tworzy wyłącznie Manager lub Superadmin.
 
 ### 1.2 Logowanie (Multi-Tenancy)
 
-System wspiera architekturę wielu restauracji (Tenantów) na jednej instancji. Logowanie może odbywać się na dwa sposoby:
+System wspiera architekturę wielu restauracji (Tenantów) na pojedynczej instancji. Logowanie może odbywać się na dwa sposoby:
 
-1. **Logowanie adresem e-mail** — używasz swojego globalnie unikalnego adresu e-mail oraz hasła. (Login ID restauracji nie jest wymagane).
-2. **Logowanie po nazwie użytkownika** — wpisujesz swój **Login** (username), **Hasło** oraz **Login ID** (slug) Twojej restauracji.
+1. **Logowanie adresem e-mail** — używasz swojego globalnie unikalnego adresu e-mail oraz hasła (identyfikator lokalu nie jest wymagany).
+2. **Logowanie nazwą użytkownika** — wpisujesz swój **Login** (username), **Hasło** oraz **Kod restauracji** (slug / Login ID).
 
 Kroki logowania:
 1. Otwórz aplikację w przeglądarce lub na urządzeniu mobilnym.
-2. Wypełnij odpowiednie pola logowania w zależności od wybranego sposobu (E-mail lub Login + Login ID).
+2. Wypełnij odpowiednie pola formularza w zależności od wybranej metody.
 3. Kliknij **„Zaloguj"**.
 
-> **💡 Tip**: Jeśli aplikacja prosi o adres serwera, skontaktuj się z Managerem — może udostępnić konfigurację przez **kod QR** (ikona QR w panelu Managera).
+> **Wskazówka**: Jeśli aplikacja prosi o adres serwera, skontaktuj się z Managerem — może udostępnić parametry połączenia przez **kod QR** (przycisk QR w pasku aplikacji).
 
-#### Komunikaty logowania
+#### Komunikaty logowania i błędów
 
-| Komunikat | Znaczenie | Co robić |
-|-----------|-----------|----------|
-| *„Invalid credentials"* | Błędny login lub hasło | Sprawdź dane lub poproś Managera o reset hasła |
-| *„Account is deactivated"* | Twoje konto jest wyłączone | Skontaktuj się z Managerem |
-| *„Connection error"* | Brak połączenia z serwerem | Sprawdź adres serwera w ustawieniach |
+| Komunikat | Znaczenie | Działanie |
+|-----------|-----------|-----------|
+| *„Nieprawidłowy login lub hasło.”* | Błędne dane uwierzytelniające | Sprawdź login/hasło lub poproś Managera o reset hasła |
+| *„Twoje konto zostało zdeaktywowane. Skontaktuj się z administratorem.”* | Konto wyłączone przez Managera | Skontaktuj się z Managerem lokalu |
+| *„Błąd połączenia z serwerem. Sprawdź połączenie internetowe lub adres serwera.”* | Brak łączności z backendem | Sprawdź połączenie z siecią lub adres serwera w konfiguracji |
 
 ### 1.3 Zmiana Hasła
 
-Każdy użytkownik (Manager i Pracownik) może samodzielnie zmienić hasło:
+Każdy użytkownik może samodzielnie zmienić hasło:
 
-1. Kliknij ikonę profilu (👤) → **„Zmień hasło"**.
-2. Podaj stare hasło, nowe hasło (min. 6 znaków) i powtórz je.
-3. Kliknij **„Zmień"**.
+1. Kliknij ikonę profilu w prawym górnym rogu -> **„Zmień hasło"**.
+2. Podaj dotychczasowe hasło oraz nowe hasło.
+3. **Wymogi dotyczące hasła**: minimum 8 znaków, co najmniej jedna wielka litera oraz co najmniej jedna cyfra.
+4. Kliknij **„Zmień"**.
 
-> **💡 Tip**: Jeśli zapomniałeś starego hasła, Manager może zresetować je w zakładce **Zespół**.
+> **Wskazówka**: Jeśli zapomniałeś hasła, Manager lokalu może zresetować je w zakładce **Zespół**.
 
 ---
 
 ## 2. Panel Managera
 
-Po zalogowaniu jako Manager widzisz dolny pasek nawigacji z 5 zakładkami:
+Po zalogowaniu jako Manager dostępny jest dolny pasek nawigacyjny z zakładkami:
 
-| Ikona | Zakładka | Opis |
-|-------|----------|------|
-| 🏠 | **Home** | Dashboard — podgląd dziennego grafiku i statystyki |
-| ⚙️ | **Konfiguracja** | Ustawienia restauracji, ról, zmian i wymagań |
-| 📅 | **Grafik** | Tygodniowy grafik — generowanie, edycja, publikacja |
-| ✅ | **Obecności** | Ewidencja czasu pracy, zatwierdzanie, eksport PDF |
-| 👥 | **Zespół** | Zarządzanie pracownikami, statystyki, giełda zmian, urlopy |
+| Zakładka | Opis |
+|----------|------|
+| **Home** | Dashboard — podgląd dziennego grafiku i statystyki zespołu |
+| **Konfiguracja** | Ustawienia restauracji, stanowisk (ról), definicji zmian i wymagań kadrowych |
+| **Grafik** | Tygodniowy grafik — generowanie AI, ręczna edycja, publikacja |
+| **Obecności** | Ewidencja czasu pracy, zatwierdzanie wpisów, eksport raportu PDF |
+| **Zespół** | Zarządzanie pracownikami, statystyki, giełda zmian, wnioski urlopowe |
 
-Górny pasek zawiera:
-- **❔ Pomoc** — dialog z instrukcjami
-- **📱 QR** — generowanie kodu QR z adresem serwera (do udostępnienia pracownikom)
-- **🔔 Powiadomienia** — lista powiadomień in-app
-- **🍽️ Moduł POS** — przejście do systemu zamówień restauracyjnych
-- **🚪 Wyloguj**
+Górny pasek aplikacji zawiera:
+- **Pomoc** — instrukcje i formularz zgłaszania problemów
+- **QR** — generowanie kodu QR z adresem serwera dla pracowników
+- **Powiadomienia** — lista notyfikacji z panelem zarządzania uprawnieniami Web Push
+- **Moduł POS** — przejście do systemu zamówień restauracyjnych
+- **Wyloguj**
 
 ---
 
 ### 2.1 Home (Dashboard)
 
-Główny ekran z widokiem kalendarza:
-
-- **Kalendarz miesięczny** — kliknij dowolny dzień, aby zobaczyć szczegóły.
-- **Lista zmian** — kto pracuje, na jakiej zmianie, w jakiej roli.
-- **Statystyki dzienne** — liczba przypisanych pracowników.
-
-> **💡 Tip**: Dashboard jest odświeżany automatycznie. Jeśli chcesz zobaczyć nowe dane, po prostu kliknij inny dzień i wróć.
+- **Kalendarz miesięczny** — kliknięcie wybranego dnia prezentuje szczegóły obsady.
+- **Lista zmian** — lista zaplanowanych pracowników, godziny pracy i przypisane role.
+- **Statystyki dzienne** — podsumowanie liczby pracowników na poszczególnych stanowiskach.
 
 ---
 
-### 2.2 Konfiguracja (⚙️)
+### 2.2 Konfiguracja
 
-Zakładka Konfiguracja składa się z **3 pod-zakładek**:
+Zakładka składa się z trzech podsekcji:
 
-#### 📌 Pod-zakładka 1: Restauracja
+#### Podsekcja 1: Restauracja
+- Nazwa restauracji (wymagana)
+- Adres lokalu
+- Godziny otwarcia i zamknięcia (format HH:MM)
 
-Podstawowe dane Twojego lokalu:
-
-| Pole | Opis | Wymagane |
-|------|------|----------|
-| Nazwa restauracji | np. „Kawiarnia Pod Lipą" | ✅ |
-| Adres | np. „ul. Główna 15, Warszawa" | ❌ |
-| Godziny otwarcia | Format HH:MM (np. 08:00) | ❌ |
-| Godziny zamknięcia | Format HH:MM (np. 22:00) | ❌ |
-
-Kliknij **„Zapisz ustawienia"** po wprowadzeniu zmian.
-
-#### 📌 Pod-zakładka 2: Role i Zmiany
-
-Tutaj definiujesz **stanowiska** (role) i **definicje zmian** — to fundamentalne elementy systemu. Bez nich generowanie grafiku nie jest możliwe.
+#### Podsekcja 2: Role i Zmiany
 
 ##### Role (Stanowiska)
-
-Role określają, **na jakim stanowisku** pracuje dana osoba (np. Barista, Kasjer, Kelner, Kucharz).
-
-- Wpisz nazwę roli → kliknij **„Dodaj"**.
-- Kolor jest przydzielany automatycznie.
-- Rola pojawi się na liście poniżej.
-
-> **⚠️ Ważne**: Po dodaniu roli, musisz **przypisać ją pracownikom** w zakładce Zespół. Algorytm przypisze do zmiany tylko osoby, które mają wymaganą rolę.
-
-> **💡 Tip**: Nazwij role tak, jak wyglądają stanowiska w Twojej restauracji. Im dokładniej, tym lepiej algorytm dopasuje grafik.
+Role definiują stanowiska pracy (np. Barista, Kasjer, Kelner, Kucharz).
+- Wprowadź nazwę roli i zatwierdź przyciskiem **„Dodaj"**.
+- System automatycznie przypisze kolor identyfikacyjny.
+- Po dodaniu roli przypisz ją odpowiednim pracownikom w zakładce **Zespół**.
 
 ##### Zmiany (Shift Definitions)
+Definicje przedziałów czasowych (np. „Rano" 08:00–16:00).
+- **Powiązanie z rolami (Role-Based Shifts)**: Każda zmiana jest przypisywana do określonych stanowisk. Pracownicy widzą w panelu dyspozycji wyłącznie te zmiany, które odpowiadają ich rolom.
+- **Dni obowiązywania**: Zaznacz dni tygodnia, w których dana zmiana występuje.
+- **Reguła nakładania zmian**: System blokuje przypisanie pracownika do zmian nakładających się o więcej niż 30 minut (nakładanie do 30 minut jest dozwolone na przekazanie stanowiska).
 
-Zmiany określają **przedziały czasowe** pracy (np. „Rano" 08:00–16:00).
-
-| Pole | Opis | Wymagane |
-|------|------|----------|
-| Nazwa zmiany | np. „Rano", „Popołudnie", „Wieczór" | ✅ |
-| Start (HH:MM) | Godzina rozpoczęcia | ✅ |
-| Koniec (HH:MM) | Godzina zakończenia | ✅ |
-| Dni obowiązywania | Zaznacz dni tygodnia (Pn–Nd), domyślnie: wszystkie | ✅ |
-| Role | Zmiany są powiązane z konkretnymi rolami (JobRoles). Pracownik widzi podczas zgłaszania dostępności tylko te zmiany, które odpowiadają jego stanowisku. | ✅ |
-
-- Kliknij **„Dodaj Zmianę"** → pojawi się na liście.
-- Aby edytować: kliknij ikonę ✏️ → zmień dane → **„Zapisz"**.
-- Aby usunąć: kliknij ikonę 🗑️.
-
-> **⚠️ Ważne o nakładaniu się zmian**: System automatycznie pilnuje, by jeden pracownik nie był przypisany do dwóch zmian, które nakładają się o więcej niż 30 minut. Nakładanie ≤ 30 min jest dozwolone (np. przekazanie zmiany).
-
-> **💡 Tip**: Jeśli np. zmiana „Międzyzmiana" obowiązuje tylko w sobotę i niedzielę, odznacz dni Pn–Pt. Dzięki temu algorytm nie będzie próbował przypisywać ludzi do tej zmiany w tygodniu.
-
-#### 📌 Pod-zakładka 3: Wymagania Kadrowe
-
-Wymagania kadrowe definiują, **ilu pracowników o danej roli potrzebujesz na każdą zmianę**.
-
-System obsługuje dwa tryby:
-
-| Tryb | Opis | Kiedy używać |
-|------|------|-------------|
-| **Tygodniowy (globalny)** | Jeden szablon na cały tydzień — identyczne zapotrzebowanie na każdą zmianę per dzień tygodnia | Gdy zapotrzebowanie jest stałe |
-| **Konkretne daty** | Zapotrzebowanie na konkretne daty (nadpisuje szablon tygodniowy) | Na święta, imprezy, zmiany sezonowe |
-
-**Jak ustawić wymagania:**
-1. Przejdź do pod-zakładki **Wymagania**.
-2. Wybierz tryb: **Tygodniowy** (przełącznik) lub **Per datę** (nawigacja tygodniowa ← →).
-3. Siatka pokazuje: **Zmiana × Rola × Dzień**.
-4. Kliknij komórkę i ustaw liczbę (np. „2" oznacza: potrzebuję 2 osoby o tej roli na tę zmianę).
-5. Kliknij **„Zapisz wymagania"**.
-
-> **⚠️ Ważne**: Wymagania kadrowe są **kluczowe** dla algorytmu! Jeśli ich nie ustawisz, algorytm nie będzie wiedział ile osób przypisać i może nie wygenerować żadnych przypisań.
-
-> **💡 Tip**: Wymagania tygodniowe to „domyślny szablon". Jeśli w piątek potrzebujesz więcej ludzi niż zwykle, ustaw dla piątkowej daty wyższe wymaganie — nadpisze ono szablon.
-
-> **💡 Tip**: Wartość wymagania działa jak „Cap" (limit górny). Jeśli ustawisz „2", algorytm przypisze **maksymalnie 2 osoby** na tę zmianę w tej roli. Jeśli dostępna jest tylko 1 osoba, przypisze 1 i wygeneruje ostrzeżenie.
+#### Podsekcja 3: Wymagania Kadrowe
+Definiują liczbę pracowników na danej zmianie dla konkretnej roli.
+- **Tryb tygodniowy**: Domyślny szablon stałego zapotrzebowania na każdy dzień tygodnia.
+- **Tryb per data**: Zapotrzebowanie na konkretne dni kalendarzowe (nadpisuje szablon tygodniowy przy wydarzeniach specjalnych).
 
 ---
 
-### 2.3 Grafik (📅)
+### 2.3 Grafik
 
-Serce systemu — tu widzisz tygodniowy grafik, generujesz go automatycznie lub edytujesz ręcznie.
+#### Generowanie Automatyczne (OR-Tools Solver)
+1. Przejdź do wybranego tygodnia za pomocą strzałek nawigacyjnych.
+2. Kliknij **„Generuj grafik"**.
+3. Algorytm optymalizacyjny uwzględnia:
+   - Zgłoszone dyspozycje pracowników (dostępny / niedostępny)
+   - Przypisane role i uprawnienia do zmian
+   - Zdefiniowane zapotrzebowanie kadrowe
+   - Miesięczne cele godzinowe i zmianowe
+   - Ochronę kodeksowego odpoczynku dobowego (minimum 11 godzin przerwy)
+   - Dni obowiązywania zmian
+4. Wygenerowany grafik pojawia się jako **Szkic (Draft)** — nie jest jeszcze widoczny dla pracowników.
 
-#### Nawigacja
-
-- Strzałki **← →** przełączają tygodnie.
-- Tytuł pokazuje zakres dat: np. „30 mar – 5 kwi 2026".
-
-#### Generowanie Automatyczne (AI Solver)
-
-1. Kliknij **„Generuj grafik"**.
-2. System uruchamia algorytm OR-Tools CP-SAT, który uwzględnia:
-   - ✅ Dostępność pracowników (kto jest dostępny na daną zmianę)
-   - ✅ Role (kto ma uprawnienia do danego stanowiska)
-   - ✅ Wymagania kadrowe (ile osób na zmianę)
-   - ✅ Cele godzinowe/zmianowe per pracownik
-   - ✅ Aktualne godziny w miesiącu (MTD — month-to-date)
-   - ✅ Nakładanie się zmian (blokuje konflikty > 30 min)
-   - ✅ Dni obowiązywania zmian
-
-3. Wynik pojawia się jako **Szkic (Draft)** — nie jest zapisany ani widoczny dla pracowników.
-
-> **⚠️ Ważne o „miękkiej" logice algorytmu**: System **zawsze priorytetyzuje wypełnienie zmiany** nad limitami godzinowymi. Jeśli jedynym dostępnym pracownikiem jest osoba, która przekroczy swoje `target_hours_per_month`, algorytm **i tak ją przypisze**, ale spróbuje zminimalizować nadgodziny jeśli są alternatywy. Celem jest: **nigdy nie zostawiać pustej zmiany, jeśli jest ktokolwiek dostępny**.
-
-> **💡 Tip**: Jeśli algorytm zwraca „infeasible" (brak rozwiązania), sprawdź:
-> - Czy pracownicy złożyli dostępność na ten tydzień?
-> - Czy pracownicy mają przypisane role odpowiadające wymaganiom?
-> - Czy są jakiekolwiek wymagania kadrowe ustawione?
-
-#### Ostrzeżenia kadrowe
-
-Po wygenerowaniu grafiku, system pokaże ostrzeżenia, np.:
-- 🔺 **„Brakuje: Barista (1)"** — nie udało się obsadzić 1 baristy na tę zmianę.
-
-Ostrzeżenia pojawiają się, gdy:
-- Brak dostępnych pracowników z wymaganą rolą.
-- Wszystkie dostępne osoby już pracują na nakładającej się zmianie.
-
-#### Edycja Ręczna
-
-Po wygenerowaniu (lub na pustym grafiku):
-1. Kliknij **„+ Dodaj"** w komórce (zmiana × dzień).
-2. Wyświetli się lista pracowników z ich statusami dostępności:
-   - 🟢 — dostępny/preferowany na tę zmianę
-   - 🔴 — niedostępny
-3. Wybierz pracownika i rolę.
-4. Aby usunąć: kliknij na pracownika w komórce → potwierdź usunięcie.
-
-> **💡 Tip**: Możesz mieszać tryby — wygenerować automatycznie, a potem ręcznie poprawić konkretne komórki.
-
-#### Zapisywanie i Publikacja
-
-| Akcja | Przycisk | Efekt |
-|-------|----------|-------|
-| **Zapisz** | „Zapisz zmiany" | Grafik jest zapisany w bazie, ale pracownicy go **nie widzą** |
-| **Opublikuj** | „Opublikuj" | Grafik staje się **widoczny dla pracowników** + powiadomienie push |
-
-> **⚠️ Ważne**: Jeśli opuścisz zakładkę Grafik z niezapisanymi zmianami, system pokaże ostrzeżenie: *„Masz niezapisane zmiany w grafiku. Czy chcesz je odrzucić?"*.
-
-> **💡 Tip**: Cykl pracy z grafikiem:
-> 1. Ustaw wymagania kadrowe (jednorazowo, potem się powtarzają)
-> 2. Poczekaj aż pracownicy złożą dostępność
-> 3. Generuj → Edytuj → Zapisz → Opublikuj
+#### Edycja Ręczna i Publikacja
+- Kliknij **„+ Dodaj"** w komórce, aby ręcznie przypisać pracownika.
+- Kliknij na przypisanego pracownika, aby go usunąć lub zmienić obsadę.
+- **Zapisz zmiany**: Zapisuje grafik w bazie danych jako wersję roboczą.
+- **Opublikuj**: Publikuje grafik dla zespołu. Pracownicy natychmiast widzą swoje zmiany i otrzymują powiadomienie Push / Web Push.
 
 ---
 
-### 2.4 Obecności (✅)
+### 2.4 Obecności
 
-Zarządzanie ewidencją czasu pracy.
-
-#### Widok listy
-
-- **Filtry**: zakres dat + status (Oczekujące / Zatwierdzone / Odrzucone / Wszystkie).
-- Każdy wpis pokazuje: pracownika, datę, godziny wejścia/wyjścia, status.
-
-#### Zatwierdzanie / Odrzucanie
-
-Gdy pracownik zarejestruje obecność **poza grafikiem** (nieplanowana), wpis ma status **PENDING** i wymaga decyzji Managera:
-
-| Przycisk | Efekt |
-|----------|-------|
-| ✅ **Zatwierdź** | Status → CONFIRMED, godziny wliczane do ewidencji |
-| ❌ **Odrzuć** | Status → REJECTED, godziny nie są liczone |
-
-> **💡 Tip**: Obecności z grafiku (planowane) są automatycznie CONFIRMED — nie wymagają zatwierdzenia.
-
-#### Ręczne dodawanie
-
-Kliknij **„+"** → wybierz pracownika, datę, godziny wejścia/wyjścia. Przydatne, gdy pracownik zapomniał zarejestrować obecność.
-
-#### Eksport PDF
-
-Kliknij ikonę PDF → zostanie pobrany plik z:
-- Listą wszystkich obecności w zakresie dat (z filtrami).
-- **Podsumowaniem godzin**: suma godzin per pracownik (tylko CONFIRMED).
-
-> **💡 Tip**: Eksport PDF przydaje się do rozliczeń miesięcznych. Ustaw filtr na cały miesiąc i status „CONFIRMED".
+Ewidencja i rozliczanie rzeczywistego czasu pracy:
+- **Zatwierdzanie obecności nieplanowanych**: Wpisy zarejestrowane przez pracowników poza grafikiem trafiają do statusu `PENDING` i wymagają zatwierdzenia lub odrzucenia przez Managera.
+- **Obecności planowane**: Wpisy zgodne z opublikowanym grafikiem uzyskują status `CONFIRMED` automatycznie.
+- **Ręczne dodanie obecności**: Umożliwia uzupełnienie ewidencji w przypadku zapomnienia przez pracownika.
+- **Eksport PDF**: Generuje oficjalny raport ewidencji czasu pracy z podsumowaniem godzin za wybrany okres.
 
 ---
 
-### 2.5 Zespół (👥)
+### 2.5 Zespół
 
-Zakładka Zespół składa się z kilku pod-zakładek dostępnych przez karty na górze ekranu.
-
-#### Lista Pracowników
-
-- Widoczni wszyscy aktywni pracownicy z przypisanymi rolami i podsumowaniem godzin.
-- Przełącznik **„Pokaż nieaktywnych"** odkrywa dezaktywowane konta.
-
-#### Tworzenie konta
-
-Kliknij **„+"** → wypełnij:
-
-| Pole | Opis | Wymagane |
-|------|------|----------|
-| Login (username) | Unikalna nazwa użytkownika | ✅ |
-| Hasło | Min. 6 znaków | ✅ |
-| Imię i Nazwisko | Wyświetlane w grafiku | ✅ |
-| Email | Do kontaktu i globalnego logowania (Managerowie mogą dodawać/edytować email pracowników) | ❌ |
-
-#### Dialog szczegółów pracownika
-
-Kliknij na pracownika → dialog z opcjami:
-
-| Akcja | Opis |
-|-------|------|
-| **Przypisz role** | Zaznacz stanowiska (np. Barista ✅, Kasjer ✅). Algorytm przypisze tylko do ról, które ma |
-| **Edytuj dane** | Imię, nazwisko, email |
-| **Cele godzinowe** | `target_hours_per_month` — preferowana liczba godzin/miesiąc |
-| **Cele zmianowe** | `target_shifts_per_month` — preferowana liczba zmian/miesiąc |
-| **Reset hasła** | Ustaw nowe hasło (np. gdy pracownik je zapomniał) |
-| **Aktywacja / Dezaktywacja** | Wyłączenie wyłącza logowanie, ale nie kasuje danych |
-
-> **⚠️ Ważne o celach**: Cele godzinowe/zmianowe to **miękkie wytyczne** dla algorytmu. Algorytm będzie **starał się** ich nie przekraczać, ale jeśli nie ma innej opcji, i tak przypisze pracownika — by zmiana nie została pusta.
-
-> **💡 Tip**: Jeśli pracownik nie ma ustawionych celów (`target_hours_per_month` = puste), algorytm traktuje to jako „brak limitu" — może przypisać dowolną liczbę zmian.
-
-#### Statystyki pracownika
-
-Dostępne w dialogu szczegółów — pokazują:
-- Godziny w bieżącym miesiącu
-- Liczbę zmian w bieżącym miesiącu
-- Status dostępności (czy złożył dostępność)
-
-#### Giełda Zmian (zarządzanie)
-
-Podgląd wszystkich otwartych ofert:
-- Kto oddaje, jaką zmianę, kiedy.
-- **Sugerowane zastępstwa** — system proponuje pracowników posortowanych wg dostępności.
-- Kliknij **„Przydziel"** → wybierz zastępcę → zmiana zostanie przeniesiona.
-- Kliknij **„Anuluj"** → zamknij ofertę bez przypisania.
-
-> **💡 Tip**: Sugestie zastępstw są sortowane tak, by dostępni pracownicy z odpowiednią rolą byli na górze listy.
-
-#### Urlopy
-
-Widok wniosków urlopowych:
-- Filtr po statusie: Oczekujące / Zatwierdzone / Odrzucone.
-- **Zatwierdź** / **Odrzuć** — pracownik otrzyma powiadomienie push o decyzji.
-- **Kalendarz urlopów** — miesięczny widok z oznaczonymi dniami urlopu.
-
-#### Dostępność zespołu
-
-Widok dostępności **wszystkich pracowników** na wybrany tydzień:
-- Grid: pracownicy × zmiany × dni.
-- Kolory: 🟢 Dostępny / 🔴 Niedostępny.
-
-> **💡 Tip**: Sprawdź ten widok **przed generowaniem grafiku**, aby upewnić się, że pracownicy złożyli dostępność.
+- **Lista pracowników**: Przegląd personelu, przypisanych stanowisk i wypracowanych godzin.
+- **Tworzenie konta**: Kliknij „+”, podaj imię i nazwisko, login, hasło (min. 8 znaków, 1 wielka litera, 1 cyfra) oraz adres e-mail.
+- **Zarządzanie pracownikiem**:
+  - Przypisywanie i zmiana ról (stanowisk)
+  - Aktualizacja danych osobowych i adresu e-mail
+  - Ustalanie miesięcznych celów godzinowych i zmianowych
+  - Resetowanie hasła pracownika
+  - Aktywacja i dezaktywacja konta (`is_active`)
+- **Giełda zmian**: Podgląd ofert oddania zmiany, sugerowane zastępstwa na podstawie dostępności i uprawnień, zatwierdzanie transferu zmiany.
+- **Wnioski urlopowe**: Przeglądanie, zatwierdzanie i odrzucanie wniosków pracowników wraz z podglądem w kalendarzu urlopowym.
 
 ---
 
 ## 3. Panel Pracownika
 
-Po zalogowaniu jako Pracownik widzisz dolny pasek z 4 zakładkami:
+Dolny pasek nawigacyjny pracownika zawiera zakładki:
 
-| Ikona | Zakładka | Opis |
-|-------|----------|------|
-| 📅 | **Mój Grafik** | Opublikowane zmiany, oddawanie zmian |
-| 📝 | **Dostępność** | Zgłaszanie dostępności + wnioski urlopowe |
-| ⏰ | **Obecność** | Rejestracja czasu pracy |
-| 🔄 | **Giełda** | Przejmowanie zmian od innych pracowników |
-
-Górny pasek zawiera:
-- 🔔 **Powiadomienia**
-- ❔ **Pomoc**
-- 👤 **Menu profilu** (zmiana hasła, Google Calendar, moduł POS, wyloguj)
+| Zakładka | Opis |
+|----------|------|
+| **Mój Grafik** | Opublikowane zmiany, widok całego zespołu, oddawanie i wymiana zmian |
+| **Dostępność** | Deklaracja dyspozycji tygodniowej oraz wnioski urlopowe |
+| **Obecność** | Rejestracja czasu pracy (check-in / check-out) |
+| **Giełda** | Przegląd ofert i przejmowanie zmian od współpracowników |
 
 ---
 
-### 3.1 Mój Grafik (📅)
+### 3.1 Mój Grafik
 
-Widok kalendarza z opublikowanymi zmianami:
-
-- **Tygodniowy widok** — strzałki ← → do nawigacji.
-- Każda zmiana pokazuje: godziny, rolę, współpracowników na tej samej zmianie.
-- **Podsumowanie godzin** — wyświetlane nad grafikiem:
-  - Godziny w bieżącym tygodniu
-  - Godziny w bieżącym miesiącu
-
-#### Oddawanie zmian
-
-1. Kliknij na swoją zmianę.
-2. Kliknij **„Oddaj zmianę"**.
-3. Zmiana trafi na **Giełdę** — widoczna dla Managera i kwalifikujących się pracowników.
-4. Do momentu przejęcia lub anulowania, **nadal jesteś przypisany do tej zmiany**.
-
-> **⚠️ Ważne**: Nie można oddać zmiany z przeszłości.
-
-> **💡 Tip**: Po oddaniu zmiany możesz śledzić jej status w zakładce Giełda → „Moje oferty" (OPEN → TAKEN / CANCELLED).
-
-#### Integracja z Google Calendar
-
-Dostępna z menu profilu (👤) → **„Kalendarz Google"**:
-- **Połącz** → logowanie przez Google → zmiany z grafiku synchronizują się automatycznie z Twoim kalendarzem.
-- **Odłącz** → przerywa synchronizację.
-
-> **💡 Tip**: Dzięki temu zobaczysz swoje zmiany bezpośrednio w Google Calendar, razem z innymi wydarzeniami.
+- **Widok tygodniowy**: Prezentuje Twoje godziny pracy, stanowisko oraz współpracowników na danej zmianie.
+- **Przełącznik „Cała załoga"**: Umożliwia wgląd w grafik wszystkich pracowników lokalu.
+- **Oddanie zmiany na giełdę**: Kliknij swoją zmianę -> „Oddaj zmianę”. Zmiana trafi na giełdę, gdzie inny uprawniony pracownik może ją przejąć.
+- **Bezpośrednia wymiana zmian (Direct Swap)**: W widoku grafiku zespołu możesz zaproponować bezpośrednią wymianę zmiany współpracownikowi o tym samym stanowisku.
+- **Google Calendar**: W menu profilu możesz połączyć konto z Kalendarzem Google. Zmiany będą synchronizowane automatycznie w trybie offline.
 
 ---
 
-### 3.2 Dostępność (📝)
+### 3.2 Dostępność
 
-**⭐ Kluczowa funkcja** — dzięki niej Manager wie, kiedy możesz pracować.
+#### Deklaracja Dyspozycji
+1. Przejdź do wybranego tygodnia za pomocą strzałek.
+2. Na liście widoczne są wyłącznie zmiany przypisane do Twoich ról.
+3. Kliknij komórkę, aby wybrać stan:
+   - **Dostępny (zielony)**: Mogę pracować na tej zmianie.
+   - **Niedostępny (czerwony)**: Nie mogę pracować na tej zmianie.
+4. Kliknij **„Zapisz"**.
 
-Zakładka Dostępność ma 2 pod-zakładki: **Dyspozycja** i **Wnioski urlopowe**.
-
-#### Dyspozycja
-
-Tygodniowy grid (dni × zmiany):
-
-1. Nawigacja tygodniowa: strzałki ← →.
-2. Kliknij komórkę, aby przełączyć status:
-
-| Stan | Kolor | Znaczenie |
-|------|-------|-----------|
-| 🟢 **Dostępny** | Zielony | Mogę pracować na tej zmianie |
-| 🔴 **Niedostępny** | Czerwony | Nie mogę pracować |
-
-3. Kliknij **„Zapisz"** — preferencje zostaną wysłane.
-
-> **ℹ️ Zmiany przypisane do ról**: Na liście zobaczysz wyłącznie te zmiany, które są powiązane z Twoimi przypisanymi rolami (JobRoles). Ułatwia to precyzyjne określanie dyspozycji tylko dla relevantnych zmian.
-
-> **⚠️ Ważne**: Jeśli **nie złożysz** dostępności na dany tydzień, algorytm **nie przypisze Cię do żadnej zmiany** w tym tygodniu! Algorytm interpretuje brak dyspozycji jako „pozycja nieznana" i bezpiecznie pomija.
-
-> **💡 Tip**: Złóż dostępność jak najwcześniej — Manager generuje grafik na podstawie Twoich preferencji. Im wcześniej, tym lepiej!
-
-> **💡 Tip**: Jeśli widzisz komunikat *„Brak zdefiniowanych zmian — skontaktuj się z menadżerem"*, oznacza to, że Manager jeszcze nie skonfigurował definicji zmian.
+> **Ważne**: Brak złożenia dyspozycji na dany tydzień skutkuje nieprzypisaniem do żadnej zmiany przez algorytm.
 
 #### Wnioski Urlopowe
-
-1. Kliknij **„Nowy wniosek"**.
-2. Wypełnij:
-   - **Data od** — pierwszy dzień urlopu
-   - **Data do** — ostatni dzień urlopu (nie może być w przeszłości)
-   - **Powód** — krótki opis (max. 500 znaków)
-3. Wniosek trafi do Managera. Statusy:
-
-| Status | Znaczenie |
-|--------|-----------|
-| **PENDING** | Oczekuje na decyzję Managera |
-| **APPROVED** | Zatwierdzony |
-| **REJECTED** | Odrzucony |
-| **CANCELLED** | Anulowany przez Ciebie |
-
-> **⚠️ Ważne**: Wniosek urlopowy **nie blokuje automatycznie** Twojej dostępności w grafiku. Zadbaj o oznaczenie się jako „Niedostępny" na okresy urlopowe w zakładce Dyspozycja.
-
-> **💡 Tip**: Możesz anulować wniosek tylko w statusie PENDING. Po zatwierdzeniu lub odrzuceniu — nie.
+1. W podsekcji „Wnioski urlopowe” kliknij **„Nowy wniosek"**.
+2. Wskaż datę początkową, datę końcową oraz opcjonalny powód.
+3. Po wysłaniu wniosek otrzymuje status `PENDING`. Po decyzji Managera otrzymasz powiadomienie Push z informacją o zatwierdzeniu (`APPROVED`) lub odrzuceniu (`REJECTED`).
 
 ---
 
-### 3.3 Obecność (⏰)
+### 3.3 Obecność
 
-Rejestracja czasu pracy:
-
-1. Wybierz **datę** (domyślnie dzisiejsza).
-2. Godzina wejścia (check-in) i wyjścia (check-out):
-   - Jeśli byłeś **zaplanowany** na tę datę, system podpowie domyślne godziny z grafiku.
-   - Możesz je zmienić, jeśli faktyczne godziny były inne.
+1. Wybierz datę (domyślnie bieżąca).
+2. Wprowadź godzinę wejścia i wyjścia (jeśli zmiana była zaplanowana, godziny uzupełnią się automatycznie).
 3. Kliknij **„Zapisz"**.
-
-#### Co się dzieje po zapisaniu?
-
-| Sytuacja | Status wpisu | Wymagana akcja Managera? |
-|----------|-------------|-------------------------|
-| Byłeś zaplanowany na tę datę | **CONFIRMED** ✅ | ❌ (automatyczne) |
-| **Nie** byłeś zaplanowany | **PENDING** ⏳ | ✅ (Manager musi zatwierdzić) |
-
-> **⚠️ Ważne**: Możesz zarejestrować obecność tylko **raz na dzień**. Jeśli spróbujesz ponownie, zobaczysz komunikat *„Attendance already registered for this date"*.
-
-> **💡 Tip**: Historia obecności jest widoczna pod formularzem rejestracji ze statusem każdego wpisu.
+4. Wpisy zgodne z grafikiem zatwierdzane są automatycznie. Wpisy poza grafikiem oczekują na potwierdzenie Managera.
 
 ---
 
-### 3.4 Giełda Zmian (🔄)
+### 3.4 Giełda Zmian
 
-Giełda pozwala na **przejmowanie zmian** od innych pracowników.
-
-#### Widok giełdy
-
-Lista otwartych ofert z detalami:
-- Kto oddaje zmianę
-- Data, godziny, rola
-- **Status konfliktu** — automatyczna weryfikacja:
-
-| Oznaczenie | Znaczenie |
-|------------|-----------|
-| ✅ Brak konfliktu | Możesz bezpiecznie przejąć |
-| ⚠️ Ten sam dzień | Masz już zmianę tego dnia, ale nie nakłada się > 30 min |
-| 🚫 Nakładanie | Masz zmianę, która nakłada się o > 30 min — **nie możesz przejąć** |
-
-- **Hint dostępności** — czy oznaczyłeś się jako dostępny na tę zmianę.
-
-#### Przejmowanie zmiany
-
-1. Znajdź ofertę na liście.
-2. Kliknij **„Przejmij"**.
-3. System sprawdzi konflikty:
-   - Jeśli nakładanie > 30 min → **blokada** (*„You already have a shift that overlaps..."*).
-   - Jeśli brak konfliktu → zmiana zostanie przeniesiona na Ciebie.
-4. Oryginalny pracownik i managerowie otrzymają powiadomienie.
-
-> **💡 Tip**: Badge na ikonie Giełda (🔴 liczba) informuje, ile zmian jest dostępnych do przejęcia.
-
-> **⚠️ Ważne**: Nie możesz przejąć własnej oferty.
-
-#### Moje oferty
-
-Pod listą giełdy widzisz swoje oddawane zmiany i ich statusy (OPEN / TAKEN / CANCELLED).
+- Przeglądaj otwarte oferty oddania zmian zgłoszone przez innych pracowników.
+- System automatycznie oznacza brak kolizji czasowych oraz zgodność z Twoimi uprawnieniami stanowiskowymi.
+- Kliknięcie **„Przejmij"** natychmiast przenosi zmianę na Twoje konto i powiadamia Managera oraz oddającego.
 
 ---
 
-## 4. Moduł POS v2 / Kitchen Display System (KDS)
+## 4. Moduł POS / Kitchen Display System (KDS)
 
-System obsługi zamówień restauracyjnych z pełną obsługą trybu offline. Dostęp z głównego panelu przez ikonę 🍽️ (Manager) lub menu profilu (Pracownik).
+System obsługi sali i kuchni z obsługą pracy offline:
 
-### 4.1 Wymagania wstępne (Konfiguracja POS — tylko Manager)
+### 4.1 Ekran Kelnera (POS)
+- Wybór strefy (np. Sala Główna, Ogródek) i numeru stolika.
+- Dodawanie dań z dynamicznych kategorii menu wraz z modyfikatorami i uwagami.
+- Obsługa kursów dań (przystawki, dania główne, desery).
+- Przekazanie zamówienia do kuchni i monitorowanie statusu realizacji.
+- Rozliczanie rachunków z obsługą płatności dzielonych (gotówka, karta, voucher, płatności mobilne).
 
-Przed rozpoczęciem pracy z POS, Manager musi skonfigurować środowisko w panelu **Manager Setup**:
-
-1. **Strefy** — dodaj strefy restauracji (np. „Sala Główna", „Ogródek").
-2. **Stoliki** — dodaj stoliki przypisane do stref z liczbą miejsc.
-3. **Kategorie** — utwórz dynamiczne kategorie menu (np. Przystawki, Dania Główne, Napoje) z kolorami i ikony.
-4. **Pozycje menu** — dodaj dania z cenami i **czasem przygotowania** (`prep_time_sec`) — kluczowe dla silnika pacingu KDS.
-5. **Grupy modyfikatorów** (opcjonalnie) — np. „Stopień Wysmażenia" z opcjami: Rare, Medium, Well Done.
-
-> **💡 Tip**: Alternatywnie można użyć skryptu `python seed_test_data.py` aby automatycznie wygenerować przykładowe dane testowe.
-
-### 4.2 Ekran Kelnera (Waiter)
-
-Widok stolików i tworzenie zamówień:
-
-1. **Wybierz stolik** z listy (pogrupowane po strefach).
-2. **Dodaj pozycje** z menu:
-   - Wybierz kategorię → kliknij pozycję → ustaw ilość.
-   - **Kurs (course)** — przypisz pozycje do kursów (1 = przystawki, 2 = dania główne, itd.).
-   - **Modyfikatory** — jeśli pozycja ma grupę modyfikatorów, wybierz opcję (np. „Medium rare").
-   - Opcjonalnie dodaj **notatki** (np. „Bez pomidora").
-3. **Zatwierdź zamówienie** → trafia do kuchni.
-
-Po utworzeniu zamówienia, kelner widzi statusy pozycji:
-- 🟡 NEW → 🟠 ACKNOWLEDGED → 🟢 PREPARING → 🟢 READY → ✅ DELIVERED
-
-> **💡 Tip**: Cena i nazwa pozycji są „zamrożone" (snapshot) w momencie złożenia zamówienia. Nawet jeśli Manager zmieni cenę w menu, istniejące zamówienia zachowają starą cenę.
-
-### 4.3 Kitchen Display System (KDS) — Offline-First
-
-Ekran dla kuchni (tablet / monitor):
-
-- **Lista pozycji** z ilościami, notatkami, modyfikatorami i numerem stolika.
-- **Pacing Engine** — system automatycznie oblicza opóźnienia startu przygotowania per-kurs:
-  - Najdłuższa pozycja w kursie = **anchor** (punkt odniesienia).
-  - Pozostałe pozycje dostają `delay_start_sec` — kucharz wie, kiedy je zacząć, żeby wszystko było gotowe jednocześnie.
-- **Zmiana statusu** jednym kliknięciem:
-  - NEW → **„Zaczynam"** (PREPARING)
-  - PREPARING → **„Gotowe"** (READY)
-- **Tryb offline** — tablet działa nawet bez Wi-Fi:
-  - Zmiany są buforowane lokalnie.
-  - Po powrocie sieci, **batch sync** wysyła wszystkie zmiany na serwer jednym żądaniem.
-  - Serwer waliduje **monotoniczną kolejność stanów** (wagi: NEW=10 < PREPARING=30 < READY=40) i odrzuca przestarzałe aktualizacje.
-
-#### Anti-Ghosting (VOIDED)
-
-- Gdy kelner anuluje pozycję, trafia ona do stanu **VOIDED_PENDING_ACK** (waga 98).
-- Tablet KDS musi potwierdzić anulowanie — dopiero wtedy pozycja przechodzi do **VOIDED** (waga 99).
-- Zapobiega to sytuacji, gdy kucharz przygotowuje danie, które zostało już anulowane.
-
-#### Płatności
-
-- Obsługa **split payment** — można dzielić płatność między gotówkę, kartę, voucher i płatność mobilną.
-- System automatycznie śledzi: `total_amount`, `amount_paid`, `amount_due`.
-- Napiwki są rejestrowane per-płatność.
-
-> **💡 Tip**: KDS najlepiej wyświetlić na tablecie lub monitorze w kuchni w trybie pełnoekranowym.
+### 4.2 Ekran Kuchni (KDS)
+- Prezentacja zamówień w czasie rzeczywistym z uwzględnieniem silnika pacingu (synchronizacja czasu przygotowania dań w obrębie danego kursu).
+- Zmiana stanów dań: Nowe -> W przygotowaniu -> Gotowe do wydania.
+- **Działanie Offline-First**: KDS działa stabilnie nawet przy zaniku sieci Wi-Fi. Zmiany buforowane są lokalnie i synchronizowane w paczkach (batch sync) po przywróceniu połączenia z weryfikacją monotoniczności stanów (anti-ghosting).
 
 ---
 
-## 5. System Powiadomień
+## 5. System Powiadomień i Web Push
 
-### 5.1 Powiadomienia In-App
+PlannerV2 dostarcza powiadomienia trzema uzupełniającymi się kanałami:
 
-- Ikona dzwonka (🔔) w górnym pasku — z badge'em pokazującym liczbę nieprzeczytanych.
-- Kliknij → lista powiadomień z możliwością oznaczenia jako przeczytane.
+### 5.1 Powiadomienia w Aplikacji (In-App)
+- Ikona dzwonka w prawym górnym rogu z licznikiem nieprzeczytanych wiadomości.
+- Okno dialogowe z historią powiadomień i opcją oznaczenia jako przeczytane.
 
-### 5.2 Powiadomienia Push (FCM)
+### 5.2 Powiadomienia Przeglądarkowe (Web Push)
+- Działają w przeglądarkach stacjonarnych i mobilnych (Chrome, Firefox, Edge, Safari).
+- W trybie pierwszoplanowym powiadomienie wyświetla się jednocześnie w przeglądarce oraz w widocznym banerze na górze ekranu.
+- W trybie tła (zamknięta karta) powiadomienia odbiera Service Worker (`firebase-messaging-sw.js`), wyświetlając natywną notyfikację systemową.
 
-Na urządzeniach mobilnych (Android/iOS) system wysyła powiadomienia push:
+### 5.3 Konfiguracja Powiadomień na Urządzeniach Apple iOS (PWA)
+Aby otrzymywać powiadomienia Push na iPhone / iPad (iOS 16.4+):
+1. Otwórz aplikację w przeglądarce Safari.
+2. Kliknij przycisk **Udostępnij** (kwadrat ze strzałką w górę) i wybierz **„Do ekranu początkowego”** (Add to Home Screen).
+3. Uruchom aplikację z ikony na ekranie początkowym (jako pełnoekranową aplikację PWA).
+4. Kliknij ikonę dzwonka w prawym górnym rogu i kliknij przycisk **„Włącz powiadomienia”**.
+5. W wyświetlonym oknie dialogowym systemu iOS wybierz **„Pozwól”**.
 
-| Zdarzenie | Kto otrzymuje |
-|-----------|---------------|
-| Opublikowanie grafiku | Przypisani pracownicy |
-| Nowa zmiana wystawiona na giełdę | Managerowie + pracownicy z odpowiednią rolą |
-| Zmiana przejęta z giełdy | Oddający pracownik + managerowie |
-| Nowy wniosek urlopowy | Managerowie |
-| Decyzja o urlopie (zatwierdzony/odrzucony) | Wnioskujący pracownik |
-
-> **💡 Tip**: Upewnij się, że masz włączone powiadomienia na swoim urządzeniu, aby nie przegapić ważnych informacji!
+### 5.4 Rozwiązywanie Problemów z Powiadomieniami
+- **Status „Powiadomienia są zablokowane”**: Przejdź do ustawień przeglądarki (ikona kłódki przy adresie strony lub Ustawienia iOS -> Planista -> Powiadomienia) i zezwól na wysyłanie powiadomień, po czym odśwież aplikację.
+- **Brak powiadomień w tle na iOS**: Upewnij się, że aplikacja została zainstalowana na ekranie początkowym PWA, a wersja systemu iOS to co najmniej 16.4.
 
 ---
 
 ## 6. Konfiguracja Serwera i Pierwsze Logowanie
 
-### 6.1 Pierwszy raz — konfiguracja adresu
+### 6.1 Ustawienie Adresu Serwera
+1. Przy pierwszym uruchomieniu aplikacja wyświetla ekran konfiguracji.
+2. Wybierz **Skanuj kod QR** (Manager wyświetla kod z poziomu ikony QR w swoim panelu) lub wprowadź adres URL serwera ręcznie.
+3. Parametry zostaną zapisane w pamięci urządzenia.
 
-1. Aplikacja wyświetli ekran **Konfiguracja Serwera**.
-2. Dwie opcje:
-   - **Skanuj QR** — Manager generuje QR z ikoną 📱 w panelu.
-   - **Ręcznie** — wpisz URL backendu (np. `http://192.168.1.100:8000`).
-
-### 6.2 Tworzenie pierwszego Managera
-
-Pierwszy Manager musi zostać utworzony przez API:
-
-```
-POST /auth/register
-{
-  "username": "admin",
-  "password": "your_password",
-  "full_name": "Jan Kowalski",
-  "manager_pin": "1234"
-}
-```
-
-> **⚠️ Ważne**: Kod PIN (`manager_pin`) musi odpowiadać zmiennej `MANAGER_REGISTRATION_PIN` serwera (domyślnie: `1234`).
+### 6.2 Tworzenie Pierwszego Konta
+- W środowisku wielodostępnym pierwsze konto Managera lokalu tworzy Superadmin w panelu `/#/superadmin`.
+- W instalacji autonomicznej pierwsze konto tworzone jest przez endpoint `POST /auth/register` z podaniem kodu PIN (`MANAGER_REGISTRATION_PIN`).
 
 ---
 
 ## 7. Najczęstsze Pytania (FAQ)
 
-### Grafik
+### Dlaczego grafik nie obsadza pracowników, mimo że są dostępni?
+1. Upewnij się, że pracownicy zapisali deklarację dostępności na dany tydzień.
+2. Sprawdź, czy pracownicy mają przypisane role odpowiadające wymaganiom danej zmiany.
+3. Sprawdź, czy w konfiguracji zdefiniowano wymagania kadrowe na ten okres.
+4. Upewnij się, że dni obowiązywania zmian obejmują planowane dni pracy.
 
-**Q: Dlaczego algorytm nie przypisuje pracowników, mimo że są dostępni?**
+### Czy algorytm przypisze pracownika przekraczającego cel godzinowy?
+Tak. Zapewnienie pełnej obsady zmian jest priorytetem wyższym niż miękkie limity godzinowe. Jeśli dostępny jest tylko pracownik przekraczający cel, solver dokona przypisania, generując odpowiednie ostrzeżenie dla Managera.
 
-Sprawdź kolejno:
-1. ✅ Czy pracownicy złożyli **dostępność** na wybrany tydzień?
-2. ✅ Czy mają przypisane **role** odpowiadające wymaganiom kadrowym?
-3. ✅ Czy ustawiłeś **wymagania kadrowe** (ile osób potrzebujesz na zmianę)?
-4. ✅ Czy zmiany mają ustawione **dni obowiązywania** obejmujące docelowy dzień?
-
-**Q: Pracownik przekroczy limit godzin — czy algorytm go i tak przypisze?**
-
-Tak. Limity godzinowe i zmianowe są traktowane jako „miękkie wytyczne". Algorytm priorytetyzuje wypełnienie zmiany. Ale jeśli ma wybór między dwiema osobami, wybierze tę, która jest dalej od limitu.
-
-**Q: Co się stanie, jeśli wygeneruję grafik ponownie?**
-
-Poprzedni szkic zostanie nadpisany. Jeśli grafik jest już **zapisany** w bazie, generowanie tworzy nowy szkic — dopiero po kliknięciu „Zapisz" nadpisze stary.
-
-### Obecności
-
-**Q: Pracownik nie był w grafiku, ale przyszedł do pracy. Co robić?**
-
-Pracownik rejestruje obecność normalnie. Wpis pojawi się ze statusem PENDING — Manager musi go zatwierdzić w zakładce Obecności.
-
-### Giełda
-
-**Q: Pracownik oddał zmianę, ale nikt jej nie przejął. Co teraz?**
-
-Pracownik nadal jest przypisany do zmiany. Manager może ręcznie przypisać zastępcę w panelu Giełda Zmian, lub pracownik może anulować ofertę.
-
-**Q: Czy pracownik może przejąć zmianę, nawet jeśli oznaczył się jako niedostępny?**
-
-Tak — system nie blokuje przejęcia na podstawie dostępności, tylko na podstawie **konfliktu zmian** (nakładanie > 30 min). Hint dostępności jest informacyjny.
+### Jak zresetować hasło pracownika?
+Manager przechodzi do zakładki **Zespół**, otwiera kartę wybranego pracownika, wybiera **„Reset hasła”**, podaje nowe hasło spełniające wymogi złożoności (min. 8 znaków, 1 wielka litera, 1 cyfra) i zatwierdza operację.
 
 ---
 
 ## 8. Pomoc i Zgłaszanie Błędów
 
-### Pomoc
+- **Panel Pomocy**: Dostępny pod ikoną znaku zapytania na górnym pasku aplikacji.
+- **Zgłaszanie usterek**: W panelu pomocy wybierz **„Zgłoś błąd”**, podaj tytuł i opis problemu. Zgłoszenie zostanie automatycznie przesłane do repozytorium GitHub Issues projektu.
+- **Polityka prywatności**: Link dostępny na ekranie logowania oraz w ustawieniach aplikacji.
 
-W górnym pasku: ikona **❔** → dialog z najważniejszymi informacjami o obsłudze.
-
-Superadmini posiadają globalny dostęp (dashboard znajduje się pod adresem `/#/superadmin`).
-
-### Zgłoszenie błędu
-
-1. Kliknij **❔** → **„Zgłoś błąd"**.
-2. Wypełnij formularz:
-   - **Tytuł** — krótki opis problemu
-   - **Opis** — szczegóły, kroki do odtworzenia
-3. Zgłoszenie automatycznie tworzy **Issue na GitHub** i trafia do zespołu technicznego.
-
-### Polityka Prywatności
-
-Dostępna z ekranu logowania — link na dole strony.
+---
 
 ## 9. Panel SuperAdmina (Multi-Tenancy)
-PlannerV2 od teraz posiada pełne wsparcie dla struktury Multi-Tenant z wbudowanym panelem właściciela systemu (SuperAdmin).
 
-Logowanie SuperAdmina:
-* Login: manager@default.pl (wartość bazowa ustawiana przez seed bazy danych, w zależności od konfiguracji)
-* Hasło: zgodne z instrukcją instalacji (domyślnie "Manager1")
+Panel nadrzędny dostępny pod adresem `/#/superadmin` dla kont z uprawnieniem `SUPERADMIN`:
 
-Funkcje w panelu SuperAdmin:
-1. **Zarządzanie restauracjami:**
-   - Dodawanie nowych restauracji.
-   - Dezaktywowanie/aktywowanie dostępu dla danej restauracji.
-   - Edycja danych (nazwa oraz unikalny ID/Slug restauracji używany podczas logowania nazwą użytkownika).
-2. **Zarządzanie kontami:**
-   - Tworzenie pierwszego managera (właściciela) dla nowo dodanej restauracji.
-   - Przeglądanie listy wszystkich użytkowników i pracowników przypisanych do danej restauracji.
-   - Awaryjne resetowanie haseł dla wybranych użytkowników.
-
-Dzięki temu system pozwala na bezproblemową obsługę wielu lokali gastronomicznych na jednej instancji serwera.
+1. **Zarządzanie Lokalami (Tenants)**:
+   - Dodawanie nowych restauracji (nazwa oraz unikalny identyfikator slug / Login ID).
+   - Włączanie i wyłączanie dostępu do systemu dla danej restauracji.
+   - Edycja parametrów lokalu.
+2. **Konta Globalne**:
+   - Tworzenie pierwszego konta Managera dla nowo utworzonej restauracji.
+   - Wgląd w bazę użytkowników ze wszystkich restauracji.
+   - Awaryjny reset haseł dla wybranych kont menedżerskich.

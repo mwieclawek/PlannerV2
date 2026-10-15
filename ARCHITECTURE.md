@@ -424,7 +424,7 @@ sequenceDiagram
     Note over KDS: Wi-Fi wróciło — batch sync
     KDS->>B: POST /pos/v2/kds/sync {actions: [{item_id, new_status, client_timestamp}]}
     B->>B: KDSService.process_sync_batch()
-    Note over B: Monotonic weight check (NEW:10 < PREPARING:30 < READY:40)<br/>✓ Forward OK | ✗ Stale rejected | ✗ Voided ghost blocked
+    Note over B: Monotonic weight check (NEW:10 < PREPARING:30 < READY:40)<br/>Forward OK | Stale rejected | Voided ghost blocked
     B->>B: KDSEventLog (audit trail)
     B-->>KDS: {results: [{success, applied_status}], server_time}
 
@@ -432,17 +432,30 @@ sequenceDiagram
     W->>B: POST /pos/v2/kds/sync {READY → DELIVERED}
 ```
 
-## Powiadomienia Push (FCM)
+## Powiadomienia Push i Web Push (FCM)
 
-System obsługuje powiadomienia push za pomocą Firebase Cloud Messaging:
+System obsługuje powiadomienia push za pomocą Firebase Cloud Messaging na platformach mobilnych (Android/iOS) oraz w przeglądarkach (Web Push i Safari iOS PWA):
 
 | Zdarzenie | Odbiorcy | Kanał |
 |-----------|----------|-------|
-| Opublikowanie grafiku | Pracownicy z przypisaniami | In-app + Push |
+| Opublikowanie grafiku | Pracownicy z przypisaniami | In-app + Push (FCM / Web Push) |
 | Nowa zmiana na giełdzie | Managerowie + kwalifikujący się pracownicy (z odpowiednią rolą) | In-app + Push |
 | Zmiana przejęta z giełdy | Oddający pracownik + managerowie | In-app + Push |
 | Nowy wniosek urlopowy | Managerowie | In-app + Push |
 | Zatwierdzenie/odrzucenie urlopu | Wnioskujący pracownik | In-app + Push |
+
+### Komponenty Web Push
+- **Service Worker (`firebase-messaging-sw.js`):** Obsługa zdarzeń w tle (`onBackgroundMessage`), ikona `/icons/Icon-192.png`, przywracanie fokusu karty (`notificationclick`).
+- **Foreground Dual Notifications:** Równoległa prezentacja powiadomienia systemowego przeglądarki (HTML5 Notification API przez `package:web`) oraz banera `MaterialBanner` u góry ekranu (`ScaffoldMessenger`).
+- **Wymóg User Gesture:** Dedykowany przycisk w oknie dialogowym `NotificationBell` umożliwiający wywołanie `requestPermission()` w bezpośredniej odpowiedzi na kliknięcie użytkownika (niezbędne dla Safari iOS PWA i Chrome).
+- **Konfiguracja Nginx:** Wyłączenie buforowania plików Service Workera (`Cache-Control: no-cache, no-store, must-revalidate`).
+
+## Obsługa Błędów i Walidacja Danych (ApiErrorHandler)
+
+Dla zapewnienia spójnego doświadczenia użytkownika i bezpieczeństwa danych:
+- **`ApiErrorHandler` (Frontend):** Przechwytuje błędy biblioteki Dio i mapuje kody HTTP, błędy walidacji Pydantic (tablice 422 `detail`), słowniki oraz błędy połączenia na czytelne komunikaty w języku polskim.
+- **`FriendlyDioException`:** Hermetyzuje sformatowany komunikat błędu, ułatwiając jego bezpośrednie wyświetlanie w komponentach SnackBar i MaterialBanner.
+- **Polityka Silnych Haseł:** Narzucenie minimalnych wymagań (min. 8 znaków, co najmniej 1 wielka litera, co najmniej 1 cyfra) w walidatorach frontendowych oraz w schematach Pydantic backendu (`PasswordChangeRequest`, `ManagerCreateRequest`).
 
 ## Bezpieczeństwo
 
@@ -475,7 +488,7 @@ services:
   nginx:
     image: nginx:alpine
     ports: ["80:80"]
-    # Reverse proxy: /api → backend, / → frontend static files
+    # Reverse proxy: /api -> backend, / -> frontend static files
 ```
 
 Pipeline CI/CD (Jenkins):

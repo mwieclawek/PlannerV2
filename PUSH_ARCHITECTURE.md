@@ -1,57 +1,160 @@
-# FCM Push Notifications Architecture Plan
+# Architektura Powiadomień Push (FCM & Web Push)
 
-Aby wdrożyć powiadomienia Push na platformy mobilne (Android/iOS) i webowe dla aplikacji PlannerV2, w przyszłości należy zainicjować integrację z usługą **Firebase Cloud Messaging (FCM)**. Powiadomienia w aplikacji aktualnie opierają się na bazie danych i zapytaniach HTTP wywoływanych przez interfejs (dzwoneczek), jednak system zaprojektowano w taki sposób, aby był otwarty na rozbudowę o notyfikacje wypychane.
+System PlannerV2 obsługuje wieloplatformowe powiadomienia Push za pośrednictwem Firebase Cloud Messaging (FCM) dla aplikacji mobilnych (Android, iOS) oraz przeglądarek internetowych (Web Push, w tym Progressive Web Apps na systemie iOS 16.4+).
 
-## Architektura i Przepływ
+---
 
-1. **Gromadzenie tokenów FCM (Rejestracja urządzeń)**
-   - W warstwie Frontendowej (Flutter) należy zainstalować pakiet `firebase_messaging`.
-   - Podczas logowania po pomyślnym autoryzowaniu (lub starcie aplikacji, gdzie użytkownik jest już zalogowany) aplikacja zapyta system o prawa do powiadomień.
-   - Po nadaniu uprawnień wstrzyknięty zostanie kod pobrania tokenu rejestracji urządzenia (FCM Token).
-   - Ten token należy przesłać pod nowy zasób w backendzie np. `POST /api/notifications/devices`.
+## 1. Architektura i Komponenty
 
-2. **Składowanie tokenów po stronie Backendowej**
-   - Dodanie nowej tabeli na backendzie (np. `UserDeviceToken` lub `FCMToken`), powiązanej relacją z modelem `User`. Z racji tego, że użytkownik może obsługiwać system równolegle z aplikacji na telefonie i przeglądarki, powiązanie powinno być 1-wiele.
+System składa się z trzech współpracujących warstw:
 
-3. **Inicjowanie powiadomień Push**
-   - Po każdej akcji generującej nową notyfikację (np. dodanie dyżuru, zatwierdzenie ewidencji), kod aplikacji w `backend/routers` i `backend/services` dodaje standardowe powiadomienie rekordu do tabeli bazy danych środowiska (PostgreSQL).
-   - Należy zaimplementować tzw. `Background Tasks` (korzystając z wbudowanych FastApi `BackgroundTasks` lub rozbudowanego narzędzia do kolejkowania jak np. `Celery/Redis`), który przetwarza utworzony wniosek wysłania.
-   - Zadanie w tle (Background Task) pobierze wszystkie aktywne tokeny przypisane do danego `user_id` odbierającego i wykorzystując zestaw bibliotek Pythona podpiętych pod Firebase (`firebase-admin`) użyje integracji FCM Admin SDK do wywołania wysyłki wiadomości Push pod te tokeny.
+1. **Warstwa Kliencka (Flutter & Web Push Service Worker):**
+   - Rejestracja urządzenia w usłudze FCM.
+   - Obsługa powiadomień w tle przez dedykowany Service Worker przeglądarki (`firebase-messaging-sw.js`).
+   - Obsługa powiadomień na pierwszym planie (Foreground) z podwójną sygnalizacją: natywnym powiadomieniem przeglądarki (HTML5 Notification API) oraz banerem systemowym u góry ekranu (`MaterialBanner`).
+   - Zarządzanie uprawnieniami powiadomień w interfejsie (`NotificationBell`) z zachowaniem wymogu bezpośredniego gestu użytkownika (User Gesture) wymaganego przez przeglądarki Safari (iOS PWA) oraz Google Chrome.
 
-## Wymagania wstępne i potrzebne zależności
+2. **Warstwa Serwerowa (FastAPI Backend):**
+   - Model `UserDevice` przechowujący relację 1:N między użytkownikiem a jego zarejestrowanymi tokenami urządzeń.
+   - Rejestracja tokenów urządzeń pod endpointem `POST /api/notifications/devices`.
+   - Wyrejestrowywanie tokenów pod `DELETE /api/notifications/devices/{token}` podczas wylogowania lub deaktywacji konta.
+   - Serwis `PushService` (`backend/app/services/push_service.py`) wykorzystujący oficjalne SDK `firebase-admin` do asynchronicznej wysyłki komunikatów Multicast.
 
-- **Frontend (Flutter)**: Dodanie `firebase_messaging: ^X.X.X` w pliku `pubspec.yaml`. Utworzenie skryptów obsługi `FirebaseMessaging.onMessage`, `FirebaseMessaging.onMessageOpenedApp` i `FirebaseMessaging.onBackgroundMessage`.
-- **Backend (FastAPI)**: Uruchomienie `pip install firebase-admin`. W projekcie istnieje już obsługa `.env`, należy osadzić plik certyfikacki konta usługowego Firebase jako referencję lokalną z `.env` lub jako dane środowiskowych zmiennych do ładowania przy starcie. Powołanie tablicy `UserDevice` używając migracji `Alembic`.
+3. **Infrastruktura Sieciowa (Nginx Reverse Proxy):**
+   - Serwowanie statycznych plików Service Workera (`/firebase-messaging-sw.js` oraz `/flutter_service_worker.js`) z nagłówkami `Cache-Control: no-cache, no-store, must-revalidate`.
+   - Zapewnienie natychmiastowej propagacji aktualizacji kodu Service Workera do przeglądarek użytkowników.
 
-## Schemat działania
+---
+
+## 2. Implementacja Web Push
+
+### 2.1 Service Worker (`frontend/web/firebase-messaging-sw.js`)
+
+Service worker działa w tle przeglądarki, niezależnie od tego, czy karta z aplikacją jest aktywna:
+
+```javascript
+importScripts("https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js");
+
+firebase.initializeApp({
+  apiKey: "...",
+  appId: "...",
+  messagingSenderId: "...",
+  projectId: "planista-e31fe",
+  authDomain: "planista-e31fe.firebaseapp.com",
+  storageBucket: "planista-e31fe.firebasestorage.app",
+});
+
+const messaging = firebase.messaging();
+
+messaging.onBackgroundMessage((payload) => {
+  const notificationTitle = payload.notification?.title || payload.data?.title || 'Planista';
+  const notificationOptions = {
+    body: payload.notification?.body || payload.data?.body || '',
+    icon: '/icons/Icon-192.png',
+    badge: '/icons/Icon-192.png',
+    data: payload.data || {},
+  };
+
+  return self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow('/');
+      }
+    })
+  );
+});
+```
+
+### 2.2 Integracja w Kodzie Flutter (`PushService` & `WebNotificationHelper`)
+
+- **Konfiguracja klucza VAPID:**
+  `PushService` pobiera klucz certyfikatu Web Push ze zmiennej środowiskowej kompilacji:
+  ```dart
+  static const String vapidKey = String.fromEnvironment('FCM_VAPID_KEY', defaultValue: '');
+  ```
+  Klucz jest opcjonalnie przekazywany do `_messaging.getToken(vapidKey: kIsWeb ? _resolvedVapidKey : null)`.
+
+- **Izolacja platformowa (`WebNotificationHelper`):**
+  Zastosowano architekturę warunkowych importów (`conditional imports`):
+  - `web_notification_helper_web.dart`: implementacja korzystająca z `package:web` i `dart:js_interop` do obsługi `web.Notification`.
+  - `web_notification_helper_stub.dart`: implementacja zastępcza dla środowisk mobilnych oraz testów jednostkowych na Dart VM.
+
+- **Obsługa trybu pierwszoplanowego (Foreground):**
+  Gdy użytkownik korzysta z otwartej aplikacji i nadejdzie powiadomienie:
+  1. Lista powiadomień pod dzwoneczkiem odświeża się automatycznie (`ref.read(notificationsProvider.notifier).fetchNotifications()`).
+  2. Wyświetlane jest powiadomienie przeglądarkowe (jeśli uprawnienia są przyznane).
+  3. Wyświetlany jest widoczny baner u góry ekranu (`MaterialBanner` przez `rootScaffoldMessengerKey`).
+
+---
+
+## 3. Wsparcie Apple iOS Web Push (PWA)
+
+Zgodnie ze standardami Apple (iOS 16.4+), obsługa Web Push w Safari wymaga:
+1. Trybu pełnoekranowego Standalone PWA (`manifest.json` z `"display": "standalone"`).
+2. Dodania witryny do ekranu początkowego urządzenia (Add to Home Screen).
+3. Meta-tagu w `index.html`:
+   ```html
+   <meta name="apple-mobile-web-app-capable" content="yes">
+   <meta name="apple-mobile-web-app-status-bar-style" content="black">
+   <link rel="apple-touch-icon" href="icons/Icon-192.png">
+   ```
+4. Wywołania `Notification.requestPermission()` wyłącznie w bezpośredniej odpowiedzi na kliknięcie lub dotknięcie użytkownika (User Gesture). W aplikacji PlannerV2 zapewnia to przycisk „Włącz powiadomienia” umieszczony w oknie dialogowym `NotificationBell`.
+
+---
+
+## 4. Diagram Przepływu Danych
 
 ```mermaid
 sequenceDiagram
-    participant User as Urządzenie Pracownika
-    participant Flutter as Flutter App
+    participant User as Użytkownik / Przeglądarka
+    participant Flutter as Flutter Frontend
+    participant SW as Service Worker
+    participant FCM as Firebase Cloud Messaging
     participant Backend as FastAPI Backend
     participant DB as Baza PostgreSQL
-    participant Firebase as FCM CServer
 
-    User->>Flutter: Logowanie do systemu
-    Flutter->>Firebase: Żądaj FCM Token
-    Firebase-->>Flutter: Zwróć FCM Token
-    Flutter->>Backend: Prześlij FCM Token do bazy (np. /api/notifications/device)
-    Backend->>DB: Zapisz relację User -> Token
+    User->>Flutter: Logowanie lub kliknięcie "Włącz powiadomienia"
+    Flutter->>User: Wyświetlenie promptu systemowego (requestPermission)
+    User-->>Flutter: Zgoda na powiadomienia
+    Flutter->>FCM: getToken(vapidKey)
+    FCM-->>Flutter: Zwrócenie tokena rejestracyjnego FCM
+    Flutter->>Backend: POST /api/notifications/devices {fcm_token}
+    Backend->>DB: Zapis / aktualizacja rekordu UserDevice
+
+    Note over Backend,DB: Zdarzenie biznesowe (np. publikacja grafiku)
+    Backend->>DB: Zapis powiadomienia w tabeli Notification
+    Backend->>DB: Pobranie aktywnych tokenów FCM adresata
+    DB-->>Backend: Lista tokenów [TokenA, TokenB]
+    Backend->>FCM: send_each_for_multicast(tokens, notification, data)
     
-    rect rgb(200, 220, 240)
-    Note over Backend,DB: Zmiana statusu grafiku / inne powiadomienie
-    Backend->>DB: Wygeneruj notyfikację lokalnie w bazie (istniejący kod)
-    Backend->>Backend: Uruchom Background Task (async)
-    Backend->>DB: Pobierz listę Tokenów dla User ID
-    DB-->>Backend: [Token1, Token2]
-    Backend->>Firebase: Wyślij Push Message przez SDK firebase_admin (Token1, Token2)
+    alt Aplikacja zamknięta / w tle (Background)
+        FCM->>SW: Push Event do Service Workera
+        SW->>User: Systemowe powiadomienie (self.registration.showNotification)
+        User->>SW: Kliknięcie powiadomienia
+        SW->>User: Fokus na istniejącą kartę lub otwarcie aplikacji
+    else Aplikacja otwarta (Foreground)
+        FCM->>Flutter: FirebaseMessaging.onMessage
+        Flutter->>Flutter: Odświeżenie listy pod dzwonkiem
+        Flutter->>User: HTML5 Notification + MaterialBanner na górze ekranu
     end
-    
-    Firebase->>User: Dostarcza Native Push Notification (Android/iOS)
 ```
 
-## Podsumowanie bezpieczeństwa
+---
 
-- Tokeny powinny być stale odświeżane. Warto usuwać rekordy powiązań z urządzeniami, gdy logowanie wygaśnie (np. aplikacja odeśle wyjątek niebytu podczas logiki 401 Unauthorized), albo z API wejdzie request z akcji wylogowania użytkownika (Endpoint `POST /auth/logout` do usunięcia tokenu powiązanego z sesją).
-- Obsługa środowisk - Użytkownik deweloperski może wymagać innego środowiska Firebase niż Produkcja albo rozróżnienia notyfikacji Topic'ami/Prefixami. W tym projekcie posiadamy oddzielną bazę na DEV i PROD wspieraną kontenerami przez Docker Compose i Jenkins - środowisko PROD w backendzie będzie wskazywać na produkcyjny plik certyfikatów Service account, a DEV może wskazywać na np. devowy projekt Firebase lub by w ogóle mockowany tak by deweloper nie tworzył masowo spamu na ekranie przy testach Jenkinsa.
+## 5. Bezpieczeństwo i Higiena Tokenów
+
+- **Cykl życia tokena:** Tokeny są powiązane z konkretnym kontem użytkownika i jego sesją. Przy wylogowaniu aplikacja wywołuje `DELETE /api/notifications/devices/{token}`.
+- **Deaktywacja konta:** Gdy menedżer dezaktywuje pracownika (`is_active = False`), powiązane urządzenia są usuwane, uniemożliwiając otrzymywanie poufnych powiadomień.
+- **Obsługa nieważnych tokenów:** Gdy FCM zgłosi kod błędu `UnregisteredError` lub `InvalidArgumentError` dla danego tokena, backend automatycznie usuwa przestarzały rekord z bazy danych.
+- **Nagłówki Nginx:** Pliki Service Workera nie podlegają buforowaniu przez przeglądarki ani serwery pośredniczące (`Cache-Control: no-cache, no-store, must-revalidate`), co zapobiega blokowaniu aktualizacji kodu push.

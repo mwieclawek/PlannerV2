@@ -4,47 +4,56 @@
 
 | Nazwa | Hex | Użycie |
 |-------|-----|--------|
-| Primary | `#4F46E5` (Indigo) | Przyciski, akcenty, nawigacja |
-| Success | `#22C55E` | Potwierdzenia, dostępność PREFERRED |
-| Warning | `#F59E0B` | Ostrzeżenia, status NEUTRAL |
-| Error | `#EF4444` | Błędy, niedostępność, odrzucone |
-| Background | `#F8FAFC` | Tło |
-| Surface | `#FFFFFF` | Karty, dialogi |
-| On Surface | `#1E293B` | Tekst główny |
+| Primary | `#006A6A` (Deep Teal) | Przyciski, akcenty, nawigacja |
+| Primary Container | `#9CF4F4` (Light Mint) | Tła kontenerów wyróżnionych |
+| Secondary | `#4A6363` (Muted Grey-Green) | Elementy drugorzędne |
+| Success | `#2E7D32` | Potwierdzenia, status aktywny, dostępność preferowana |
+| Warning | `#ED6C02` | Ostrzeżenia, status neutralny, powiadomienia zablokowane |
+| Error | `#BA1A1A` | Błędy, niedostępność, odrzucone wnioski |
+| Background | `#FAFDFC` (Ice White) | Tło aplikacji |
+| Surface | `#F2FBFB` | Karty, dialogi, panele |
+| On Surface | `#191C1C` | Tekst główny |
 
 ## Typografia
 
-- **Nagłówki**: Google Fonts — Outfit
+- **Nagłówki**: Google Fonts — Outfit / Inter
 - **Treść**: Google Fonts — Inter
 - **Rozmiary**: 12 / 14 / 16 / 20 / 24 / 32px
 
 ## Komponenty
 
 ### Przyciski
-- `ElevatedButton` — główne akcje (Zapisz, Generuj, Opublikuj)
-- `OutlinedButton` — akcje drugorzędne (Anuluj, Filtruj)
-- `IconButton` — akcje inline (Edytuj, Usuń, Dodaj)
+- `FilledButton` — główne akcje (Zapisz, Generuj, Opublikuj, Włącz powiadomienia)
+- `OutlinedButton` — akcje drugorzędne (Anuluj, Filtruj, Wymień)
+- `IconButton` — akcje inline (Edytuj, Usuń, Dodaj, Odśwież)
 - `FloatingActionButton` — szybkie dodawanie (+)
 
 ### Formularze
-- `TextField` z `OutlineInputBorder`
+- `TextField` z `OutlineInputBorder` (zaokrąglenie 10px, tło `surfaceContainerLow`)
 - Walidacja inline z `errorText`
+- Walidacja siły haseł: minimum 8 znaków, 1 wielka litera, 1 cyfra (`ApiErrorHandler.validatePassword`)
 - `DropdownButtonFormField` dla select
 - `TimePicker` dla godzin zmian
 
 ### Karty
-- `Card` z `elevation: 2`
-- Padding: 16px
-- Border radius: 12px
+- `Card` z zaokrągleniem 8–12px
+- Obramowanie `BorderSide(color: outline.withValues(alpha: 0.2))`
+- Padding wewnętrzny: 12–16px
 
 ### Dialogi
-- `AlertDialog` — potwierdzenia, ostrzeżenia
+- `AlertDialog` — potwierdzenia, ostrzeżenia, usuwanie
 - `SimpleDialog` — wybory (np. wybór pracownika)
-- Customowe dialogi: `EmployeeDetailDialog`, `BugReportDialog`, `HelpDialog`, `QrConfigDialog`
+- Customowe dialogi: `EmployeeDetailDialog`, `NotificationDialog`, `BugReportDialog`, `HelpDialog`, `QrConfigDialog`
+
+### Banery i Powiadomienia
+- `MaterialBanner` (`ScaffoldMessenger`) — wyrazisty baner u góry ekranu dla powiadomień pierwszoplanowych (Foreground Push), z przyciskiem zamknięcia i automatycznym wygaszaniem po 6 sekundach.
+- `SnackBar` — komunikaty statusu, błędy sieciowe (floating, 4–5 sekund).
+- Baner uprawnień Web Push — wbudowany w okno dialogowe `NotificationBell`, prezentujący stan uprawnień (aktywne, oczekujące na akceptację, zablokowane) z przyciskiem aktywacji.
 
 ### Chipy / Badge
 - `Chip` z kolorem roli — identyfikacja pracowników na grafiku
-- Status badge — kolorowe oznaczenie statusu (OPEN/TAKEN/CANCELLED)
+- Status badge — kolorowe oznaczenie statusu (OPEN / TAKEN / CANCELLED)
+- Unread badge — czerwony licznik nieprzeczytanych powiadomień nad ikoną dzwonka
 
 ---
 
@@ -52,12 +61,14 @@
 
 ### Login (`/login`)
 - Logo aplikacji (widget `AppLogo`)
-- Obsługa architektury Multi-Tenancy (wielodostępność) - wiele restauracji na jednej instancji.
-- Pola: **Kod restauracji** (Login ID), **Login lub Email**, **Hasło**
-- Przycisk: **Zaloguj**
-- Brak opcji samodzielnej rejestracji
+- Obsługa architektury Multi-Tenancy (wielodostępność):
+  - Logowanie za pomocą unikalnego adresu e-mail i hasła LUB
+  - Logowanie za pomocą nazwy użytkownika (username), kodu lokalu (slug) i hasła
+- Pola formularza: Kod restauracji (Login ID), Login lub Email, Hasło
+- Wskazówki autouzupełniania (`AutofillGroup`) dla menedżerów haseł
+- Przycisk: Zaloguj
 
-### Server Setup (`/server-setup`)
+### Server Setup (`/setup`)
 - Skanowanie kodu QR z adresem serwera
 - Ręczne wpisanie URL backendu
 - Zapisywane w `ConfigService` (SharedPreferences)
@@ -66,126 +77,116 @@
 
 ### Superadmin Dashboard (`/#/superadmin`)
 - Dostępne dla użytkowników o globalnej roli `SUPERADMIN`.
-- Lista wszystkich restauracji (Tenantów) prezentowana w formie Kart.
-- Karty restauracji oferują:
-  - Toggla do edycji statusu.
-  - Ikonę ołówka do edycji nazwy i slug (identyfikatora/kodu restauracji).
-  - Przycisk **Użytkownicy** – otwiera okno dialogowe z listą użytkowników przypisanych do danej restauracji (wraz z opcją resetu hasła managera).
-  - Przycisk **Dodaj managera**.
-- Floating Action Button (+) pozwalający na akcję **Dodaj Restaurację**.
+- Lista wszystkich restauracji (Tenantów) prezentowana w formie kart:
+  - Przełącznik aktywności lokalu
+  - Przycisk edycji nazwy i identyfikatora slug
+  - Przycisk Użytkownicy — dialog listy kont powiązanych z lokalem wraz z funkcją resetu hasła managera
+  - Przycisk Dodaj managera
+- Floating Action Button (+) do rejestracji nowego lokalu
 
 ---
 
 ### Manager Dashboard (`/manager`)
 
-Bottom Navigation Bar z 6 zakładkami:
+Pasek nawigacyjny z zakładkami:
 
-| # | Ikona | Nazwa | Ekran |
-|---|-------|-------|-------|
-| 0 | 🏠 Home | Home | `HomeTab` |
-| 1 | 📅 Calendar | Grafik | `SchedulerTab` |
-| 2 | 👥 People | Zespół | `TeamTab` |
-| 3 | ⚙️ Settings | Ustawienia | `SetupTab` |
-| 4 | ✅ Check | Obecności | `AttendanceApprovalTab` |
-| 5 | 🔄 Swap | Zmiany | `GiveawayTab` |
+| Indeks | Etykieta | Ekran |
+|--------|----------|-------|
+| 0 | Home | `HomeTab` |
+| 1 | Grafik | `SchedulerTab` |
+| 2 | Zespół | `TeamTab` |
+| 3 | Ustawienia | `SetupTab` |
+| 4 | Obecności | `AttendanceApprovalTab` |
+| 5 | Zmiany | `GiveawayTab` |
 
 #### Home Tab
-- **Kalendarz** (CalendarView) z dziennymi wydarzeniami
-- Kliknięcie dnia → szczegóły: kto pracuje, na jakiej zmianie i roli
-- Pasek nawigacyjny AppBar z nazwą użytkownika, ikonami Pomoc (❔) i Wyloguj
+- Kalendarz z dziennymi wydarzeniami
+- Podgląd dnia: lista pracowników, zmian i stanowisk
+- Pasek górny: dzwonek powiadomień, pomoc, konfiguracja QR, moduł POS, wylogowanie
 
 #### Scheduler Tab (Grafik)
-- Nawigacja tygodniowa (← Tydzień →)
-- **Grid**: Dni × Zmiany z chipami pracowników (kolor = rola)
-- **Wymagania kadrowe**: edycja per dzień/zmiana/rola
-- **Tryb Draft**: generowanie nie zapisuje do DB
-- Przyciski: Generuj | Zapisz | Opublikuj
-- Statystyki godzin per pracownik
+- Nawigacja tygodniowa (poprzedni / następny tydzień)
+- Siatka dni i zmian z chipami pracowników
+- Wymagania kadrowe per dzień / zmiana / rola
+- Tryb szkicu (Draft): generowanie bez natychmiastowego zapisu
+- Ostrzeżenia o 11-godzinnym odpoczynku dobowym oraz brakach kadrowych
+- Przyciski akcji: Generuj, Zapisz, Opublikuj
 
 #### Team Tab (Zespół)
 - Lista pracowników z avatarami i rolami
-- FAB (+) — tworzenie nowego konta pracownika
-- Kliknięcie → `EmployeeDetailDialog`:
-  - Przypisywanie ról (checkboxy)
-  - Edycja danych (imię, **adres email**, cele godzinowe)
-  - Reset hasła
-  - Aktywacja / dezaktywacja (`is_active`)
-- Filtr: aktywni / wszyscy
+- Przycisk dodawania pracownika
+- Okno dialogowe pracownika:
+  - Przypisywanie ról
+  - Edycja danych (imię, adres e-mail, cele godzinowe)
+  - Reset hasła z walidacją złożoności
+  - Aktywacja / dezaktywacja konta
 
 #### Setup Tab (Ustawienia)
-- **Sekcja Role**: lista + formularz dodawania (nazwa + kolor)
-- **Sekcja Zmiany**: lista + formularz (nazwa + godziny start/end). *Zmiany (ShiftDefinition) są teraz przypisane do konkretnych ról (JobRoles).*
-- **Sekcja Restauracja**: nazwa, adres, godziny otwarcia
-- Inline edycja i usuwanie (ikony ołówka/kosza)
+- Sekcja Role: lista stanowisk, kolory
+- Sekcja Zmiany: godziny rozpoczęcia i zakończenia, powiązanie z konkretnymi rolami
+- Sekcja Restauracja: dane lokalu, godziny otwarcia
 
 #### Attendance Approval Tab (Obecności)
-- Filtry: zakres dat, status (PENDING/CONFIRMED/REJECTED)
-- Lista obecności z detalami (pracownik, data, godziny, status)
-- Przyciski: Zatwierdź ✅ | Odrzuć ❌
-- Ręczne dodawanie obecności
-- Przycisk eksportu PDF
+- Filtry: zakres dat, status (PENDING / CONFIRMED / REJECTED)
+- Lista ewidencji czasu pracy z przyciskami zatwierdzenia i odrzucenia
+- Ręczne dodawanie wpisów i eksport raportu PDF
 
-#### Giveaway Tab (Oddawanie Zmian)
-- Lista otwartych próśb o oddanie zmiany
-- Szczegóły: kto oddaje, jaka zmiana, data
-- Sugerowane zastępstwa (sortowane wg dostępności)
-- Przyciski: Przydziel | Anuluj
+#### Giveaway Tab (Giełda Zmian)
+- Lista otwartych zgłoszeń oddania zmiany
+- Sugerowane zastępstwa na podstawie dostępności i uprawnień
+- Akcje przydzielenia zastępstwa i anulowania zgłoszenia
 
 ---
 
 ### Employee Dashboard (`/employee`)
 
-Bottom Navigation Bar z 3 zakładkami:
+Pasek nawigacyjny z zakładkami:
 
-| # | Ikona | Nazwa | Ekran |
-|---|-------|-------|-------|
-| 0 | 📅 Calendar | Grafik | `MyScheduleScreen` |
-| 1 | 📝 Edit | Dostępność | `AvailabilityViewTab` |
-| 2 | ⏰ Clock | Obecność | `AttendanceTab` |
+| Indeks | Etykieta | Ekran |
+|--------|----------|-------|
+| 0 | Grafik | `MyScheduleScreen` |
+| 1 | Dostępność | `AvailabilityViewTab` |
+| 2 | Obecność | `AttendanceTab` |
 
 #### My Schedule Screen
 - Kalendarz z opublikowanymi zmianami
-- Szczegóły zmiany: data, godziny, rola
-- Opcja **"Oddaj zmianę"** (tworzy ShiftGiveaway)
-- Status oddanych zmian (OPEN/TAKEN/CANCELLED)
+- Przełącznik widoku: „Moje zmiany” / „Cała załoga”
+- Funkcja oddania zmiany na giełdę
+- Funkcja bezpośredniej wymiany zmian z uprawnionym współpracownikiem
 
 #### Availability View Tab
-- Grid: Dni × Zmiany (tydzień)
-- **Widoczne są tylko zmiany istotne dla pracownika (powiązane z jego przypisanymi rolami).**
-- Tap-to-toggle statusu: ✅ Preferuję → ⚪ Neutralnie → ❌ Niedostępny
-- Nawigacja tygodniowa
-- Przycisk Zapisz
+- Siatka dni i zmian (widoczne wyłącznie zmiany zgodne z przypisanymi rolami pracownika)
+- Przełącznik statusu: Preferuję / Neutralnie / Niedostępny
+- Zapisywanie deklaracji dostępności
 
 #### Attendance Tab
-- Formularz rejestracji obecności (data, check-in, check-out)
-- Historia własnych wpisów ze statusem
-- Domyślne godziny pobierane z grafiku
+- Rejestracja obecności (check-in / check-out) z domyślnymi godzinami z grafiku
+- Historia zarejestrowanych obecności i status ich zatwierdzenia
 
 ---
 
-## Wspólne Widgety
+## Wspólne Komponenty i Widgety
 
 | Widget | Opis |
 |--------|------|
-| `AppLogo` | Logo aplikacji |
-| `AvailabilityGrid` | Grid dostępności z kolorowym kodowaniem |
-| `ScheduleViewer` | Uniwersalny widok grafiku |
-| `BugReportDialog` | Formularz zgłaszania błędów (→ GitHub Issues) |
-| `HelpDialog` | Panel pomocy z FAQ |
-| `QrConfigDialog` | Dialog generowania QR z adresem serwera |
+| `NotificationBell` | Dzwonek powiadomień z licznikiem, dialogiem listy powiadomień i panelem uprawnień Web Push |
+| `AppLogo` | Logo systemu |
+| `AvailabilityGrid` | Siatka dostępności z oznaczeniem stanów |
+| `ScheduleViewer` | Uniwersalna przeglądarka grafiku |
+| `BugReportDialog` | Formularz zgłaszania usterek do GitHub Issues |
+| `HelpDialog` | Panel pomocy i wskazówek |
+| `QrConfigDialog` | Generator kodu QR z parametrami połączenia |
 
 ## Responsywność
 
-| Breakpoint | Layout |
-|------------|--------|
-| < 600px | Mobile — Bottom Navigation + stack |
-| 600-1200px | Tablet — 2 kolumny |
-| > 1200px | Desktop — sidebar + content |
+| Szerokość | Układ |
+|-----------|-------|
+| < 600px | Mobile: dolny pasek nawigacji, widok jednokolumnowy |
+| 600–1200px | Tablet: siatki dwukolumnowe, adaptacyjne dialogi |
+| > 1200px | Desktop / Web: pełna siatka kalendarza, nawigacja horyzontalna |
 
-## Animacje i UX
+## Komunikacja Błędów i Dostępność
 
-- Przejścia między ekranami: `PageRouteBuilder`
-- Loading states: `CircularProgressIndicator`
-- Snackbary: 3s auto-dismiss (sukces/błąd)
-- Pull-to-refresh na listach
-- Color-coded chipy i badge'e wg statusu
+- Wszystkie błędy sieciowe prezentowane są w języku polskim za pośrednictwem `ApiErrorHandler`.
+- Błędy walidacji formularzy (w tym złożoności hasła) wyświetlane są inline pod polami tekstowymi oraz w komunikatach SnackBar.
+- Komunikaty powiadomień pierwszoplanowych pojawiają się w nieinwazyjnym banerze u góry ekranu z możliwością natychmiastowego zamknięcia.

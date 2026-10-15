@@ -1,4 +1,4 @@
-# 🗓️ PlannerV2 — Inteligentny System Planowania Grafików
+# PlannerV2 — Inteligentny System Planowania Grafików
 
 <div align="center">
 
@@ -14,81 +14,88 @@
 
 ---
 
-## 🏢 Architektura Wielodostępna (Multi-Tenancy)
+## Architektura Wielodostępna (Multi-Tenancy)
+
 System wspiera wiele restauracji na pojedynczej instancji (model Tenant):
 - Każda restauracja (Tenant) posiada własną nazwę oraz unikalny identyfikator logowania (`slug` / Login ID).
 - **Dual-Login**: Logowanie odbywa się poprzez globalnie unikalny adres `email` LUB kombinację `username` + `Login ID` (tenant_slug).
-- Izolacja danych: Modele bazy danych oraz payload tokenów JWT są zabezpieczone i odseparowane z użyciem `tenant_id`.
+- **Izolacja danych**: Modele bazy danych oraz payload tokenów JWT są zabezpieczone i odseparowane z użyciem `tenant_id`.
 
 ---
 
-## ✨ Funkcjonalności
+## Funkcjonalności
 
-### 👑 Panel Superadmina (Globalny)
+### Panel Superadmina (Globalny)
+
 | Moduł | Opis |
 |-------|------|
-| 🌐 **Globalny Dashboard** | Dostęp pod `/#/superadmin` dla globalnych administratorów systemu. |
-| 🏢 **Zarządzanie Restauracjami** | Tworzenie, edycja i podgląd wszystkich lokali (Tenants) w systemie. |
-| 👥 **Konta Globalne** | Wgląd w bazę wszystkich użytkowników, tworzenie pierwszych kont managerów dla nowych restauracji, możliwość resetu hasła managera. |
+| **Globalny Dashboard** | Dostęp pod `/#/superadmin` dla globalnych administratorów systemu. |
+| **Zarządzanie Restauracjami** | Tworzenie, edycja i podgląd wszystkich lokali (Tenants) w systemie. |
+| **Konta Globalne** | Wgląd w bazę wszystkich użytkowników, tworzenie pierwszych kont managerów dla nowych restauracji, możliwość resetu hasła managera. |
 
-### 👔 Panel Managera
+### Panel Managera
+
 | Moduł | Opis |
 |-------|------|
-| 🏠 **Dashboard** | Podgląd dziennego grafiku, kalendarz, statystyki zespołu |
-| 🗓️ **Auto-Grafik** | Inteligentny generator OR-Tools CP-SAT z trybem szkicu (Draft → Save → Publish), ostrzeżenia kadrowe |
-| ✏️ **Edycja grafiku** | Ręczne przypisanie/usunięcie pracowników, batch save, widok wymagań kadrowych |
-| 👥 **Zarządzanie zespołem** | Tworzenie kont, **dodawanie i edycja adresów e-mail pracowników**, przypisywanie ról, aktywacja/dezaktywacja, reset hasła, cele godzinowe/zmianowe |
-| ⚙️ **Konfiguracja** | Role (stanowiska), **definicje zmian z przypisaniem do konkretnych ról (Role-Based Shifts)**, wymagania kadrowe (globalne i per-datę), dane lokalu, godziny otwarcia |
-| 📋 **Obecności** | Ewidencja czasu pracy, zatwierdzanie/odrzucanie, ręczne dodawanie, eksport PDF |
-| 🔄 **Giełda Zmian** | Zarządzanie prośbami o oddanie zmiany, sugerowane zastępstwa, przydzielanie/anulowanie |
-| 🏖️ **Urlopy** | Przeglądanie wniosków urlopowych, zatwierdzanie/odrzucanie, widok kalendarza urlopów |
-| 📊 **Podsumowania** | Miesięczne godziny i zmiany per pracownik, status dostępności |
-| 🍽️ **POS** | Zarządzanie stołami restauracji, konfiguracja menu (kategorie: zupy, dania główne, desery, napoje) |
-| 🐞 **Zgłaszanie błędów** | Integracja z GitHub Issues |
+| **Dashboard** | Podgląd dziennego grafiku, kalendarz, statystyki zespołu. |
+| **Auto-Grafik** | Inteligentny generator OR-Tools CP-SAT z trybem szkicu (Draft -> Save -> Publish), ostrzeżenia kadrowe i kodeksowe (11h odpoczynku). |
+| **Edycja grafiku** | Ręczne przypisanie/usunięcie pracowników, batch save, widok wymagań kadrowych. |
+| **Zarządzanie zespołem** | Tworzenie kont, dodawanie i edycja adresów e-mail pracowników, przypisywanie ról, aktywacja/dezaktywacja, reset hasła, cele godzinowe/zmianowe. |
+| **Konfiguracja** | Role (stanowiska), definicje zmian z przypisaniem do konkretnych ról (Role-Based Shifts), wymagania kadrowe (globalne i per-datę), dane lokalu, godziny otwarcia. |
+| **Obecności** | Ewidencja czasu pracy, zatwierdzanie/odrzucanie, ręczne dodawanie, eksport PDF. |
+| **Giełda Zmian** | Zarządzanie prośbami o oddanie zmiany, sugerowane zastępstwa, przydzielanie/anulowanie. |
+| **Urlopy** | Przeglądanie wniosków urlopowych, zatwierdzanie/odrzucanie, widok kalendarza urlopów. |
+| **Podsumowania** | Miesięczne godziny i zmiany per pracownik, status dostępności. |
+| **POS** | Zarządzanie stołami restauracji, konfiguracja menu (kategorie dynamiczne, modyfikatory). |
+| **Zgłaszanie błędów** | Integracja z GitHub Issues. |
 
-### 👤 Panel Pracownika
+### Panel Pracownika
+
 | Moduł | Opis |
 |-------|------|
-| 📅 **Mój Grafik** | Kalendarz z opublikowanymi zmianami, lista współpracowników na zmianę |
-| 📝 **Dostępność** | Preferowany / Dostępny / Niedostępny — tygodniowy grid. **Pracownicy widzą tylko zmiany relewantne dla przypisanych im ról**. |
-| ⏰ **Obecność** | Check-in / Check-out z domyślnymi godzinami z grafiku |
-| 🔄 **Oddawanie zmian** | Zgłoszenie oddania, śledzenie statusu, przejmowanie zmian innych pracowników |
-| 🏖️ **Urlopy** | Składanie wniosków urlopowych, śledzenie statusu |
-| 🔔 **Powiadomienia** | In-app + Push (FCM) o publikacji grafiku, zmianach na giełdzie, urlopach |
+| **Mój Grafik** | Kalendarz z opublikowanymi zmianami, lista współpracowników na zmianę, przełącznik widoku całego zespołu. |
+| **Dostępność** | Preferowany / Dostępny / Niedostępny — tygodniowy grid. Pracownicy widzą tylko zmiany relewantne dla przypisanych im ról. |
+| **Obecność** | Rejestracja check-in / check-out z domyślnymi godzinami z grafiku. |
+| **Wymiana i oddawanie zmian** | Zgłoszenie oddania na giełdę, bezpośrednia wymiana zmian z uprawnionym współpracownikiem. |
+| **Urlopy** | Składanie wniosków urlopowych, śledzenie statusu. |
+| **Powiadomienia** | In-app + Push (FCM Android/iOS/Web) o publikacji grafiku, zmianach na giełdzie, urlopach. |
+| **Google Calendar** | Bezpieczna integracja z Google Calendar (OAuth 2.0 z trwałym tokenem odświeżającym offline). |
 
-### 🍳 Moduł POS v2 / Kitchen Display System (KDS)
+### Moduł POS v2 / Kitchen Display System (KDS)
+
 | Moduł | Opis |
 |-------|------|
-| 🏷️ **Strefy i Stoły** | Zarządzanie strefami sali (Sala Główna, Ogródek) i stolikami z pojemnością miejsc |
-| 📋 **Menu v2** | Kategorie dynamiczne, pozycje z `prep_time_sec` (KDS Pacing), grupy modyfikatorów (np. Stopień Wysmażenia) |
-| 🛒 **Zamówienia (POS)** | Tworzenie zamówień per-stolik, snapshot cen/nazw, kursy (course-based), notatki, rabaty |
-| 📺 **KDS Offline-First** | Monotoniczny sync batch (tablet → serwer), stany: NEW → ACKNOWLEDGED → PREPARING → READY → DELIVERED, anti-ghosting (VOIDED_PENDING_ACK) |
-| ⏱️ **Pacing Engine** | Automatyczne obliczanie opóźnień startu przygotowania per-kurs (anchor-based staggering) |
-| 💳 **Płatności** | Multi-method split payments (gotówka, karta, voucher, mobile), napiwki |
-| ❌ **Void / Cancel** | Anulowanie pozycji z potwierdzeniem na tablecie KDS (anti-ghosting) |
+| **Strefy i Stoły** | Zarządzanie strefami sali (Sala Główna, Ogródek) i stolikami z pojemnością miejsc. |
+| **Menu v2** | Kategorie dynamiczne, pozycje z `prep_time_sec` (KDS Pacing), grupy modyfikatorów. |
+| **Zamówienia (POS)** | Tworzenie zamówień per-stolik, snapshot cen/nazw, kursy (course-based), notatki, rabaty. |
+| **KDS Offline-First** | Monotoniczny sync batch (tablet -> serwer), stany: NEW -> ACKNOWLEDGED -> PREPARING -> READY -> DELIVERED, anti-ghosting. |
+| **Pacing Engine** | Automatyczne obliczanie opóźnień startu przygotowania per-kurs (anchor-based staggering). |
+| **Płatności** | Multi-method split payments (gotówka, karta, voucher, mobile), napiwki. |
+| **Void / Cancel** | Anulowanie pozycji z potwierdzeniem na tablecie KDS. |
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Warstwa | Technologia |
 |---------|-------------|
-| Frontend | Flutter Web / Android / iOS |
+| Frontend | Flutter Web / Android / iOS, PWA (Progressive Web App) |
 | Backend | FastAPI + SQLModel + Pydantic v2 |
 | Solver | Google OR-Tools (CP-SAT) |
 | Database | SQLite (dev) / PostgreSQL (prod) |
 | Migracje | Alembic |
-| Auth | JWT (python-jose) + pbkdf2_sha256 |
+| Auth | JWT (PyJWT) + pbkdf2_sha256 + Dual-Login |
+| Error Handling | ApiErrorHandler (ujednolicona obsługa Dio + reguły haseł) |
 | KDS Sync | Monotonic weight state machine (offline-first batch) |
-| Push | Firebase Cloud Messaging (FCM) |
-| Encryption | cryptography (Fernet) — tokeny Google |
+| Push Notifications | Firebase Cloud Messaging (Android/iOS) + Web Push (Service Worker + VAPID) |
+| Encryption | cryptography (Fernet) — tokeny Google Calendar |
 | PDF | ReportLab |
 | CI/CD | Jenkins + Docker |
-| Proxy | Nginx (reverse proxy + static files) |
+| Proxy | Nginx (reverse proxy + static files + nagłówki cache PWA) |
 
 ---
 
-## 🚀 Szybki Start
+## Szybki Start
 
 ```bash
 # Backend
@@ -105,12 +112,13 @@ flutter pub get
 flutter run -d web-server --web-port 5000
 ```
 
-> **Uwaga**: System wspiera teraz wielu tenantów. Konta pracowników i managerów lokalu zarządza Manager lub Superadmin.
+> **Uwaga**: System wspiera wielu tenantów. Kontami pracowników i managerów lokalu zarządza Manager lub Superadmin.
 > Początkowy dostęp globalny może być przydzielony z uprawnieniami `SUPERADMIN`.
+> Domyślne hasło testowego managera to `Manager123`, a pracowników `Employee123`.
 
 ---
 
-## 📁 Struktura Projektu
+## Struktura Projektu
 
 ```
 PlannerV2/
@@ -118,7 +126,7 @@ PlannerV2/
 │   ├── app/
 │   │   ├── main.py                # FastAPI app + lifespan
 │   │   ├── models.py              # SQLModel entities (30+ modeli)
-│   │   ├── schemas.py             # Pydantic v2 schemas (KDS sync models)
+│   │   ├── schemas.py             # Pydantic v2 schemas (KDS sync models, walidacja haseł)
 │   │   ├── database.py            # Konfiguracja bazy danych
 │   │   ├── auth_utils.py          # JWT + password hashing (pbkdf2_sha256)
 │   │   ├── routers/
@@ -141,11 +149,13 @@ PlannerV2/
 │   │       └── push_service.py     # Firebase Cloud Messaging
 │   ├── alembic/                    # Migracje bazy danych
 │   ├── tests/                      # Testy (pytest)
-│   │   ├── test_kds.py            # Testy jednostkowe KDS (pacing, sync)
-│   │   └── test_kds_api.py        # Testy integracyjne KDS endpoint
 │   ├── seed_test_data.py           # Generator danych testowych
 │   └── reset_db_alembic.py         # Reset bazy + migracje
 ├── frontend/
+│   ├── web/
+│   │   ├── firebase-messaging-sw.js # Service worker Web Push FCM
+│   │   ├── index.html              # PWA meta-tagi dla iOS
+│   │   └── manifest.json           # Standalone PWA manifest
 │   └── lib/
 │       ├── screens/
 │       │   ├── login_screen.dart
@@ -155,35 +165,32 @@ PlannerV2/
 │       │   ├── manager/            # Dashboard + 8 zakładek
 │       │   ├── employee/           # Dashboard + 5 ekranów
 │       │   └── pos/                # POS: waiter, kds, orders, setup
-│       ├── widgets/                # Reużywalne komponenty
+│       ├── widgets/                # Reużywalne komponenty (w tym NotificationBell)
 │       ├── providers/              # Riverpod state management
-│       ├── services/               # ApiService (Dio) + ConfigService
+│       ├── services/               # ApiService (Dio), PushService, WebNotificationHelper
+│       ├── utils/                  # ApiErrorHandler, router, scaffold_messenger
 │       └── models/                 # Modele Dart
-├── nginx/                          # Konfiguracja reverse proxy
+├── nginx/                          # Konfiguracja reverse proxy z regułami no-cache dla PWA
 ├── docker-compose.yml              # PostgreSQL + Backend + Nginx
 ├── Jenkinsfile                     # CI/CD pipeline (DEV + PROD)
-└── docs/
-    ├── ARCHITECTURE.md             # Architektura systemu
-    ├── USER_GUIDE.md               # Podręcznik użytkownika
-    ├── QUICKSTART.md               # Instrukcja uruchomienia
-    ├── UI_DESIGN.md                # Specyfikacja interfejsu
-    ├── TEST_PLAN.md                # Plan testów
-    └── PUSH_ARCHITECTURE.md        # Architektura powiadomień push
+└── docs/                           # Dokumentacja techniczna i podręczniki
 ```
 
 ---
 
-## 🔌 API — Główne Endpointy
+## API — Główne Endpointy
 
 ### Auth (`/auth`)
+
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
 | `POST` | `/auth/token` | Login (Dual-login: email lub username+tenant_slug) |
 | `POST` | `/auth/register` | Rejestracja globalnego administratora / menedżera |
 | `GET` | `/auth/me` | Dane zalogowanego użytkownika (z tenant_id i uprawnieniami) |
-| `PUT` | `/auth/change-password` | Zmiana hasła |
+| `PUT` | `/auth/change-password` | Zmiana hasła (walidacja min. 8 znaków, 1 wielka litera, 1 cyfra) |
 
 ### Manager (`/manager`)
+
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
 | `CRUD` | `/manager/roles` | Role (stanowiska) |
@@ -192,7 +199,7 @@ PlannerV2/
 | `GET/POST` | `/manager/users` | Lista / tworzenie pracowników (możliwość edycji e-maila) |
 | `PUT` | `/manager/users/{id}` | Aktualizacja użytkownika |
 | `PUT` | `/manager/users/{id}/roles` | Przypisanie ról |
-| `PUT` | `/manager/users/{id}/password` | Reset hasła |
+| `PUT` | `/manager/users/{id}/password` | Reset hasła pracownika |
 | `GET` | `/manager/dashboard/home` | Dashboard z dziennym podglądem |
 | `GET` | `/manager/users/{id}/stats` | Statystyki pracownika |
 | `GET/POST` | `/manager/config` | Konfiguracja restauracji |
@@ -208,6 +215,7 @@ PlannerV2/
 | `GET` | `/manager/leave-requests/calendar` | Kalendarz urlopów |
 
 ### Employee (`/employee`)
+
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
 | `GET/POST` | `/employee/availability` | Moja dostępność (zmiany wg ról) |
@@ -221,9 +229,10 @@ PlannerV2/
 | `GET` | `/employee/giveaways` | Dostępne zmiany na giełdzie |
 | `POST` | `/employee/giveaways/{id}/claim` | Przejmij zmianę |
 | `POST/GET/DELETE` | `/employee/leave-requests` | Wnioski urlopowe |
-| `POST` | `/employee/google-calendar/auth` | Integracja Google Calendar |
+| `POST` | `/employee/google-calendar/auth` | Integracja Google Calendar (autoryzacja offline) |
 
 ### Scheduler (`/scheduler`)
+
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
 | `POST` | `/scheduler/generate` | Generuj grafik (AI solver) |
@@ -234,74 +243,71 @@ PlannerV2/
 | `DELETE` | `/scheduler/assignment/{id}` | Usuń przypisanie |
 
 ### POS v2 (`/pos/v2`)
+
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
 | `CRUD` | `/pos/v2/zones` | Strefy restauracji (Sala Główna, Ogródek) |
 | `CRUD` | `/pos/v2/tables` | Stoły ze strefami i pojemnością |
 | `CRUD` | `/pos/v2/categories` | Dynamiczne kategorie menu |
 | `CRUD` | `/pos/v2/menu` | Pozycje menu z `prep_time_sec` i modyfikatorami |
-| `CRUD` | `/pos/v2/modifier-groups` | Grupy modyfikatorów (np. Stopień Wysmażenia) |
+| `CRUD` | `/pos/v2/modifier-groups` | Grupy modyfikatorów |
 | `POST` | `/pos/v2/orders` | Utwórz zamówienie (kelner, z kursami) |
 | `GET` | `/pos/v2/orders` | Lista zamówień (filtr po statusie/stoliku) |
-| `POST` | `/pos/v2/kds/sync` | **Batch sync KDS** (offline-first, monotonic weights) |
+| `POST` | `/pos/v2/kds/sync` | Batch sync KDS (offline-first, monotonic weights) |
 | `GET` | `/pos/v2/kds/items` | Lista pozycji KDS z metadanymi pacingu |
 | `POST` | `/pos/v2/payments` | Dodaj płatność (multi-method split) |
 
-### Kitchen / POS v1 (`/kitchen`) — Legacy
-| Metoda | Endpoint | Opis |
-|--------|----------|------|
-| `GET/POST/DELETE` | `/kitchen/tables` | CRUD stolików (stary format) |
-| `GET/POST/PUT/DELETE` | `/kitchen/menu` | CRUD pozycji menu (stary format) |
-| `POST` | `/kitchen/orders` | Utwórz zamówienie (stary format) |
-
 ### Notifications (`/api/notifications`)
+
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
 | `GET` | `/api/notifications` | Moje powiadomienia |
 | `PATCH` | `/api/notifications/{id}/read` | Oznacz jako przeczytane |
-| `POST` | `/api/notifications/devices` | Rejestracja tokenu FCM |
-| `DELETE` | `/api/notifications/devices/{token}` | Wyrejestrowanie urządzenia |
+| `POST` | `/api/notifications/devices` | Rejestracja tokenu urządzenia (Android, iOS, Web FCM) |
+| `DELETE` | `/api/notifications/devices/{token}` | Wyrejestrowanie urządzenia przy wylogowaniu |
 
 ### Inne
+
 | Metoda | Endpoint | Opis |
 |--------|----------|------|
 | `GET` | `/health` | Health check (DB + migracje) |
-| `POST` | `/bug-report` | Zgłoszenie błędu → GitHub Issue |
+| `POST` | `/bug-report` | Zgłoszenie błędu -> GitHub Issue |
 
 ---
 
-## 🔧 Zmienne Środowiskowe
+## Zmienne Środowiskowe
 
-| Zmienna | Opis | Wymagana |
-|---------|------|----------|
-| `DATABASE_URL` | Connection string bazy danych | ✅ (prod) |
-| `SECRET_KEY` | Klucz JWT | ✅ |
-| `MANAGER_REGISTRATION_PIN` | PIN do rejestracji managera (opcjonalny dla starszej metody logowania) | ❌ |
-| `ENCRYPTION_KEY` | Klucz Fernet do szyfrowania tokenów Google | ❌ |
-| `GOOGLE_CLIENT_ID` | OAuth 2.0 Client ID | ❌ |
-| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 Client Secret | ❌ |
-| `GOOGLE_REDIRECT_URI` | OAuth 2.0 Redirect URI | ❌ |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Ścieżka do Firebase service account JSON | ❌ |
-| `GITHUB_TOKEN` | Token do tworzenia Issues | ❌ |
-| `GITHUB_REPO` | Repozytorium do Issues (format: `owner/repo`) | ❌ |
+| Zmienna | Opis | Status |
+|---------|------|--------|
+| `DATABASE_URL` | Connection string bazy danych | Wymagana na produkcji |
+| `SECRET_KEY` | Klucz prywatny do podpisywania JWT | Wymagana |
+| `MANAGER_REGISTRATION_PIN` | PIN do rejestracji pierwszego managera | Opcjonalna |
+| `ENCRYPTION_KEY` | Klucz Fernet do szyfrowania tokenów Google | Opcjonalna |
+| `GOOGLE_CLIENT_ID` | OAuth 2.0 Client ID | Opcjonalna |
+| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 Client Secret | Opcjonalna |
+| `GOOGLE_REDIRECT_URI` | OAuth 2.0 Redirect URI | Opcjonalna |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Ścieżka do Firebase service account JSON | Opcjonalna |
+| `GITHUB_TOKEN` | Token do tworzenia Issues | Opcjonalna |
+| `GITHUB_REPO` | Repozytorium do Issues (format: `owner/repo`) | Opcjonalna |
+
+Dla frontendu Web dopuszczalna jest flaga kompilacji:
+`--dart-define=FCM_VAPID_KEY=twoj_klucz_vapid` (lub pobieranie z konfiguracji domyślnej).
 
 ---
 
-## 🚢 CI/CD & Deployment
+## CI/CD & Deployment
 
 Aplikacja wykorzystuje Jenkins do automatycznych wdrożeń:
 
-- **DEV**: Wdrażany automatycznie z gałęzi `main`
-- **PROD**: Wdrażany automatycznie po utworzeniu taga wersji (np. `v1.0.0`)
+- **DEV**: Wdrażany automatycznie z gałęzi `main`.
+- **PROD**: Wdrażany automatycznie po utworzeniu taga wersji (np. `v2.2.0`).
 
 ```yaml
-# docker-compose.yml
 services:
   db:
     image: postgres:15
   backend:
     build: ./backend
-    # Alembic migrations run on startup
   nginx:
     image: nginx:alpine
     ports: ["80:80"]
@@ -309,19 +315,19 @@ services:
 
 ---
 
-## 📚 Dokumentacja
+## Dokumentacja
 
 | Dokument | Opis |
 |----------|------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Architektura systemu, diagramy, modele danych |
-| [USER_GUIDE.md](USER_GUIDE.md) | Podręcznik użytkownika (Manager + Pracownik + POS) |
+| [USER_GUIDE.md](USER_GUIDE.md) | Podręcznik użytkownika (Manager, Pracownik, POS, Powiadomienia) |
 | [QUICKSTART.md](QUICKSTART.md) | Instrukcja uruchomienia |
-| [UI_DESIGN.md](UI_DESIGN.md) | Specyfikacja interfejsu |
-| [TEST_PLAN.md](TEST_PLAN.md) | Plan testów |
-| [PUSH_ARCHITECTURE.md](PUSH_ARCHITECTURE.md) | Architektura powiadomień push |
+| [UI_DESIGN.md](UI_DESIGN.md) | Specyfikacja interfejsu i komponentów |
+| [TEST_PLAN.md](TEST_PLAN.md) | Plan testów automatycznych i manualnych |
+| [PUSH_ARCHITECTURE.md](PUSH_ARCHITECTURE.md) | Architektura powiadomień push (Mobile + Web Push) |
 
 ---
 
-## 📄 Licencja
+## Licencja
 
 MIT License — zobacz [LICENSE](LICENSE)

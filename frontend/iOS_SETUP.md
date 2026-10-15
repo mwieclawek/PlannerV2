@@ -74,3 +74,12 @@ If you encounter errors about deployment targets (e.g., `IPHONEOS_DEPLOYMENT_TAR
 platform :ios, '13.0'
 ```
 Then run `pod install` again.
+
+## Alternative: iOS PWA Deployment (Web Push Supported)
+
+As an alternative to building and distributing native IPA binaries via the Apple Developer Program:
+1. Deploy the web build (`flutter build web`) behind Nginx.
+2. Users open the application URL in Safari on iOS 16.4+.
+3. Tap the Share button -> "Add to Home Screen".
+4. Open the standalone PWA from the home screen.
+5. Tap the notification bell icon and select "Włącz powiadomienia" to grant permission for Web Push notifications.
