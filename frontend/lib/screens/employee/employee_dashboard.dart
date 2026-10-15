@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
+import '../../services/google_auth_stub.dart'
+    if (dart.library.js_interop) '../../services/google_auth_web.dart';
 import '../../providers/providers.dart';
 import '../../widgets/availability_grid.dart';
 import 'my_schedule_screen.dart';
@@ -399,7 +401,16 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                         onPressed: () async {
                           setDialogState(() => isSigningIn = true);
                           try {
-                            final googleSignIn = GoogleSignIn(
+                            String? authCode;
+                            try {
+                              // On Web, request server auth code using GIS CodeClient to obtain offline refresh_token
+                              authCode = await requestServerAuthCodeOnWeb();
+                            } catch (_) {
+                              authCode = null;
+                            }
+
+                            if (authCode == null) {
+                              final googleSignIn = GoogleSignIn(
                                 scopes: [
                                   'https://www.googleapis.com/auth/calendar.events',
                                 ],
@@ -415,17 +426,18 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                               }
 
                               final auth = await account.authentication;
-                              final authCode =
-                                  auth.serverAuthCode ?? auth.accessToken;
+                              authCode =
+                                  account.serverAuthCode ?? auth.accessToken;
+                            }
 
-                              if (authCode == null) {
-                                setDialogState(() {
-                                  isSigningIn = false;
-                                  error =
-                                      'Nie udało się uzyskać kodu autoryzacji od Google';
-                                });
-                                return;
-                              }
+                            if (authCode == null) {
+                              setDialogState(() {
+                                isSigningIn = false;
+                                error =
+                                    'Nie udało się uzyskać kodu autoryzacji od Google';
+                              });
+                              return;
+                            }
 
                               // Send auth code to backend
                               final linkRes = await ref
@@ -438,7 +450,7 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                                 error = null;
                               });
 
-                              final synced = linkRes is Map ? (linkRes['synced'] ?? 0) : 0;
+                              final synced = linkRes['synced'] ?? 0;
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(

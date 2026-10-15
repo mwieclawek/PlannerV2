@@ -761,11 +761,12 @@ class ApiService {
     return response.data;
   }
 
-  Future<void> connectGoogleCalendar(String authCode) async {
-    await _dio.post(
+  Future<Map<String, dynamic>> connectGoogleCalendar(String authCode) async {
+    final response = await _dio.post(
       '/employee/google-calendar/auth',
       data: {'auth_code': authCode},
     );
+    return response.data is Map<String, dynamic> ? response.data : {};
   }
 
   Future<void> disconnectGoogleCalendar() async {
