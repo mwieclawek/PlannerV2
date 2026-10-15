@@ -18,6 +18,10 @@ engine = create_engine(
     poolclass=StaticPool
 )
 
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
 @pytest.fixture(name="session")
 def session_fixture() -> Generator[Session, None, None]:
     SQLModel.metadata.drop_all(engine)

@@ -74,7 +74,7 @@ def test_monotonic_sync_batch_validation(db_session: Session):
     table = PosTable(id=uuid4(), name="T1")
     db_session.add(table)
     
-    order = Order(id=uuid4(), table_id=table.id, waiter_id=user.id, created_at=datetime.now())
+    order = Order(id=uuid4(), table_id=table.id, waiter_id=user.id, created_at=datetime.now(timezone.utc))
     db_session.add(order)
     
     item = OrderItem(

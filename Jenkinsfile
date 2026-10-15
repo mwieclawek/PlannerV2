@@ -28,7 +28,7 @@ pipeline {
                 unstash 'source'
                 sh '''
                     pip install -r backend/requirements.txt
-                    pip install pytest httpx pytest-asyncio trio
+                    pip install pytest httpx pytest-asyncio
                 '''
                 sh 'python -m py_compile backend/app/main.py'
                 sh 'mkdir -p test-results'

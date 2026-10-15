@@ -516,8 +516,8 @@ class PosService:
             Payment.tip_amount > 0,
         )
         # Filter by date (created_at on same day)
-        day_start = datetime(target.year, target.month, target.day, 0, 0, 0)
-        day_end = datetime(target.year, target.month, target.day, 23, 59, 59)
+        day_start = datetime(target.year, target.month, target.day, 0, 0, 0, tzinfo=timezone.utc)
+        day_end = datetime(target.year, target.month, target.day, 23, 59, 59, 999999, tzinfo=timezone.utc)
         stmt = stmt.where(Payment.created_at >= day_start,
                           Payment.created_at <= day_end)
 
