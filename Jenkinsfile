@@ -28,15 +28,22 @@ pipeline {
                 unstash 'source'
                 sh '''
                     pip install -r backend/requirements.txt
-                    pip install pytest httpx pytest-asyncio
+                    pip install pytest httpx pytest-asyncio trio
                 '''
                 sh 'python -m py_compile backend/app/main.py'
                 sh 'mkdir -p test-results'
                 // Usunięcie starej bazy SQLite (safety net)
                 sh 'rm -f backend/*.db backend/app/*.db *.db'
-                // Testy używają in-memory SQLite — nie potrzeba uruchamiać serwera
-                sh 'export PYTHONPATH=$PWD:$PWD/backend && python -m pytest backend/tests/test_api.py -v -o asyncio_mode=auto --junitxml=test-results/backend-api.xml || true'
-                sh 'export PYTHONPATH=$PWD:$PWD/backend && python -m pytest backend/tests/test_integration.py -v -o asyncio_mode=auto --junitxml=test-results/backend-integration.xml || true'
+                // Testy używają in-memory SQLite — nie potrzeba uruchamiać serwera.
+                // Uruchamiamy WSZYSTKIE testy z backend/tests; błąd któregokolwiek failuje build.
+                sh '''
+                    export PYTHONPATH=$PWD:$PWD/backend
+                    export APP_ENV=development
+                    export JWT_SECRET_KEY=ci-test-secret-key-32-chars-long-planner-v2
+                    export MANAGER_REGISTRATION_PIN=12345678
+                    export ENCRYPTION_KEY=1wqgJx3GxGGUwygtOgsp68wdvr37f_W_BGGPccw_qA0=
+                    python -m pytest backend/tests -v -o asyncio_mode=auto --junitxml=test-results/backend-all.xml
+                '''
             }
             post {
                 always {
