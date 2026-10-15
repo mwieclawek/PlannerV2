@@ -1,16 +1,39 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/notification_provider.dart';
+import '../utils/scaffold_messenger.dart';
 import 'api_service.dart';
+import 'web_notification_helper.dart';
 
 class PushService {
   final ApiService _apiService;
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  final Ref? _ref;
+  final FirebaseMessaging? _customMessaging;
 
-  PushService(this._apiService);
+  FirebaseMessaging get _messaging =>
+      _customMessaging ?? FirebaseMessaging.instance;
 
-  Future<void> initialize() async {
-    // 1. Request permissions (required on iOS and Web)
-    NotificationSettings settings = await _messaging.requestPermission(
+  static const String vapidKey = String.fromEnvironment(
+    'FCM_VAPID_KEY',
+    defaultValue: '',
+  );
+
+  PushService(this._apiService, [this._ref, this._customMessaging]);
+
+  String? get _resolvedVapidKey {
+    final trimmed = vapidKey.trim();
+    return trimmed.isNotEmpty ? trimmed : null;
+  }
+
+  Future<NotificationSettings> requestPermission() async {
+    if (kIsWeb) {
+      // Direct Web Notification API request (required for iOS Safari PWA / modern browsers)
+      await WebNotificationHelper.instance.requestPermission();
+    }
+
+    return await _messaging.requestPermission(
       alert: true,
       announcement: false,
       badge: true,
@@ -19,67 +42,177 @@ class PushService {
       provisional: false,
       sound: true,
     );
+  }
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      print('User granted permission');
-    } else if (settings.authorizationStatus ==
-        AuthorizationStatus.provisional) {
-      print('User granted provisional permission');
-    } else {
-      print('User declined or has not accepted permission');
-      // If no permission, do not try to get token
-      return;
-    }
-
-    // 2. Fetch the FCM token for this device
+  Future<bool> requestPermissionAndRegister() async {
     try {
-      String? token;
-
-      if (kIsWeb) {
-        // Web requires pushing VAPID key which we might not have configured.
-        // It's optional if already configured in firebase-messaging-sw.js.
-        token = await _messaging.getToken();
-      } else {
-        token = await _messaging.getToken();
-      }
-
-      if (token != null) {
-        print('FCM Token: $token');
-        await _apiService.registerDeviceToken(token);
+      final settings = await requestPermission();
+      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional) {
+        await fetchAndRegisterToken();
+        return true;
       }
     } catch (e) {
-      print('Błąd podczas pobierania tokena FCM: $e');
+      debugPrint('Błąd żądania uprawnień: $e');
+    }
+    return false;
+  }
+
+  Future<String?> fetchAndRegisterToken() async {
+    try {
+      final token = await _messaging.getToken(
+        vapidKey: kIsWeb ? _resolvedVapidKey : null,
+      );
+
+      if (token != null) {
+        debugPrint('FCM Token: $token');
+        await _apiService.registerDeviceToken(token);
+        return token;
+      }
+    } catch (e) {
+      debugPrint('Błąd podczas pobierania tokena FCM: $e');
+    }
+    return null;
+  }
+
+  Future<void> initialize() async {
+    // 1. Request permissions (required on iOS and Web)
+    try {
+      NotificationSettings settings;
+      if (kIsWeb) {
+        final status = WebNotificationHelper.instance.permissionStatus;
+        if (status == 'granted') {
+          settings = await requestPermission();
+        } else {
+          // On web, if not granted yet, try to request; catch if browser requires user gesture
+          settings = await requestPermission();
+        }
+      } else {
+        settings = await requestPermission();
+      }
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+          settings.authorizationStatus == AuthorizationStatus.provisional) {
+        debugPrint('User granted permission');
+        await fetchAndRegisterToken();
+      } else {
+        debugPrint('User declined or has not accepted permission');
+      }
+    } catch (e) {
+      debugPrint('Info: permission request during initialize deferred: $e');
     }
 
-    // 3. Listen to token refreshes
+    // 2. Listen to token refreshes
     _messaging.onTokenRefresh.listen((newToken) {
-      print('FCM Token refreshed: $newToken');
+      debugPrint('FCM Token refreshed: $newToken');
       _apiService.registerDeviceToken(newToken);
     });
 
-    // 4. Setup foreground message handler
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print('Got a message whilst in the foreground!');
-      print('Message data: ${message.data}');
+    // 3. Setup foreground message handler
+    _setupForegroundListener();
+  }
 
-      if (message.notification != null) {
-        print('Message also contained a notification: ${message.notification}');
-        // Here we could use a SnackBar, showDialog, or a local notification plugin
-        // Since Riverpod state manages notifications, we can optionally trigger a refresh
-        // of getNotifications() if we pass the ref down or dispatch an event.
+  void _setupForegroundListener() {
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint('Got a message whilst in the foreground!');
+      debugPrint('Message data: ${message.data}');
+
+      // Refresh notifications under the bell
+      try {
+        _ref?.read(notificationsProvider.notifier).fetchNotifications();
+      } catch (e) {
+        debugPrint('Błąd odświeżania powiadomień: $e');
       }
+
+      final title =
+          message.notification?.title ??
+          message.data['title']?.toString() ??
+          'Nowe powiadomienie';
+      final body =
+          message.notification?.body ??
+          message.data['body']?.toString() ??
+          '';
+
+      // 1. Native browser notification on Web (if tab is in background or alongside banner)
+      if (kIsWeb) {
+        WebNotificationHelper.instance.showNotification(
+          title: title,
+          body: body,
+          icon: '/icons/Icon-192.png',
+        );
+      }
+
+      // 2. Show prominent banner at the top of the screen via ScaffoldMessenger
+      showForegroundBanner(title, body);
+    });
+  }
+
+  void showForegroundBanner(String title, String body) {
+    final messenger = rootScaffoldMessengerKey.currentState;
+    if (messenger == null) return;
+
+    final banner = MaterialBanner(
+      backgroundColor: const Color(0xFFE0F2F1), // Teal 50
+      leading: const Icon(
+        Icons.notifications_active,
+        color: Color(0xFF006A6A),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF003737),
+            ),
+          ),
+          if (body.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              body,
+              style: const TextStyle(color: Color(0xFF1E3535)),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            messenger.hideCurrentMaterialBanner();
+          },
+          child: const Text(
+            'Zamknij',
+            style: TextStyle(
+              color: Color(0xFF006A6A),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    messenger.hideCurrentMaterialBanner();
+    messenger.showMaterialBanner(banner);
+
+    Future.delayed(const Duration(seconds: 6), () {
+      try {
+        messenger.hideCurrentMaterialBanner();
+      } catch (_) {}
     });
   }
 
   Future<void> unregisterOnLogout() async {
     try {
-      String? token = await _messaging.getToken();
+      final token = await _messaging.getToken(
+        vapidKey: kIsWeb ? _resolvedVapidKey : null,
+      );
       if (token != null) {
         await _apiService.unregisterDeviceToken(token);
-        // Do not delete token locally since same device might login later, delete from server is enough.
       }
     } catch (e) {
-      print('Błąd podczas usuwania tokena FCM: $e');
+      debugPrint('Błąd podczas usuwania tokena FCM: $e');
     }
   }
 }

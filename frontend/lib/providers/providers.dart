@@ -24,7 +24,7 @@ final sysAdminServiceProvider = Provider<SysAdminService>((ref) {
 // Push Service Provider
 final pushServiceProvider = Provider<PushService>((ref) {
   final api = ref.watch(apiServiceProvider);
-  return PushService(api);
+  return PushService(api, ref);
 });
 
 // Current User Provider

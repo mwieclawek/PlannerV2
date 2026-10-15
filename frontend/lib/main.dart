@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'utils/router.dart';
+import 'utils/scaffold_messenger.dart';
 
 import 'services/config_service.dart';
 
@@ -75,6 +76,7 @@ class MyApp extends ConsumerWidget {
     );
 
     return MaterialApp.router(
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       title: 'Planista',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
