@@ -269,6 +269,16 @@ class GoogleCalendarService:
         if not user.google_access_token and not user.google_refresh_token:
             return {"status": "skipped", "message": "Google Calendar not connected", "synced": 0, "total": 0}
 
+        token = self.get_valid_access_token(user)
+        if not token:
+            return {
+                "status": "error",
+                "needs_reauth": True,
+                "message": "Autoryzacja Kalendarza Google wygasła. Połącz kalendarz ponownie.",
+                "synced": 0,
+                "total": 0,
+            }
+
         today = date.today()
         start = start_date or (today - timedelta(days=7))
         end = end_date or (today + timedelta(days=45))
@@ -281,10 +291,30 @@ class GoogleCalendarService:
         )
         schedules = self.session.exec(statement).all()
 
+        if not schedules:
+            return {
+                "status": "success",
+                "message": "Brak opublikowanych zmian w wybranym okresie.",
+                "synced": 0,
+                "total": 0,
+                "start_date": str(start),
+                "end_date": str(end),
+            }
+
         synced_count = 0
         for sched in schedules:
             if self.sync_schedule_to_calendar(user, sched):
                 synced_count += 1
+
+        if synced_count == 0 and len(schedules) > 0:
+            return {
+                "status": "error",
+                "message": f"Nie udało się zsynchronizować żadnej z {len(schedules)} zmian z Kalendarzem Google.",
+                "synced": 0,
+                "total": len(schedules),
+                "start_date": str(start),
+                "end_date": str(end),
+            }
 
         return {
             "status": "success",

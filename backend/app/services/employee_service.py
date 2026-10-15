@@ -149,10 +149,22 @@ class EmployeeService:
 
     def get_google_calendar_status(self, user_id: UUID) -> dict:
         from ..models import User
+        from .google_calendar_service import GoogleCalendarService
         user = self.session.get(User, user_id)
         if not user:
             return {"connected": False}
-        return {"connected": bool(user.google_refresh_token or user.google_access_token)}
+        if not (user.google_refresh_token or user.google_access_token):
+            return {"connected": False}
+
+        cal_service = GoogleCalendarService(self.session)
+        token = cal_service.get_valid_access_token(user)
+        if not token:
+            return {
+                "connected": False,
+                "needs_reauth": True,
+                "message": "Połączenie z Kalendarzem Google wygasło. Połącz ponownie."
+            }
+        return {"connected": True}
 
     def unlink_google_calendar(self, user_id: UUID):
         from ..models import User

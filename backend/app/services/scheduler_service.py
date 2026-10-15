@@ -197,10 +197,11 @@ class SchedulerService:
 
         # Sync to Google Calendar AFTER commit, in the background, with its own session
         from .google_calendar_service import enqueue, sync_user_range_task
-        for u_id in published_user_ids:
+        all_published_user_ids = set(s.user_id for s in schedules if s.is_published)
+        for u_id in all_published_user_ids:
             enqueue(background_tasks, sync_user_range_task, u_id, self.tenant_id, start_date, end_date)
 
-        logger.info(f"Published schedules from {start_date} to {end_date}. Affected users: {len(published_user_ids)}")
+        logger.info(f"Published schedules from {start_date} to {end_date}. Newly published: {len(published_user_ids)}, synced calendars: {len(all_published_user_ids)}")
         return count
 
     # --- Single assignment (manager) ---

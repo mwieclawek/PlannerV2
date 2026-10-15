@@ -182,6 +182,9 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                       setDialogState(() {
                         isConnected = data['connected'] == true;
                         isLoading = false;
+                        if (!isConnected && data['message'] != null) {
+                          error = data['message'];
+                        }
                       });
                     })
                     .catchError((e) {
@@ -284,7 +287,7 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Zamknij'),
                   ),
-                  if (!isLoading && !isSigningIn && error == null)
+                  if (!isLoading && !isSigningIn)
                     if (isConnected) ...[
                       OutlinedButton.icon(
                         onPressed: () async {
@@ -296,6 +299,7 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                             setDialogState(() {
                               isConnected = false;
                               isLoading = false;
+                              error = null;
                             });
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -326,16 +330,59 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                                 .read(apiServiceProvider)
                                 .syncGoogleCalendar();
                             setDialogState(() => isLoading = false);
+                            final status = res['status'];
                             final count = res['synced'] ?? 0;
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '✓ Zsynchronizowano $count zmian z Kalendarzem Google',
+                            final total = res['total'] ?? 0;
+                            final msg = res['message'];
+                            final needsReauth = res['needs_reauth'] == true;
+
+                            if (status == 'error' || needsReauth) {
+                              setDialogState(() {
+                                if (needsReauth) {
+                                  isConnected = false;
+                                }
+                                error = msg ?? 'Błąd synchronizacji z Kalendarzem Google';
+                              });
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(msg ?? 'Błąd synchronizacji z Kalendarzem Google'),
+                                    backgroundColor: Colors.red,
                                   ),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
+                                );
+                              }
+                            } else if (count == 0 && total > 0) {
+                              setDialogState(() {
+                                error = msg ?? 'Nie udało się zsynchronizować żadnej z $total zmian';
+                              });
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(msg ?? 'Nie udało się zsynchronizować żadnej z $total zmian z Kalendarzem Google'),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                              }
+                            } else if (count == 0 && total == 0) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(msg ?? 'Brak opublikowanych zmian do zsynchronizowania'),
+                                    backgroundColor: Colors.blueGrey,
+                                  ),
+                                );
+                              }
+                            } else {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      '✓ Zsynchronizowano $count zmian z Kalendarzem Google',
+                                    ),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              }
                             }
                           } catch (e) {
                             setDialogState(() {
@@ -356,6 +403,8 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                                 scopes: [
                                   'https://www.googleapis.com/auth/calendar.events',
                                 ],
+                                serverClientId:
+                                    '357153331477-b6512tnr51gi4kslrh9f8tjndhdp74j7.apps.googleusercontent.com',
                               );
 
                               final account = await googleSignIn.signIn();
@@ -379,20 +428,22 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                               }
 
                               // Send auth code to backend
-                              await ref
+                              final linkRes = await ref
                                   .read(apiServiceProvider)
                                   .connectGoogleCalendar(authCode);
 
                               setDialogState(() {
                                 isSigningIn = false;
                                 isConnected = true;
+                                error = null;
                               });
 
+                              final synced = linkRes is Map ? (linkRes['synced'] ?? 0) : 0;
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text(
-                                      '✓ Kalendarz Google połączony pomyślnie',
+                                      '✓ Kalendarz Google połączony. Zsynchronizowano $synced zmian.',
                                     ),
                                     backgroundColor: Colors.green,
                                   ),
