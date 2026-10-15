@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.1.1] - 2026-10-15
+
+### Fixed
+- **Google Calendar Token Expiration & Re-auth**:
+  - `get_google_calendar_status` weryfikuje teraz faktyczną ważność i możliwość odświeżenia tokena Google. W przypadku wygaśnięcia tokena zwraca stan braku połączenia z informacją o konieczności ponownej autoryzacji zamiast mylącego statusu „połączony”.
+  - `sync_user_schedules` sprawdza ważność tokena przed rozpoczęciem synchronizacji i zwraca czytelne komunikaty o błędach w języku polskim w przypadku wygaśnięcia sesji lub niepowodzenia synchronizacji zmian.
+  - Dialog Google Calendar w panelu pracownika poprawnie wyświetla stan wygaśnięcia sesji, umożliwia ponowne połączenie jednym kliknięciem oraz informuje o szczegółach błędów w pomarańczowych/czerwonych komunikatach zamiast fałszywych zielonych powiadomień.
+  - W `publish_schedule` synchronizacja kalendarza Google jest teraz zlecana dla wszystkich pracowników posiadających opublikowane zmiany w danym tygodniu (w tym przy ponownej publikacji grafiku), a nie tylko dla nowo utworzonych wpisów.
+
 ## [v2.1.0] - 2026-10-15 (Cumulative release from v1.7.3)
 
 ### 🏢 Multi-Tenancy Architecture & Global Superadmin
