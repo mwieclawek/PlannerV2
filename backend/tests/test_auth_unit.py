@@ -191,5 +191,76 @@ class TestAuthMeEndpoint:
         assert data["role_system"] in ["MANAGER", "EMPLOYEE"]
 
 
+class TestPasswordChangeEndpoint:
+    """Tests for /auth/change-password endpoint and UserPasswordChange schema"""
+
+    def test_schema_validates_password_strength(self):
+        from app.schemas import UserPasswordChange
+        from pydantic import ValidationError
+
+        # Too short
+        with pytest.raises(ValidationError) as exc:
+            UserPasswordChange(old_password="old", new_password="Pass1")
+        assert "Password must be at least 8 characters" in str(exc.value)
+
+        # No uppercase
+        with pytest.raises(ValidationError) as exc:
+            UserPasswordChange(old_password="old", new_password="password123")
+        assert "Password must contain at least one uppercase letter" in str(exc.value)
+
+        # No digit
+        with pytest.raises(ValidationError) as exc:
+            UserPasswordChange(old_password="old", new_password="PasswordOnly")
+        assert "Password must contain at least one digit" in str(exc.value)
+
+        # Valid
+        valid = UserPasswordChange(old_password="old", new_password="NewPassword123")
+        assert valid.new_password == "NewPassword123"
+
+    @pytest.mark.asyncio
+    async def test_change_password_incorrect_old_password(self, client, auth_headers):
+        """Test that change-password returns 400 when old password is wrong"""
+        response = await client.put(
+            "/auth/change-password",
+            headers=auth_headers,
+            json={
+                "old_password": "WrongPassword123",
+                "new_password": "ValidNewPassword123"
+            }
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Incorrect old password"
+
+    @pytest.mark.asyncio
+    async def test_change_password_weak_new_password_returns_422(self, client, auth_headers):
+        """Test that change-password returns 422 with validation error when new password is weak"""
+        response = await client.put(
+            "/auth/change-password",
+            headers=auth_headers,
+            json={
+                "old_password": "password123",
+                "new_password": "short"
+            }
+        )
+        assert response.status_code == 422
+        data = response.json()
+        assert "detail" in data
+        assert any("Password must be at least 8 characters" in str(err) for err in data["detail"])
+
+    @pytest.mark.asyncio
+    async def test_change_password_success(self, client, auth_headers):
+        """Test successful password change"""
+        response = await client.put(
+            "/auth/change-password",
+            headers=auth_headers,
+            json={
+                "old_password": "secret",
+                "new_password": "NewSecretPassword123"
+            }
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "password_changed"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

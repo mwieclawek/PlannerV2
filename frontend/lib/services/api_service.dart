@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
+import '../utils/api_error_handler.dart';
 
 class ApiService {
   final String baseUrl;
@@ -38,7 +39,8 @@ class ApiService {
               debugPrint('Error removing token: $e');
             }
           }
-          return handler.next(error);
+          final friendly = FriendlyDioException.fromDioException(error);
+          return handler.next(friendly);
         },
       ),
     );

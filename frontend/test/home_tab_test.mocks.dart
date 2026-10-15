@@ -247,9 +247,9 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
           as _i6.Future<_i3.JobRole>);
 
   @override
-  _i6.Future<List<_i3.ShiftDefinition>> getShifts() =>
+  _i6.Future<List<_i3.ShiftDefinition>> getShifts({bool? allShifts = false}) =>
       (super.noSuchMethod(
-            Invocation.method(#getShifts, []),
+            Invocation.method(#getShifts, [], {#allShifts: allShifts}),
             returnValue: _i6.Future<List<_i3.ShiftDefinition>>.value(
               <_i3.ShiftDefinition>[],
             ),
@@ -540,6 +540,19 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
             returnValueForMissingStub: _i6.Future<void>.value(),
           )
           as _i6.Future<void>);
+
+  @override
+  _i6.Future<Map<String, dynamic>> publishSchedule(
+    DateTime? startDate,
+    DateTime? endDate,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#publishSchedule, [startDate, endDate]),
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
   _i6.Future<void> updateRole(int? roleId, String? name, String? colorHex) =>
@@ -913,13 +926,43 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
           as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i6.Future<void> giveAwayShift(String? scheduleId) =>
+  _i6.Future<void> giveAwayShift(String? scheduleId, {String? targetShiftId}) =>
       (super.noSuchMethod(
-            Invocation.method(#giveAwayShift, [scheduleId]),
+            Invocation.method(
+              #giveAwayShift,
+              [scheduleId],
+              {#targetShiftId: targetShiftId},
+            ),
             returnValue: _i6.Future<void>.value(),
             returnValueForMissingStub: _i6.Future<void>.value(),
           )
           as _i6.Future<void>);
+
+  @override
+  _i6.Future<Map<String, dynamic>> validateSwap(
+    String? offeredScheduleId,
+    String? targetScheduleId,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#validateSwap, [
+              offeredScheduleId,
+              targetScheduleId,
+            ]),
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i6.Future<Map<String, dynamic>>);
+
+  @override
+  _i6.Future<List<Map<String, dynamic>>> getShiftAuditLog(String? shiftId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getShiftAuditLog, [shiftId]),
+            returnValue: _i6.Future<List<Map<String, dynamic>>>.value(
+              <Map<String, dynamic>>[],
+            ),
+          )
+          as _i6.Future<List<Map<String, dynamic>>>);
 
   @override
   _i6.Future<Map<String, dynamic>> getGoogleCalendarStatus() =>
@@ -932,13 +975,14 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
           as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i6.Future<void> connectGoogleCalendar(String? authCode) =>
+  _i6.Future<Map<String, dynamic>> connectGoogleCalendar(String? authCode) =>
       (super.noSuchMethod(
             Invocation.method(#connectGoogleCalendar, [authCode]),
-            returnValue: _i6.Future<void>.value(),
-            returnValueForMissingStub: _i6.Future<void>.value(),
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
           )
-          as _i6.Future<void>);
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
   _i6.Future<void> disconnectGoogleCalendar() =>

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
 import '../../providers/providers.dart';
-import '../../services/sysadmin_service.dart';
+import '../../utils/api_error_handler.dart';
 
 class SysAdminDashboardScreen extends ConsumerStatefulWidget {
   const SysAdminDashboardScreen({super.key});
@@ -102,17 +101,10 @@ class _SysAdminDashboardScreenState
                     const SnackBar(content: Text('Utworzono restaurację')),
                   );
                 }
-              } on DioException catch (e) {
-                if (mounted) {
-                  final msg = e.response?.data?['detail'] ?? e.message;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Błąd: $msg')),
-                  );
-                }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Błąd: $e')),
+                    SnackBar(content: Text('Błąd: ${ApiErrorHandler.extractMessage(e)}')),
                   );
                 }
               }
@@ -172,6 +164,13 @@ class _SysAdminDashboardScreenState
           ),
           ElevatedButton(
             onPressed: () async {
+              final passError = ApiErrorHandler.validatePassword(passwordCtrl.text);
+              if (passError != null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Błąd: $passError')),
+                );
+                return;
+              }
               try {
                 final service = ref.read(sysAdminServiceProvider);
                 final result = await service.createManager(
@@ -190,17 +189,10 @@ class _SysAdminDashboardScreenState
                             result['message'] ?? 'Zapisano pomyślnie')),
                   );
                 }
-              } on DioException catch (e) {
-                if (mounted) {
-                  final msg = e.response?.data?['detail'] ?? e.message;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Błąd: $msg')),
-                  );
-                }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Błąd: $e')),
+                    SnackBar(content: Text('Błąd: ${ApiErrorHandler.extractMessage(e)}')),
                   );
                 }
               }
@@ -258,7 +250,7 @@ class _SysAdminDashboardScreenState
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Błąd: $e')),
+                    SnackBar(content: Text('Błąd: ${ApiErrorHandler.extractMessage(e)}')),
                   );
                 }
               }
@@ -325,42 +317,55 @@ class _SysAdminDashboardScreenState
 
   void _showResetPasswordDialog(String userId, String username) {
     final passCtrl = TextEditingController();
+    String? errorText;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Zresetuj hasło ($username)'),
-        content: TextField(
-          controller: passCtrl,
-          decoration: const InputDecoration(labelText: 'Nowe hasło'),
-          obscureText: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('Zresetuj hasło ($username)'),
+          content: TextField(
+            controller: passCtrl,
+            decoration: InputDecoration(
+              labelText: 'Nowe hasło',
+              helperText: 'Min. 8 znaków, cyfra i wielka litera',
+              errorText: errorText,
+            ),
+            obscureText: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Anuluj'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final validationError = ApiErrorHandler.validatePassword(passCtrl.text);
+                if (validationError != null) {
+                  setDialogState(() => errorText = validationError);
+                  return;
+                }
+                try {
+                  final service = ref.read(sysAdminServiceProvider);
+                  await service.resetUserPassword(userId, passCtrl.text);
+                  if (mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Hasło zostało zmienione')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Błąd: ${ApiErrorHandler.extractMessage(e)}')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Zapisz'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Anuluj'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                final service = ref.read(sysAdminServiceProvider);
-                await service.resetUserPassword(userId, passCtrl.text);
-                if (mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Hasło zostało zmienione')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Błąd: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('Zapisz'),
-          ),
-        ],
       ),
     );
   }

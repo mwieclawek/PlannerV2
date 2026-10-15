@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../utils/api_error_handler.dart';
 import 'employee_detail_dialog.dart';
 
 class TeamTab extends ConsumerStatefulWidget {
@@ -298,7 +299,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Błąd: $e')));
+        ).showSnackBar(SnackBar(content: Text('Błąd: ${ApiErrorHandler.extractMessage(e)}')));
       }
     }
   }
@@ -397,7 +398,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Błąd: ${ApiErrorHandler.extractMessage(e)}'), backgroundColor: Colors.red),
         );
       }
     }
@@ -425,6 +426,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                           obscureText: true,
                           decoration: InputDecoration(
                             labelText: 'Nowe hasło',
+                            helperText: 'Min. 8 znaków, cyfra i wielka litera',
                             prefixIcon: const Icon(Icons.lock),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -457,10 +459,9 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                         final newPass = newPasswordController.text;
                         final confirmPass = confirmPasswordController.text;
 
-                        if (newPass.length < 6) {
-                          setDialogState(
-                            () => errorText = 'Hasło musi mieć min. 6 znaków',
-                          );
+                        final passError = ApiErrorHandler.validatePassword(newPass);
+                        if (passError != null) {
+                          setDialogState(() => errorText = passError);
                           return;
                         }
                         if (newPass != confirmPass) {
@@ -498,7 +499,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Błąd: $e'),
+            content: Text('Błąd: ${ApiErrorHandler.extractMessage(e)}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -869,13 +870,10 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                               controller: passwordController,
                               decoration: const InputDecoration(
                                 labelText: 'Hasło *',
+                                helperText: 'Min. 8 znaków, cyfra i wielka litera',
                               ),
                               obscureText: true,
-                              validator:
-                                  (v) =>
-                                      v != null && v.length >= 6
-                                          ? null
-                                          : 'Min. 6 znaków',
+                              validator: ApiErrorHandler.validatePassword,
                             ),
                             const SizedBox(height: 16),
                             TextFormField(
@@ -1000,7 +998,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                                     setDialogState(() => isLoading = false);
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('Błąd: $e'),
+                                        content: Text('Błąd: ${ApiErrorHandler.extractMessage(e)}'),
                                         backgroundColor:
                                             Theme.of(context).colorScheme.error,
                                       ),

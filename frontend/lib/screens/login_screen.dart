@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/providers.dart';
+import '../utils/api_error_handler.dart';
 import '../widgets/app_logo.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -51,24 +52,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       TextInput.finishAutofillContext();
     } catch (e) {
       if (mounted) {
-        String message = 'Wystąpił błąd';
-        bool isForbidden = false;
-        if (e is DioException) {
-          if (e.response?.statusCode == 403) {
-            isForbidden = true;
-          }
-          final responseData = e.response?.data;
-          if (responseData is Map && responseData['detail'] != null) {
-            message = responseData['detail'].toString();
-            if (message == 'Incorrect username or password') {
-              message = 'Nieprawidłowy login lub hasło';
-            } else if (message.contains('deactivated')) {
-              message = 'Konto jest dezaktywowane. Skontaktuj się z managerem.';
-            }
-          }
-        } else {
-          message = e.toString();
-        }
+        final message = ApiErrorHandler.extractMessage(e);
+        final isForbidden = e is DioException && e.response?.statusCode == 403;
 
         if (isForbidden && !message.contains('Nieprawidłowy')) {
           showDialog(

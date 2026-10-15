@@ -15,6 +15,7 @@ import 'leave_requests_tab.dart';
 import '../../widgets/help_dialog.dart';
 import '../../widgets/notification_bell.dart';
 import '../../providers/module_provider.dart';
+import '../../utils/api_error_handler.dart';
 
 class EmployeeDashboard extends ConsumerStatefulWidget {
   const EmployeeDashboard({super.key});
@@ -78,11 +79,10 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                           controller: newPasswordController,
                           decoration: const InputDecoration(
                             labelText: 'Nowe hasło',
+                            helperText: 'Min. 8 znaków, cyfra i wielka litera',
                           ),
                           obscureText: true,
-                          validator:
-                              (v) =>
-                                  (v?.length ?? 0) < 6 ? 'Min. 6 znaków' : null,
+                          validator: ApiErrorHandler.validatePassword,
                         ),
                         TextFormField(
                           controller: confirmPasswordController,
@@ -144,7 +144,9 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                                         context,
                                       ).showSnackBar(
                                         SnackBar(
-                                          content: Text('Błąd: $e'),
+                                          content: Text(
+                                            'Błąd: ${ApiErrorHandler.extractMessage(e)}',
+                                          ),
                                           backgroundColor:
                                               Theme.of(
                                                 context,
@@ -314,7 +316,7 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                           } catch (e) {
                             setDialogState(() {
                               isLoading = false;
-                              error = 'Błąd: $e';
+                              error = 'Błąd: ${ApiErrorHandler.extractMessage(e)}';
                             });
                           }
                         },
@@ -389,7 +391,7 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                           } catch (e) {
                             setDialogState(() {
                               isLoading = false;
-                              error = 'Błąd synchronizacji: $e';
+                              error = 'Błąd synchronizacji: ${ApiErrorHandler.extractMessage(e)}';
                             });
                           }
                         },
@@ -464,14 +466,12 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                             } on DioException catch (e) {
                               setDialogState(() {
                                 isSigningIn = false;
-                                final data = e.response?.data;
-                                final detail = data is Map ? data['detail'] : null;
-                                error = 'Błąd serwera: ${detail ?? e.message}';
+                                error = 'Błąd serwera: ${ApiErrorHandler.extractMessage(e)}';
                               });
                             } catch (e) {
                               setDialogState(() {
                                 isSigningIn = false;
-                                error = 'Błąd logowania Google: $e';
+                                error = 'Błąd logowania Google: ${ApiErrorHandler.extractMessage(e)}';
                               });
                             }
                           },

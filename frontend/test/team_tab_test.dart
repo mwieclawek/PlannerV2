@@ -88,7 +88,7 @@ void main() {
 
     // Fill form
     await tester.enterText(find.widgetWithText(TextFormField, 'Login *'), 'newuser');
-    await tester.enterText(find.widgetWithText(TextFormField, 'Hasło *'), 'password123');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Hasło *'), 'Password123');
     await tester.enterText(find.widgetWithText(TextFormField, 'Pełna nazwa *'), 'Test User');
 
     // Submit

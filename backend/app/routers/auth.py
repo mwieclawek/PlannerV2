@@ -14,7 +14,7 @@ from ..auth_utils import (
     create_access_token, create_refresh_token, decode_token,
     ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user, ensure_tenant_active
 )
-from ..schemas import Token, UserCreate, UserResponse
+from ..schemas import Token, UserCreate, UserResponse, UserPasswordChange
 from ..main import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -227,11 +227,10 @@ def read_users_me(current_user: User = Depends(get_current_user)):
 
 @router.put("/change-password")
 def change_password(
-    password_data: "UserPasswordChange",
+    password_data: UserPasswordChange,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    from ..schemas import UserPasswordChange
     if not verify_password(password_data.old_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="Incorrect old password")
 
