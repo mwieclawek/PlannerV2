@@ -644,3 +644,127 @@ class TestShiftSwapAndAuditLog:
         assert "Zmiana A" in names_all
         assert "Zmiana B" in names_all
 
+    async def test_validate_shift_swap_endpoint_and_conflict_rejection(
+        self, client: AsyncClient, session: Session, test_tenant
+    ):
+        """Test validate-swap endpoint and overlap collision prevention."""
+        from app.auth_utils import create_access_token
+
+        role_waiter = JobRole(name="Kelner", color_hex="#3498db", tenant_id=test_tenant.id)
+        role_cook = JobRole(name="Kucharz", color_hex="#e67e22", tenant_id=test_tenant.id)
+        session.add_all([role_waiter, role_cook])
+        session.commit()
+
+        shift_morning = ShiftDefinition(
+            tenant_id=test_tenant.id,
+            name="Rano",
+            start_time=time(8, 0),
+            end_time=time(16, 0),
+        )
+        shift_evening = ShiftDefinition(
+            tenant_id=test_tenant.id,
+            name="Popołudnie",
+            start_time=time(16, 0),
+            end_time=time(22, 0),
+        )
+        shift_overlap = ShiftDefinition(
+            tenant_id=test_tenant.id,
+            name="Środek",
+            start_time=time(12, 0),
+            end_time=time(18, 0),
+        )
+        session.add_all([shift_morning, shift_evening, shift_overlap])
+        session.commit()
+
+        emp_a = User(
+            username=f"waiter_a_{uuid4().hex[:6]}",
+            email=f"waiter_a_{uuid4().hex[:6]}@test.com",
+            password_hash="fakehash",
+            full_name="Adam Kelner",
+            role_system=RoleSystem.EMPLOYEE,
+            tenant_id=test_tenant.id,
+            is_active=True
+        )
+        emp_a.job_roles.append(role_waiter)
+
+        emp_b = User(
+            username=f"waiter_b_{uuid4().hex[:6]}",
+            email=f"waiter_b_{uuid4().hex[:6]}@test.com",
+            password_hash="fakehash",
+            full_name="Bartek Kelner",
+            role_system=RoleSystem.EMPLOYEE,
+            tenant_id=test_tenant.id,
+            is_active=True
+        )
+        emp_b.job_roles.append(role_waiter)
+
+        session.add_all([emp_a, emp_b])
+        session.commit()
+
+        future_d1 = date.today() + timedelta(days=5)
+        future_d2 = date.today() + timedelta(days=6)
+
+        # Shift A: Adam works Morning on future_d1
+        sched_a = Schedule(
+            user_id=emp_a.id,
+            shift_def_id=shift_morning.id,
+            date=future_d1,
+            role_id=role_waiter.id,
+            is_published=True
+        )
+        # Shift B: Bartek works Evening on future_d2
+        sched_b = Schedule(
+            user_id=emp_b.id,
+            shift_def_id=shift_evening.id,
+            date=future_d2,
+            role_id=role_waiter.id,
+            is_published=True
+        )
+        session.add_all([sched_a, sched_b])
+        session.commit()
+        session.refresh(sched_a)
+        session.refresh(sched_b)
+
+        headers_a = {"Authorization": f"Bearer {create_access_token(data={'sub': emp_a.username, 'tenant_id': test_tenant.id})}"}
+
+        # 1. Valid swap: Adam proposes sched_a for Bartek's sched_b
+        res_val = await client.get(
+            f"/employee/giveaways/validate-swap?offered_schedule_id={sched_a.id}&target_schedule_id={sched_b.id}",
+            headers=headers_a
+        )
+        assert res_val.status_code == 200
+        val_data = res_val.json()
+        assert val_data["can_swap"] is True
+        assert val_data["reason"] is None
+        assert val_data["target_user_name"] == "Bartek Kelner"
+
+        # 2. Add conflicting shift for Bartek on future_d1 (overlapping with Adam's morning shift)
+        sched_b_conflict = Schedule(
+            user_id=emp_b.id,
+            shift_def_id=shift_overlap.id,
+            date=future_d1,
+            role_id=role_waiter.id,
+            is_published=True
+        )
+        session.add(sched_b_conflict)
+        session.commit()
+
+        # Validation should now report conflict!
+        res_val_conflict = await client.get(
+            f"/employee/giveaways/validate-swap?offered_schedule_id={sched_a.id}&target_schedule_id={sched_b.id}",
+            headers=headers_a
+        )
+        assert res_val_conflict.status_code == 200
+        val_conflict_data = res_val_conflict.json()
+        assert val_conflict_data["can_swap"] is False
+        assert "ma już inną zmianę w tym czasie" in val_conflict_data["reason"]
+
+        # Attempting to create the swap should be rejected with 400
+        res_offer_fail = await client.post(
+            f"/employee/giveaway/{sched_a.id}",
+            json={"target_shift_id": str(sched_b.id)},
+            headers=headers_a
+        )
+        assert res_offer_fail.status_code == 400
+        assert "ma już zaplanowaną inną zmianę w tym czasie" in res_offer_fail.json()["detail"]
+

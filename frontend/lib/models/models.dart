@@ -382,6 +382,8 @@ class EmployeeScheduleEntry {
   final String endTime;
   final bool isOnGiveaway;
   final List<CoworkerEntry> coworkers;
+  final int? roleId;
+  final int? shiftDefId;
 
   EmployeeScheduleEntry({
     required this.id,
@@ -392,6 +394,8 @@ class EmployeeScheduleEntry {
     required this.endTime,
     this.isOnGiveaway = false,
     this.coworkers = const [],
+    this.roleId,
+    this.shiftDefId,
   });
 
   factory EmployeeScheduleEntry.fromJson(Map<String, dynamic> json) {
@@ -408,6 +412,8 @@ class EmployeeScheduleEntry {
               ?.map((e) => CoworkerEntry.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      roleId: json['role_id'] as int?,
+      shiftDefId: json['shift_def_id'] as int?,
     );
   }
 }

@@ -285,6 +285,142 @@ from fastapi import HTTPException
 from ..models import ShiftGiveaway, GiveawayStatus, JobRole, ShiftRoleLink
 from ..schemas import OfferGiveawayRequest
 
+def find_shift_conflict(
+    session: Session,
+    user_id: UUID,
+    date_val: date,
+    shift_def_id: int,
+    exclude_schedule_id: Optional[UUID] = None
+) -> Optional[tuple[Schedule, ShiftDefinition]]:
+    """Check if the user already has an active schedule on date_val overlapping with shift_def_id."""
+    from datetime import datetime as dt, timedelta
+    target_def = session.get(ShiftDefinition, shift_def_id)
+    if not target_def or not target_def.start_time or not target_def.end_time:
+        return None
+
+    existing_schedules = session.exec(
+        select(Schedule).where(
+            Schedule.user_id == user_id,
+            Schedule.date == date_val,
+            Schedule.id != exclude_schedule_id
+        )
+    ).all()
+
+    start1 = dt.combine(date_val, target_def.start_time)
+    end1 = dt.combine(date_val, target_def.end_time)
+    if end1 <= start1:
+        end1 += timedelta(days=1)
+
+    for s in existing_schedules:
+        s_def = session.get(ShiftDefinition, s.shift_def_id)
+        if not s_def or not s_def.start_time or not s_def.end_time:
+            continue
+        start2 = dt.combine(date_val, s_def.start_time)
+        end2 = dt.combine(date_val, s_def.end_time)
+        if end2 <= start2:
+            end2 += timedelta(days=1)
+
+        overlap_start = max(start1, start2)
+        overlap_end = min(end1, end2)
+        if overlap_start < overlap_end:
+            overlap_duration = (overlap_end - overlap_start).total_seconds() / 60.0
+            is_enveloped = (start1 <= start2 and end1 >= end2) or (start2 <= start1 and end2 >= end1)
+            if overlap_duration > 30 or is_enveloped:
+                return (s, s_def)
+    return None
+
+@router.get("/giveaways/validate-swap")
+def validate_shift_swap(
+    offered_schedule_id: UUID,
+    target_schedule_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Validate whether current_user can propose exchanging offered_schedule for target_schedule."""
+    schedule = session.exec(
+        select(Schedule).where(
+            Schedule.id == offered_schedule_id,
+            Schedule.user_id == current_user.id
+        )
+    ).first()
+    if not schedule:
+        return {"can_swap": False, "reason": "Nie znaleziono Twojej zmiany."}
+
+    if schedule.date < date.today():
+        return {"can_swap": False, "reason": "Nie można wymieniać zmian z przeszłości."}
+
+    existing = session.exec(
+        select(ShiftGiveaway).where(
+            ShiftGiveaway.schedule_id == offered_schedule_id,
+            ShiftGiveaway.status == GiveawayStatus.OPEN
+        )
+    ).first()
+    if existing:
+        return {"can_swap": False, "reason": "Ta zmiana została już wystawiona na giełdę."}
+
+    target_schedule = session.get(Schedule, target_schedule_id)
+    if not target_schedule:
+        return {"can_swap": False, "reason": "Nie znaleziono docelowej zmiany współpracownika."}
+
+    if target_schedule.user_id == current_user.id:
+        return {"can_swap": False, "reason": "Nie możesz wymienić zmiany ze swoją własną zmianą."}
+
+    target_user = session.get(User, target_schedule.user_id)
+    if not target_user or target_user.tenant_id != current_user.tenant_id:
+        return {"can_swap": False, "reason": "Współpracownik nie należy do tej samej restauracji."}
+
+    # Validate roles
+    user_a_role_ids = {r.id for r in current_user.job_roles}
+    user_b_role_ids = {r.id for r in target_user.job_roles}
+
+    target_role = session.get(JobRole, target_schedule.role_id) if target_schedule.role_id else None
+    offered_role = session.get(JobRole, schedule.role_id) if schedule.role_id else None
+
+    if target_schedule.role_id not in user_a_role_ids:
+        role_label = target_role.name if target_role else "wymaganej"
+        return {"can_swap": False, "reason": f"Nie posiadasz roli {role_label} wymaganej do przejęcia tej zmiany."}
+
+    if schedule.role_id not in user_b_role_ids:
+        role_label = offered_role.name if offered_role else "wymaganej"
+        return {"can_swap": False, "reason": f"Pracownik {target_user.full_name} nie posiada roli {role_label} do Twojej zmiany."}
+
+    # Check shift definition allowed roles
+    allowed_a = set(session.exec(select(ShiftRoleLink.role_id).where(ShiftRoleLink.shift_def_id == schedule.shift_def_id)).all())
+    if allowed_a and schedule.role_id not in allowed_a:
+        return {"can_swap": False, "reason": "Niedozwolona rola dla Twojej zmiany."}
+
+    allowed_b = set(session.exec(select(ShiftRoleLink.role_id).where(ShiftRoleLink.shift_def_id == target_schedule.shift_def_id)).all())
+    if allowed_b and target_schedule.role_id not in allowed_b:
+        return {"can_swap": False, "reason": "Niedozwolona rola dla zmiany współpracownika."}
+
+    # Check overlaps
+    conflict_b = find_shift_conflict(session, target_user.id, schedule.date, schedule.shift_def_id, exclude_schedule_id=target_schedule.id)
+    if conflict_b:
+        _, c_def = conflict_b
+        return {
+            "can_swap": False,
+            "reason": f"Pracownik {target_user.full_name} ma już inną zmianę w tym czasie ({c_def.name} {c_def.start_time.strftime('%H:%M')}-{c_def.end_time.strftime('%H:%M')})."
+        }
+
+    conflict_a = find_shift_conflict(session, current_user.id, target_schedule.date, target_schedule.shift_def_id, exclude_schedule_id=schedule.id)
+    if conflict_a:
+        _, c_def = conflict_a
+        return {
+            "can_swap": False,
+            "reason": f"Masz już inną zmianę w tym czasie ({c_def.name} {c_def.start_time.strftime('%H:%M')}-{c_def.end_time.strftime('%H:%M')})."
+        }
+
+    offered_def = session.get(ShiftDefinition, schedule.shift_def_id)
+    target_def = session.get(ShiftDefinition, target_schedule.shift_def_id)
+
+    return {
+        "can_swap": True,
+        "reason": None,
+        "target_user_name": target_user.full_name,
+        "target_shift_name": target_def.name if target_def else "",
+        "offered_shift_name": offered_def.name if offered_def else ""
+    }
+
 @router.post("/giveaway/{schedule_id}")
 def offer_shift_giveaway(
     schedule_id: UUID,
@@ -360,6 +496,23 @@ def offer_shift_giveaway(
         allowed_b = set(session.exec(select(ShiftRoleLink.role_id).where(ShiftRoleLink.shift_def_id == target_schedule.shift_def_id)).all())
         if allowed_b and target_schedule.role_id not in allowed_b:
             raise HTTPException(status_code=400, detail="Employees do not have matching roles for shift swap")
+
+        # Check shift overlaps/collisions
+        conflict_b = find_shift_conflict(session, target_user.id, schedule.date, schedule.shift_def_id, exclude_schedule_id=target_schedule.id)
+        if conflict_b:
+            _, c_def = conflict_b
+            raise HTTPException(
+                status_code=400,
+                detail=f"Pracownik {target_user.full_name} ma już zaplanowaną inną zmianę w tym czasie ({c_def.name} {c_def.start_time.strftime('%H:%M')}-{c_def.end_time.strftime('%H:%M')})"
+            )
+
+        conflict_a = find_shift_conflict(session, current_user.id, target_schedule.date, target_schedule.shift_def_id, exclude_schedule_id=schedule.id)
+        if conflict_a:
+            _, c_def = conflict_a
+            raise HTTPException(
+                status_code=400,
+                detail=f"Masz już zaplanowaną inną zmianę w tym czasie ({c_def.name} {c_def.start_time.strftime('%H:%M')}-{c_def.end_time.strftime('%H:%M')})"
+            )
 
     giveaway = ShiftGiveaway(
         schedule_id=schedule_id,

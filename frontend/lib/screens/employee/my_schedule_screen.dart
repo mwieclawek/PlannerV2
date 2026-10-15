@@ -822,6 +822,9 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
   Widget _buildTeamGridView() {
     final shiftsAsync = ref.watch(allShiftsProvider);
     final rolesAsync = ref.watch(rolesProvider);
+    final user = ref.read(authProvider).value;
+    final currentUserId = user?.id ?? '';
+    final myRoleIds = user?.jobRoleIds ?? [];
 
     return shiftsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -834,6 +837,14 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
           shifts: shifts,
           roles: roles,
           weekStart: _selectedWeekStart,
+          onAssignmentTap: (entry) {
+            if (entry.userId != currentUserId &&
+                myRoleIds.contains(entry.roleId) &&
+                !_isPast(entry.date) &&
+                !entry.isOnGiveaway) {
+              _showDirectSwapFromTeamView(entry);
+            }
+          },
         ),
       ),
     );
@@ -858,7 +869,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: colorScheme.primaryContainer.withOpacity(0.3),
+            color: colorScheme.primaryContainer.withValues(alpha: 0.3),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -885,8 +896,8 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
               borderRadius: BorderRadius.circular(14),
               border: isToday
                   ? Border.all(color: colorScheme.primary, width: 2)
-                  : Border.all(color: colorScheme.outlineVariant.withOpacity(0.4)),
-              color: isToday ? colorScheme.primaryContainer.withOpacity(0.15) : colorScheme.surface,
+                  : Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+              color: isToday ? colorScheme.primaryContainer.withValues(alpha: 0.15) : colorScheme.surface,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -894,7 +905,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: isToday ? colorScheme.primary.withOpacity(0.08) : colorScheme.surfaceContainerLow,
+                    color: isToday ? colorScheme.primary.withValues(alpha: 0.08) : colorScheme.surfaceContainerLow,
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                   ),
                   child: Row(
@@ -903,7 +914,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(color: colorScheme.primary, borderRadius: BorderRadius.circular(6)),
-                          child: Text('DZIEŚ', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onPrimary)),
+                          child: Text('DZIEŃ', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onPrimary)),
                         ),
                         const SizedBox(width: 8),
                       ],
@@ -938,6 +949,9 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                 else
                   ...dayEntries.map((entry) {
                     final isMe = entry.userId == currentUserId;
+                    final myRoleIds = user?.jobRoleIds ?? [];
+                    final hasMatchingRole = myRoleIds.contains(entry.roleId);
+                    final isPastDay = _isPast(entry.date);
                     final hue = (entry.roleName.hashCode % 360).abs().toDouble();
                     final roleColor = HSLColor.fromAHSL(1.0, hue, 0.55, 0.55).toColor();
                     return Padding(
@@ -978,7 +992,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                      decoration: BoxDecoration(color: roleColor.withOpacity(0.12), borderRadius: BorderRadius.circular(4)),
+                                      decoration: BoxDecoration(color: roleColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(4)),
                                       child: Text(entry.roleName, style: TextStyle(fontSize: 10, color: roleColor, fontWeight: FontWeight.w600)),
                                     ),
                                     const SizedBox(width: 6),
@@ -988,6 +1002,39 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                               ],
                             ),
                           ),
+                          if (!isMe && hasMatchingRole && !isPastDay) ...[
+                            const SizedBox(width: 8),
+                            if (entry.isOnGiveaway)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.shade50,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.purple.shade300),
+                                ),
+                                child: Text(
+                                  'GIEŁDA',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.purple.shade700,
+                                  ),
+                                ),
+                              )
+                            else
+                              OutlinedButton.icon(
+                                onPressed: () => _showDirectSwapFromTeamView(entry),
+                                icon: const Icon(Icons.swap_horiz, size: 14),
+                                label: const Text('Wymień', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                                style: OutlinedButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  minimumSize: const Size(0, 30),
+                                  side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.5)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              ),
+                          ],
                         ],
                       ),
                     );
@@ -998,6 +1045,339 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
           );
         }),
       ],
+    );
+  }
+
+  void _showDirectSwapFromTeamView(ScheduleEntry targetEntry) async {
+    // 1. Gather all of current user's future shifts
+    List<EmployeeScheduleEntry> candidateShifts = [];
+    
+    // First, from _scheduleEntries (already in state)
+    for (final s in _scheduleEntries) {
+      if (!_isPast(s.date) && !s.isOnGiveaway && s.id != targetEntry.id) {
+        candidateShifts.add(s);
+      }
+    }
+
+    // Also fetch upcoming 30 days so the employee can swap a future shift from upcoming weeks
+    try {
+      final upcoming = await ref.read(apiServiceProvider).getEmployeeSchedule(
+            DateTime.now(),
+            DateTime.now().add(const Duration(days: 30)),
+          );
+      final setIds = candidateShifts.map((e) => e.id).toSet();
+      for (final u in upcoming) {
+        if (!_isPast(u.date) && !u.isOnGiveaway && u.id != targetEntry.id && !setIds.contains(u.id)) {
+          candidateShifts.add(u);
+        }
+      }
+    } catch (_) {}
+
+    candidateShifts.sort((a, b) => a.date.compareTo(b.date));
+
+    if (!mounted) return;
+
+    String? selectedMyShiftId = candidateShifts.isNotEmpty ? candidateShifts.first.id : null;
+    bool isValidating = false;
+    bool? canSwap;
+    String? validationMessage;
+
+    Future<void> runValidation(String offeredId, StateSetter setDialogState) async {
+      setDialogState(() {
+        isValidating = true;
+        canSwap = null;
+        validationMessage = null;
+      });
+
+      try {
+        final res = await ref.read(apiServiceProvider).validateSwap(
+              offeredId,
+              targetEntry.id,
+            );
+        if (mounted) {
+          setDialogState(() {
+            isValidating = false;
+            canSwap = res['can_swap'] as bool? ?? false;
+            validationMessage = res['reason'] as String?;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setDialogState(() {
+            isValidating = false;
+            canSwap = false;
+            validationMessage = 'Błąd walidacji: $e';
+          });
+        }
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          if (selectedMyShiftId != null && canSwap == null && !isValidating) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              runValidation(selectedMyShiftId!, setDialogState);
+            });
+          }
+
+          final colorScheme = Theme.of(context).colorScheme;
+
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.swap_horiz, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Wymiana ze współpracownikiem'),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 480,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Target Shift Card
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 14,
+                                backgroundColor: colorScheme.primary,
+                                child: Text(
+                                  targetEntry.userName.isNotEmpty ? targetEntry.userName[0].toUpperCase() : '?',
+                                  style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  targetEntry.userName,
+                                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  targetEntry.roleName,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(Icons.calendar_today, size: 14, color: Colors.grey.shade600),
+                              const SizedBox(width: 6),
+                              Text(
+                                DateFormat('EEEE, d MMMM yyyy', 'pl_PL').format(targetEntry.date),
+                                style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade800),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.access_time, size: 14, color: Colors.grey.shade600),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${targetEntry.shiftName} (${targetEntry.startTime.substring(0, 5)} - ${targetEntry.endTime.substring(0, 5)})',
+                                style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+                    Text(
+                      'Wybierz swoją zmianę do oddania w zamian:',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                    const SizedBox(height: 8),
+
+                    if (candidateShifts.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.amber.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.amber.shade900, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Nie masz żadnych przyszłych zmian, które mógłbyś zaoferować w zamian.',
+                                style: GoogleFonts.inter(fontSize: 12, color: Colors.amber.shade900),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        value: selectedMyShiftId,
+                        decoration: InputDecoration(
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                        items: candidateShifts.map((s) {
+                          final dateStr = DateFormat('E, d MMM', 'pl_PL').format(s.date);
+                          return DropdownMenuItem<String>(
+                            value: s.id,
+                            child: Text(
+                              '$dateStr • ${s.startTime.substring(0, 5)}-${s.endTime.substring(0, 5)} (${s.roleName})',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (newId) {
+                          if (newId != null && newId != selectedMyShiftId) {
+                            setDialogState(() {
+                              selectedMyShiftId = newId;
+                            });
+                            runValidation(newId, setDialogState);
+                          }
+                        },
+                      ),
+
+                    const SizedBox(height: 16),
+
+                    // Validation Status Box
+                    if (isValidating)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Sprawdzanie dostępności i grafiku współpracownika...',
+                                style: GoogleFonts.inter(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (canSwap == true)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.green.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle, color: Colors.green.shade700, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '✓ Wymiana możliwa! Brak kolizji w grafiku współpracownika.',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.green.shade800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (canSwap == false)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade300),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                validationMessage ?? 'Brak możliwości zaproponowania tej wymiany.',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.red.shade800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    const SizedBox(height: 12),
+                    Text(
+                      'Po wysłaniu propozycji współpracownik otrzyma powiadomienie. Bezpośrednia wymiana wejdzie w życie po jej zaakceptowaniu.',
+                      style: GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Anuluj'),
+              ),
+              FilledButton(
+                onPressed: (canSwap == true && !isValidating && selectedMyShiftId != null)
+                    ? () {
+                        Navigator.pop(context);
+                        _submitGiveaway(
+                          selectedMyShiftId!,
+                          targetShiftId: targetEntry.id,
+                        );
+                      }
+                    : null,
+                child: const Text('Zaproponuj wymianę'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 

@@ -239,6 +239,8 @@ class EmployeeService:
                 "end_time": shift.end_time.strftime("%H:%M") if shift and shift.end_time else "",
                 "is_on_giveaway": str(s.id) in giveaway_ids,
                 "coworkers": coworkers,
+                "role_id": s.role_id,
+                "shift_def_id": s.shift_def_id,
             })
         return response
 

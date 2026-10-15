@@ -340,6 +340,8 @@ class EmployeeScheduleResponse(BaseModel):
     end_time: str
     is_on_giveaway: bool = False
     coworkers: List[CoworkerEntry] = []
+    role_id: Optional[int] = None
+    shift_def_id: Optional[int] = None
 
 # --- Restaurant Config ---
 class ConfigBase(BaseModel):

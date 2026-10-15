@@ -736,6 +736,20 @@ class ApiService {
     );
   }
 
+  Future<Map<String, dynamic>> validateSwap(
+    String offeredScheduleId,
+    String targetScheduleId,
+  ) async {
+    final response = await _dio.get(
+      '/employee/giveaways/validate-swap',
+      queryParameters: {
+        'offered_schedule_id': offeredScheduleId,
+        'target_schedule_id': targetScheduleId,
+      },
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
   Future<List<Map<String, dynamic>>> getShiftAuditLog(String shiftId) async {
     final response = await _dio.get('/manager/shifts/$shiftId/audit-log');
     return (response.data as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
