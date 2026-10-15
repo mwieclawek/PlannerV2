@@ -4,7 +4,8 @@ Tests password hashing, token creation, and token validation.
 """
 import pytest
 from datetime import timedelta
-from jose import jwt, JWTError
+import jwt
+from jwt.exceptions import PyJWTError as JWTError
 
 from app.auth_utils import (
     verify_password, 

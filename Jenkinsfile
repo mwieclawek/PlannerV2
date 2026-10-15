@@ -39,9 +39,10 @@ pipeline {
                 sh '''
                     export PYTHONPATH=$PWD:$PWD/backend
                     export APP_ENV=development
-                    export JWT_SECRET_KEY=ci-test-secret-key-32-chars-long-planner-v2
-                    export MANAGER_REGISTRATION_PIN=12345678
-                    export ENCRYPTION_KEY=1wqgJx3GxGGUwygtOgsp68wdvr37f_W_BGGPccw_qA0=
+                    # Jednorazowe sekrety generowane w locie - nic nie jest commitowane do repo
+                    export JWT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(48))")
+                    export ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+                    export MANAGER_REGISTRATION_PIN=$(python -c "import secrets; print(secrets.randbelow(90000000) + 10000000)")
                     python -m pytest backend/tests -v -o asyncio_mode=auto --junitxml=test-results/backend-all.xml
                 '''
             }
