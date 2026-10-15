@@ -4,49 +4,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v2.1.0] - 2026-10-15
+## [v2.1.0] - 2026-10-15 (Cumulative release from v1.7.3)
 
-### Added
+### 🏢 Multi-Tenancy Architecture & Global Superadmin
+- **Multi-Tenancy (Wielodostępność lokali)**:
+  - Wprowadzenie modelu lokalu (`Tenant` / `RestaurantConfig`) z unikalnym identyfikatorem logowania (`slug` / Login ID).
+  - Pełna izolacja danych w bazie: każdy zasób powiązany z `tenant_id`.
+  - **Dual-Login**: Możliwość logowania za pomocą unikalnego adresu `email` LUB kombinacji `username` + `Login ID` (tenant slug).
+  - Integracja tokenów JWT z identyfikatorem lokalu i uprawnieniami.
+- **Panel Superadmina (SysAdmin Dashboard)**:
+  - Globalny panel administracyjny pod ścieżką `/#/superadmin` dla kont z uprawnieniem `is_superadmin`.
+  - Zarządzanie lokalami: rejestracja nowych restauracji, edycja parametrów lokalu, statystyki.
+  - Globalne zarządzanie użytkownikami: tworzenie pierwszych kont menedżerów dla restauracji, awaryjny reset haseł.
+
+### 🗓️ Harmonogram i Zarządzanie Grafikami
 - **Direct Shift Swap (Bezpośrednia wymiana zmian)**:
-  - Możliwość zaoferowania bezpośredniej wymiany zmiany z poziomu widoku „Cała załoga”.
-  - Przycisk „Wymień” przy zmianach współpracowników na tej samej roli stanowiskowej.
-  - Interaktywny modal wyboru własnej zmiany do oddania z natychmiastową walidacją braku kolizji czasowych.
-  - Pełny obieg akceptacji/odrzucenia propozycji wymiany w panelu pracownika i managera.
-- **Whole Team Schedule View (Widok całego zespołu)**:
-  - Dodano przełącznik widoku u pracownika („Moje zmiany” / „Cała załoga”), umożliwiający podgląd pełnego harmonogramu restauracji dla wszystkich ról.
-- **Browser Password Saving (Obsługa menedżerów haseł)**:
-  - Dodano autofill hints (`AutofillHints.username`, `AutofillHints.password`) oraz strukturę `AutofillGroup` na formularzu logowania, umożliwiającą natywne zapisywanie i uzupełnianie poświadczeń przez przeglądarki.
+  - Opcja „Wymień” przy zmianach współpracowników posiadających tę samą rolę w widoku zespołu.
+  - Interaktywny wybór własnej zmiany do oddania z natychmiastową walidacją kolizji terminów.
+  - Obieg akceptacji/odrzucenia propozycji wymiany w panelu pracownika i managera.
 - **Draft Schedules & 11h Rest Warnings (Grafiki robocze)**:
-  - Obsługa trybu roboczego grafików przed ich publikacją (`is_published`).
-  - Mechanizm ostrzeżeń dla managera przed naruszeniem kodeksowego 11-godzinnego odpoczynku dobowego pracownika między zmianami.
-- **Shift Audit Log (Historia i audyt zmian grafiku)**:
-  - Tabela `shiftauditlog` i migracja bazy danych Alembic rejestrująca każde utworzenie, zmianę godzin, edycję przypisania i usunięcie zmiany wraz z autorem operacji.
-  - Interfejs podglądu historii zmian dla managera w module układania grafiku.
-
-### Changed
+  - Wprowadzenie statusu roboczego grafiku (`is_published`).
+  - Ostrzeżenia przed naruszeniem kodeksowego 11-godzinnego odpoczynku dobowego między kolejnymi zmianami.
+  - Opcja jednoklikowej publikacji grafiku dla zespołu.
+- **Whole Team Schedule View (Widok całego zespołu)**:
+  - Przełącznik widoku u pracownika („Moje zmiany” / „Cała załoga”) z podglądem pełnego grafiku lokalu.
+- **Shift Audit Log (Historia i audyt zmian)**:
+  - Tabela `shiftauditlog` rejestrująca każde utworzenie, zmianę godzin, edycję przypisania i usunięcie zmiany wraz z autorem operacji.
+  - Podgląd historii zmian w panelu managera.
 - **Giełda zmian (Giveaway Claims)**:
-  - Wymuszenie walidacji ról: pracownik może przejąć wystawioną na giełdzie zmianę wyłącznie wtedy, gdy posiada przypisaną do niej rolę stanowiskową.
-- **Architektura CI / Jenkins**:
-  - Wdrożono uruchamianie pełnego pakietu testów backendu (256 testów) w pipeline Jenkins z automatycznym raportowaniem JUnit XML i failowaniem buildu przy błędach.
-  - Dynamiczne generowanie kluczy `JWT_SECRET_KEY`, `ENCRYPTION_KEY` i `MANAGER_REGISTRATION_PIN` w środowisku CI zamiast wartości statycznych.
+  - Wymuszenie walidacji ról: pracownik może przejąć zmianę z giełdy tylko wtedy, gdy posiada wymaganą dla niej rolę.
+
+### 🔐 Bezpieczeństwo i UX
+- **Browser Password Saving (Obsługa menedżerów haseł)**:
+  - Autofill hints (`AutofillHints.username`, `AutofillHints.password`) oraz struktura `AutofillGroup` na formularzu logowania.
+- **Google Calendar Sync Hardening**:
+  - Zabezpieczenie tokenów OAuth, bezpieczne wyzwalacze synchronizacji w tle i dedykowany in-memory test session context.
+- **Uprawnienia i ochrona przed eskalacją**:
+  - Blokada możliwości nadania uprawnień superadmina oraz modyfikacji `tenant_id` przez managera lokalu.
+  - Automatyczne usuwanie tokenów FCM przy deaktywacji konta pracownika.
+
+### ⚙️ Baza danych, CI/CD i Testy
+- **PostgreSQL Compatibility**:
+  - Dodanie biblioteki `psycopg[binary]` dla SQLAlchemy 2.1 i automatyczna normalizacja prefiksu `postgres://` na `postgresql://`.
+  - Sekwencje PostgreSQL i obsługa transakcji w migracjach Alembic.
 - **Migracja JWT**:
-  - Pełna migracja z biblioteki `python-jose` na `PyJWT` ze standaryzowanymi algorytmami kryptograficznymi.
-
-### Fixed
-- **Błędy stref czasowych w testach**:
-  - Rozwiązano błędy `StatementError: Datetime values must have timezone information` w `pos_service.py` oraz `test_kds.py` poprzez wymuszenie świadomych obiektów `datetime.now(timezone.utc)`.
-- **Eliminacja fałszywych błędów Trio**:
-  - Usunięto pakiet `trio` ze środowiska testowego oraz dodano fixture `anyio_backend = "asyncio"`, eliminując błąd `RuntimeError: must be called from async context`.
-- **Obsługa dialektu PostgreSQL**:
-  - Dodano pakiet `psycopg[binary]` dla kompatybilności SQLAlchemy 2.1 oraz automatyczną normalizację prefiksu `postgres://` na `postgresql://`.
-- **Bezpieczeństwo uprawnień managera**:
-  - Zablokowano możliwość eskalacji uprawnień użytkownika do roli superadmina oraz modyfikacji `tenant_id` przez managera lokalu.
-  - Zaimplementowano usuwanie tokenów FCM przy deaktywacji konta użytkownika.
-
----
-
-## [v2.0.0] - 2026-10-14
-- Architektura Multi-Tenancy (izolacja wielu restauracji w jednej instancji).
-- Panel Superadmina (`/#/superadmin`).
-- Dual-login (email lub username + Login ID/slug).
-- Refaktoryzacja modeli i endpointów pod model lokalu.
+  - Pełna migracja z `python-jose` na `PyJWT`.
+- **Stabilizacja testów i CI (Jenkins)**:
+  - Uruchamianie pełnego pakietu 256 testów backendu w Jenkins CI z generowaniem raportów JUnit XML.
+  - Dynamiczne generowanie kluczy `JWT_SECRET_KEY`, `ENCRYPTION_KEY` i `MANAGER_REGISTRATION_PIN` w locie w kontenerze CI.
+  - Usunięcie pakietu `trio` i narzucenie `anyio_backend = "asyncio"`, eliminujące błędy `RuntimeError: must be called from async context`.
+  - Rozwiązanie problemów stref czasowych (`datetime.now(timezone.utc)`) w `pos_service.py` oraz `test_kds.py`.
+- **Porządki w repozytorium (Cleanup)**:
+  - Usunięcie zbędnych plików tymczasowych, logów błędów i plików roboczych.
