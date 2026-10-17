@@ -959,10 +959,10 @@ class OperationsService:
     ) -> List[dict]:
         q = select(HaccpLog).where(HaccpLog.tenant_id == self.tenant_id)
         if start_date:
-            start_dt = datetime.combine(start_date, time.min)
+            start_dt = datetime.combine(start_date, time.min).replace(tzinfo=timezone.utc)
             q = q.where(HaccpLog.created_at >= start_dt)
         if end_date:
-            end_dt = datetime.combine(end_date, time.max)
+            end_dt = datetime.combine(end_date, time.max).replace(tzinfo=timezone.utc)
             q = q.where(HaccpLog.created_at <= end_dt)
         if violations_only:
             q = q.where(HaccpLog.is_within_norm == False)

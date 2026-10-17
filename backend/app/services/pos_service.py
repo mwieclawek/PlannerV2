@@ -510,7 +510,7 @@ class PosService:
     def get_tip_summary(self, user_id: UUID,
                         target_date: Optional[date] = None) -> dict:
         """Smart Tips Tracker – today's tip totals for a waiter."""
-        target = target_date or date.today()
+        target = target_date or datetime.now(timezone.utc).date()
         stmt = select(Payment).where(Payment.tenant_id == self.tenant_id).where(
             Payment.received_by == user_id,
             Payment.tip_amount > 0,

@@ -637,7 +637,7 @@ class _EmployeeAnnouncementsSubTabState
                     ],
                   ),
                 ),
-              ),
+              );
             }),
         ],
       ),
