@@ -1,3 +1,4 @@
+import json
 import os
 import logging
 from typing import List, Optional
@@ -13,22 +14,59 @@ logger = logging.getLogger(__name__)
 # Try to initialize Firebase Admin SDK
 firebase_initialized = False
 
-try:
-    # If GOOGLE_APPLICATION_CREDENTIALS is set and valid, initialization will succeed.
-    # Otherwise, it might fail or we might mock it.
-    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    if cred_path and os.path.exists(cred_path):
-        cred = credentials.Certificate(cred_path)
-        firebase_admin.initialize_app(cred)
+
+def _ensure_firebase_initialized() -> bool:
+    """
+    Initializes Firebase Admin SDK from either:
+    1. FIREBASE_CREDENTIALS_JSON (raw JSON string in memory - ideal for Docker-out-of-Docker CI/CD)
+    2. GOOGLE_APPLICATION_CREDENTIALS (either a raw JSON string or a path to a JSON file, e.g. copied via docker cp)
+    Safe to call multiple times (idempotent).
+    """
+    global firebase_initialized
+    if firebase_initialized:
+        return True
+    if firebase_admin._apps:
         firebase_initialized = True
-        logger.info("Firebase Admin SDK initialized successfully.")
-    else:
+        return True
+
+    try:
+        cred_json = os.getenv("FIREBASE_CREDENTIALS_JSON", "").strip()
+        cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+
+        if cred_json.startswith("{"):
+            cred_dict = json.loads(cred_json)
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred)
+            firebase_initialized = True
+            logger.info("Firebase Admin SDK initialized from FIREBASE_CREDENTIALS_JSON in memory.")
+            return True
+
+        if cred_path.startswith("{"):
+            cred_dict = json.loads(cred_path)
+            cred = credentials.Certificate(cred_dict)
+            firebase_admin.initialize_app(cred)
+            firebase_initialized = True
+            logger.info("Firebase Admin SDK initialized from inline JSON in GOOGLE_APPLICATION_CREDENTIALS.")
+            return True
+
+        if cred_path and os.path.isfile(cred_path):
+            cred = credentials.Certificate(cred_path)
+            firebase_admin.initialize_app(cred)
+            firebase_initialized = True
+            logger.info(f"Firebase Admin SDK initialized from file: {cred_path}")
+            return True
+
         logger.warning(
-            "GOOGLE_APPLICATION_CREDENTIALS not set or file not found. "
-            "Push notifications will be mocked."
+            "Firebase credentials (FIREBASE_CREDENTIALS_JSON / GOOGLE_APPLICATION_CREDENTIALS) "
+            "not set or file not found. Push notifications will be mocked."
         )
-except Exception as e:
-    logger.error(f"Failed to initialize Firebase Admin SDK: {e}. Push notifications will be mocked.")
+    except Exception as e:
+        logger.error(f"Failed to initialize Firebase Admin SDK: {e}. Push notifications will be mocked.")
+    return False
+
+
+# Attempt initialization at import time
+_ensure_firebase_initialized()
 
 
 class PushService:
@@ -92,7 +130,7 @@ def send_push_to_tokens(
     str_data.setdefault("body", str(body))
     str_data.setdefault("tag", "plannerv2-push")
 
-    if not firebase_initialized:
+    if not _ensure_firebase_initialized():
         logger.info(f"[MOCK PUSH] Would send to {len(tokens)} devices - Title: '{title}', Body: '{body}'")
         return
 
@@ -117,7 +155,7 @@ def send_push_to_tokens(
     try:
         response = messaging.send_each_for_multicast(message)
         logger.info(f"Push notification sent. {response.success_count} success, {response.failure_count} failures.")
-        
+
         if response.failure_count > 0:
             stale_tokens: List[str] = []
             responses = response.responses
@@ -134,7 +172,6 @@ def send_push_to_tokens(
                         stale_tokens.append(tokens[idx])
             if stale_tokens:
                 _remove_stale_tokens(stale_tokens, session=session)
-                    
+
     except Exception as e:
         logger.error(f"Error sending push notification via FCM: {e}")
-

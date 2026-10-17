@@ -537,3 +537,23 @@ async def test_multi_tenant_isolation_and_rbac_for_new_modules(
     # Manager B cannot view receipts or delete Tenant A's announcement
     b_receipts = await client.get(f"/manager/announcements/{tenant_a_ann_id}/receipts", headers=mgr_b_headers)
     assert b_receipts.status_code == 404
+
+
+def test_push_service_in_memory_json_credentials(monkeypatch):
+    """Verify _ensure_firebase_initialized supports FIREBASE_CREDENTIALS_JSON in memory."""
+    from unittest.mock import MagicMock
+    from app.services import push_service
+
+    monkeypatch.setattr(push_service, "firebase_initialized", False)
+    monkeypatch.setattr(push_service.firebase_admin, "_apps", {})
+    mock_cert = MagicMock(return_value="mock-cred-obj")
+    mock_init = MagicMock()
+    monkeypatch.setattr(push_service.credentials, "Certificate", mock_cert)
+    monkeypatch.setattr(push_service.firebase_admin, "initialize_app", mock_init)
+    monkeypatch.setenv("FIREBASE_CREDENTIALS_JSON", '{"type": "service_account", "project_id": "test-proj"}')
+
+    assert push_service._ensure_firebase_initialized() is True
+    mock_cert.assert_called_once_with({"type": "service_account", "project_id": "test-proj"})
+    mock_init.assert_called_once_with("mock-cred-obj")
+    monkeypatch.setattr(push_service, "firebase_initialized", False)
+

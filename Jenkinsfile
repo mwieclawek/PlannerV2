@@ -16,39 +16,56 @@ pipeline {
             }
         }
         
-        // --- 2. TESTY BACKENDU ---
-        stage('Backend Tests') {
-            agent {
-                docker {
-                    image 'python:3.11-slim'
-                    args '-u root -v pip-cache:/root/.cache/pip'
+        // --- 2. RÓWNOLEGŁE TESTY BACKENDU I FRONTENDU ---
+        stage('Tests & Static Analysis') {
+            parallel {
+                stage('Backend Tests') {
+                    agent {
+                        docker {
+                            image 'python:3.11-slim'
+                            args '-u root -v pip-cache:/root/.cache/pip'
+                        }
+                    }
+                    steps {
+                        unstash 'source'
+                        sh '''
+                            pip install -r backend/requirements.txt
+                            pip install pytest httpx pytest-asyncio
+                        '''
+                        sh 'python -m py_compile backend/app/main.py'
+                        sh 'mkdir -p test-results'
+                        sh 'rm -f backend/*.db backend/app/*.db *.db'
+                        sh '''
+                            export PYTHONPATH=$PWD:$PWD/backend
+                            export APP_ENV=development
+                            export JWT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(48))")
+                            export ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+                            export MANAGER_REGISTRATION_PIN=$(python -c "import secrets; print(secrets.randbelow(90000000) + 10000000)")
+                            python -m pytest backend/tests -v -o asyncio_mode=auto --junitxml=test-results/backend-all.xml
+                        '''
+                    }
+                    post {
+                        always {
+                            junit allowEmptyResults: true, testResults: 'test-results/*.xml'
+                        }
+                    }
                 }
-            }
-            steps {
-                unstash 'source'
-                sh '''
-                    pip install -r backend/requirements.txt
-                    pip install pytest httpx pytest-asyncio
-                '''
-                sh 'python -m py_compile backend/app/main.py'
-                sh 'mkdir -p test-results'
-                // Usunięcie starej bazy SQLite (safety net)
-                sh 'rm -f backend/*.db backend/app/*.db *.db'
-                // Testy używają in-memory SQLite — nie potrzeba uruchamiać serwera.
-                // Uruchamiamy WSZYSTKIE testy z backend/tests; błąd któregokolwiek failuje build.
-                sh '''
-                    export PYTHONPATH=$PWD:$PWD/backend
-                    export APP_ENV=development
-                    # Jednorazowe sekrety generowane w locie - nic nie jest commitowane do repo
-                    export JWT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(48))")
-                    export ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
-                    export MANAGER_REGISTRATION_PIN=$(python -c "import secrets; print(secrets.randbelow(90000000) + 10000000)")
-                    python -m pytest backend/tests -v -o asyncio_mode=auto --junitxml=test-results/backend-all.xml
-                '''
-            }
-            post {
-                always {
-                    junit allowEmptyResults: true, testResults: 'test-results/*.xml'
+
+                stage('Frontend Analyze & Tests') {
+                    agent {
+                        docker {
+                            image 'ghcr.io/cirruslabs/flutter:stable'
+                            args '-u root -v pub-cache:/root/.pub-cache'
+                        }
+                    }
+                    steps {
+                        unstash 'source'
+                        dir('frontend') {
+                            sh 'flutter pub get'
+                            sh 'flutter analyze --no-fatal-infos --no-fatal-warnings'
+                            sh 'flutter test'
+                        }
+                    }
                 }
             }
         }
@@ -127,7 +144,6 @@ pipeline {
                         mkdir -p db_backups_dev
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-db-dev 2>/dev/null)" == "true" ]; then
                             BACKUP_FILE="db_backups_dev/backup_dev_$(date +%Y%m%d_%H%M%S).sql"
-                            # Używamy docker exec bez flagi -t i w pełni logujemy ewentualny błąd
                             docker exec plannerv2-db-dev pg_dump -U planner_user planner_db > "$BACKUP_FILE" || echo "⚠️ Błąd podczas zrzutu bazy DEV"
                             echo "✅ Kopia zapisana: $BACKUP_FILE"
                         else
@@ -150,9 +166,10 @@ pipeline {
                         string(credentialsId: 'db-encryption-key', variable: 'ENCRYPTION_KEY'),
                         file(credentialsId: 'firebase-admin-key', variable: 'FIREBASE_KEY')
                     ]) {
+                        // W Docker-out-of-Docker nie używamy -v z plikiem tymczasowym Jenkinsa,
+                        // lecz tworzymy kontener, kopiujemy plik klucza przez docker cp i uruchamiamy kontener.
                         sh """
-                            docker run -d --name plannerv2-backend-dev-new --network plannerv2-network \\
-                            -v "\${FIREBASE_KEY}:/app/firebase-admin-key.json:ro" \\
+                            docker create --name plannerv2-backend-dev-new --network plannerv2-network \\
                             -e DATABASE_URL="postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db" \\
                             -e GITHUB_TOKEN="\${GH_TOKEN}" \\
                             -e JWT_SECRET_KEY="\${JWT_SECRET}" \\
@@ -163,6 +180,9 @@ pipeline {
                             -e ALLOWED_ORIGINS="http://46.225.49.0:8091" \\
                             -e GOOGLE_APPLICATION_CREDENTIALS="/app/firebase-admin-key.json" \\
                             --restart unless-stopped plannerv2-backend:dev
+
+                            docker cp "\${FIREBASE_KEY}" plannerv2-backend-dev-new:/app/firebase-admin-key.json
+                            docker start plannerv2-backend-dev-new
                         """
                     }
                     sh 'sleep 10'
@@ -248,6 +268,17 @@ pipeline {
                         echo "🔄 Przeładowanie Nginxa..."
                         docker exec plannerv2-nginx-dev nginx -s reload
                     '''
+
+                    echo "🧪 Smoke Tests (DEV): Weryfikacja /health oraz /firebase-messaging-sw.js..."
+                    sh '''
+                        docker exec plannerv2-nginx-dev apk add --no-cache curl >/dev/null 2>&1 || true
+                        docker exec plannerv2-nginx-dev curl -sf http://localhost/health | grep -q '"status":"ok"'
+                        docker exec plannerv2-nginx-dev curl -sf http://localhost/firebase-messaging-sw.js | grep -q 'firebase'
+                        echo "✅ Smoke Tests DEV zakończone sukcesem!"
+                    '''
+
+                    echo "🧹 Czyszczenie nieużywanych obrazów Docker..."
+                    sh 'docker image prune -f || true'
                     
                     echo "✅ DEV gotowy na porcie 8091"
                 }
@@ -292,7 +323,6 @@ pipeline {
                         mkdir -p db_backups_prod
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-db 2>/dev/null)" == "true" ]; then
                             BACKUP_FILE="db_backups_prod/backup_prod_$(date +%Y%m%d_%H%M%S).sql"
-                            # Używamy docker exec bez flagi -t i w pełni logujemy ewentualny błąd
                             docker exec plannerv2-db pg_dump -U planner_user planner_db > "$BACKUP_FILE" || echo "⚠️ Błąd podczas zrzutu bazy PROD"
                             echo "✅ Kopia zapisana: $BACKUP_FILE"
                         else
@@ -316,8 +346,7 @@ pipeline {
                         file(credentialsId: 'firebase-admin-key', variable: 'FIREBASE_KEY')
                     ]) {
                         sh """
-                            docker run -d --name plannerv2-backend-new --network plannerv2-network \\
-                            -v "\${FIREBASE_KEY}:/app/firebase-admin-key.json:ro" \\
+                            docker create --name plannerv2-backend-new --network plannerv2-network \\
                             -e DATABASE_URL="postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db" \\
                             -e GITHUB_TOKEN="\${GH_TOKEN}" \\
                             -e JWT_SECRET_KEY="\${JWT_SECRET}" \\
@@ -328,6 +357,9 @@ pipeline {
                             -e ALLOWED_ORIGINS="https://restoplan.pl,http://46.225.49.0" \\
                             -e GOOGLE_APPLICATION_CREDENTIALS="/app/firebase-admin-key.json" \\
                             --restart unless-stopped plannerv2-backend:latest
+
+                            docker cp "\${FIREBASE_KEY}" plannerv2-backend-new:/app/firebase-admin-key.json
+                            docker start plannerv2-backend-new
                         """
                     }
                     sh 'sleep 10'
@@ -405,6 +437,17 @@ pipeline {
                         docker cp nginx/nginx.conf plannerv2-nginx:/etc/nginx/nginx.conf
                         docker exec plannerv2-nginx nginx -s reload
                     '''
+
+                    echo "🧪 Smoke Tests (PROD): Weryfikacja /health oraz /firebase-messaging-sw.js..."
+                    sh '''
+                        docker exec plannerv2-nginx apk add --no-cache curl >/dev/null 2>&1 || true
+                        docker exec plannerv2-nginx curl -sf http://localhost/health | grep -q '"status":"ok"'
+                        docker exec plannerv2-nginx curl -sf http://localhost/firebase-messaging-sw.js | grep -q 'firebase'
+                        echo "✅ Smoke Tests PROD zakończone sukcesem!"
+                    '''
+
+                    echo "🧹 Czyszczenie nieużywanych obrazów Docker..."
+                    sh 'docker image prune -f || true'
                     
                     echo "✅ PRODUKCJA Wdrożona!"
                 }

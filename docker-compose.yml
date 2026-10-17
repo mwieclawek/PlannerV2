@@ -18,8 +18,6 @@ services:
     restart: unless-stopped
     depends_on:
       - db
-    volumes:
-      - ${FIREBASE_KEY_PATH:-./firebase-admin-key.json}:/app/firebase-admin-key.json:ro
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
@@ -27,6 +25,7 @@ services:
       - MANAGER_REGISTRATION_PIN=${MANAGER_REGISTRATION_PIN:-}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
       - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/firebase-admin-key.json}
+      - FIREBASE_CREDENTIALS_JSON=${FIREBASE_CREDENTIALS_JSON:-}
     networks:
       - plannerv2-network
 
