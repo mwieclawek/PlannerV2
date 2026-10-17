@@ -71,10 +71,18 @@ pipeline {
                         appVersion = env.TAG_NAME
                     }
                     def buildDate = sh(script: "date +'%Y-%m-%d'", returnStdout: true).trim()
+                    def vapidKey = env.FCM_VAPID_KEY ?: ""
+                    try {
+                        withCredentials([string(credentialsId: 'fcm-vapid-key', variable: 'JENKINS_VAPID_KEY')]) {
+                            vapidKey = env.JENKINS_VAPID_KEY ?: vapidKey
+                        }
+                    } catch (Exception ignored) {
+                        echo "ℹ️ Brak poświadczenia 'fcm-vapid-key' w Jenkinsie – używam zmiennej środowiskowej lub domyślnej konfiguracji."
+                    }
                     dir('frontend') {
                         sh 'flutter clean'
                         sh 'flutter pub get'
-                        sh "flutter build web --release --dart-define=ENV=${flutterEnv} --dart-define=APP_VERSION=${appVersion} --dart-define=BUILD_DATE=${buildDate}"
+                        sh "flutter build web --release --dart-define=ENV=${flutterEnv} --dart-define=APP_VERSION=${appVersion} --dart-define=BUILD_DATE=${buildDate} --dart-define=FCM_VAPID_KEY=${vapidKey}"
                     }
                 }
                 stash includes: 'frontend/build/web/**/*', name: 'flutter-web'

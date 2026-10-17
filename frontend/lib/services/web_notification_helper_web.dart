@@ -28,7 +28,10 @@ class WebNotificationHelperWeb implements WebNotificationHelper {
     try {
       final jsResult = await web.Notification.requestPermission().toDart;
       return jsResult.toDart;
-    } catch (_) {
+    } catch (e) {
+      web.console.error(
+        'WebNotificationHelper: requestPermission error: $e'.toJS,
+      );
       return 'denied';
     }
   }
@@ -40,20 +43,39 @@ class WebNotificationHelperWeb implements WebNotificationHelper {
     String? icon,
   }) {
     try {
-      if (web.Notification.permission == 'granted') {
-        final notif = web.Notification(
-          title,
-          web.NotificationOptions(
-            body: body,
-            icon: icon ?? '/icons/Icon-192.png',
-          ),
-        );
+      if (web.Notification.permission != 'granted') {
+        return;
+      }
+      final options = web.NotificationOptions(
+        body: body,
+        icon: icon ?? '/icons/Icon-192.png',
+      );
+      try {
+        final notif = web.Notification(title, options);
         notif.onclick = ((web.Event _) {
           try {
             web.window.focus();
           } catch (_) {}
         }).toJS;
+      } catch (ctorErr) {
+        // Mobile browsers and PWAs with active Service Worker throw Illegal constructor
+        // and require ServiceWorkerRegistration.showNotification().
+        web.console.warn(
+          'WebNotificationHelper: Notification constructor failed ($ctorErr), falling back to serviceWorker.ready'.toJS,
+        );
+        web.window.navigator.serviceWorker.ready.toDart.then((registration) {
+          return registration.showNotification(title, options).toDart;
+        }).catchError((Object swErr) {
+          web.console.error(
+            'WebNotificationHelper: ServiceWorker showNotification failed: $swErr'.toJS,
+          );
+          return null;
+        });
       }
-    } catch (_) {}
+    } catch (e) {
+      web.console.error(
+        'WebNotificationHelper: showNotification unexpected error: $e'.toJS,
+      );
+    }
   }
 }

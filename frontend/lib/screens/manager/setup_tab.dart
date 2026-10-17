@@ -439,6 +439,7 @@ class _RolesShiftsTab extends ConsumerStatefulWidget {
 
 class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
   final _roleNameController = TextEditingController();
+  final _roleHourlyRateController = TextEditingController();
   int _roleColorIndex = 0;
   final _shiftNameController = TextEditingController();
   final _shiftStartController = TextEditingController();
@@ -450,6 +451,7 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
   @override
   void dispose() {
     _roleNameController.dispose();
+    _roleHourlyRateController.dispose();
     _shiftNameController.dispose();
     _shiftStartController.dispose();
     _shiftEndController.dispose();
@@ -512,10 +514,18 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
   Future<void> _addRole() async {
     if (_roleNameController.text.isEmpty) return;
     try {
+      final rate = double.tryParse(
+        _roleHourlyRateController.text.replaceAll(',', '.').trim(),
+      );
       await ref
           .read(apiServiceProvider)
-          .createRole(_roleNameController.text, _generateRoleColor());
+          .createRole(
+            _roleNameController.text,
+            _generateRoleColor(),
+            hourlyRate: rate,
+          );
       _roleNameController.clear();
+      _roleHourlyRateController.clear();
       ref.invalidate(rolesProvider);
       if (mounted) {
         ScaffoldMessenger.of(
@@ -529,6 +539,67 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
         ).showSnackBar(SnackBar(content: Text('Błąd: $e')));
       }
     }
+  }
+
+  void _showEditRoleDialog(JobRole role) {
+    final nameController = TextEditingController(text: role.name);
+    final rateController = TextEditingController(
+      text: role.hourlyRate != null ? role.hourlyRate!.toStringAsFixed(2) : '',
+    );
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: Text('Edytuj rolę: ${role.name}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nazwa roli',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: rateController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Domyślna stawka godzinowa (PLN/h)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Anuluj'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final rate = double.tryParse(
+                    rateController.text.replaceAll(',', '.').trim(),
+                  );
+                  await ref
+                      .read(apiServiceProvider)
+                      .updateRole(
+                        role.id,
+                        nameController.text.trim(),
+                        role.colorHex,
+                        hourlyRate: rate,
+                      );
+                  ref.invalidate(rolesProvider);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: const Text('Zapisz'),
+              ),
+            ],
+          ),
+    );
   }
 
   Future<void> _addShift() async {
@@ -658,10 +729,25 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
                   Row(
                     children: [
                       Expanded(
+                        flex: 2,
                         child: TextField(
                           controller: _roleNameController,
                           decoration: const InputDecoration(
                             labelText: 'Nazwa roli',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 1,
+                        child: TextField(
+                          controller: _roleHourlyRateController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Stawka PLN/h',
                             border: OutlineInputBorder(),
                           ),
                         ),
@@ -688,9 +774,25 @@ class _RolesShiftsTabState extends ConsumerState<_RolesShiftsTab> {
                                         radius: 12,
                                       ),
                                       title: Text(role.name),
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.delete),
-                                        onPressed: () => _deleteRole(role),
+                                      subtitle:
+                                          role.hourlyRate != null
+                                              ? Text(
+                                                'Stawka roli: ${role.hourlyRate!.toStringAsFixed(2)} PLN/h',
+                                              )
+                                              : null,
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.edit),
+                                            onPressed:
+                                                () => _showEditRoleDialog(role),
+                                          ),
+                                          IconButton(
+                                            icon: const Icon(Icons.delete),
+                                            onPressed: () => _deleteRole(role),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   )

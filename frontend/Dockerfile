@@ -7,7 +7,8 @@ COPY . .
 RUN flutter clean
 RUN flutter pub get
 ARG FLUTTER_ENV=dev
-RUN flutter build web --release --dart-define=ENV=${FLUTTER_ENV}
+ARG FCM_VAPID_KEY=""
+RUN flutter build web --release --dart-define=ENV=${FLUTTER_ENV} --dart-define=FCM_VAPID_KEY=${FCM_VAPID_KEY}
 
 # Etap 2: Serwer Nginx
 FROM nginx:alpine

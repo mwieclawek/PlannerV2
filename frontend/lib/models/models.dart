@@ -13,6 +13,7 @@ class User {
   final String? tenantName;
   final bool isSuperadmin;
   final List<int> jobRoleIds;
+  final double? hourlyRate;
 
   User({
     required this.id,
@@ -29,6 +30,7 @@ class User {
     this.tenantName,
     this.isSuperadmin = false,
     this.jobRoleIds = const [],
+    this.hourlyRate,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -51,6 +53,7 @@ class User {
               ?.map((e) => (e as num).toInt())
               .toList() ??
           [],
+      hourlyRate: (json['hourly_rate'] as num?)?.toDouble(),
     );
   }
 
@@ -70,6 +73,7 @@ class User {
       'tenant_name': tenantName,
       'is_superadmin': isSuperadmin,
       'job_roles': jobRoleIds,
+      'hourly_rate': hourlyRate,
     };
   }
 
@@ -81,19 +85,31 @@ class JobRole {
   final int id;
   final String name;
   final String colorHex;
+  final double? hourlyRate;
 
-  JobRole({required this.id, required this.name, required this.colorHex});
+  JobRole({
+    required this.id,
+    required this.name,
+    required this.colorHex,
+    this.hourlyRate,
+  });
 
   factory JobRole.fromJson(Map<String, dynamic> json) {
     return JobRole(
       id: json['id'],
       name: json['name'],
       colorHex: json['color_hex'],
+      hourlyRate: (json['hourly_rate'] as num?)?.toDouble(),
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {'id': id, 'name': name, 'color_hex': colorHex};
+    return {
+      'id': id,
+      'name': name,
+      'color_hex': colorHex,
+      'hourly_rate': hourlyRate,
+    };
   }
 }
 
@@ -427,6 +443,7 @@ class TeamMember {
   final List<int> jobRoleIds;
   final int? targetHoursPerMonth;
   final int? targetShiftsPerMonth;
+  final double? hourlyRate;
   final bool isActive;
   final NextShiftInfo? nextShift;
 
@@ -439,6 +456,7 @@ class TeamMember {
     required this.jobRoleIds,
     this.targetHoursPerMonth,
     this.targetShiftsPerMonth,
+    this.hourlyRate,
     this.isActive = true,
     this.nextShift,
   });
@@ -453,6 +471,7 @@ class TeamMember {
       jobRoleIds: (json['job_roles'] as List).map((e) => e as int).toList(),
       targetHoursPerMonth: json['target_hours_per_month'],
       targetShiftsPerMonth: json['target_shifts_per_month'],
+      hourlyRate: (json['hourly_rate'] as num?)?.toDouble(),
       isActive: json['is_active'] ?? true,
       nextShift:
           json['next_shift'] != null
@@ -595,11 +614,13 @@ class DashboardHome {
   final List<ScheduleEntry> workingToday;
   final List<Map<String, dynamic>> missingConfirmations;
   final List<ShiftGiveaway> openGiveaways;
+  final DailyCloseoutSummary? dailyCloseout;
 
   DashboardHome({
     required this.workingToday,
     required this.missingConfirmations,
     required this.openGiveaways,
+    this.dailyCloseout,
   });
 
   factory DashboardHome.fromJson(Map<String, dynamic> json) {
@@ -615,6 +636,12 @@ class DashboardHome {
               ?.map((e) => ShiftGiveaway.fromJson(e))
               .toList() ??
           [],
+      dailyCloseout:
+          json['daily_closeout'] != null
+              ? DailyCloseoutSummary.fromJson(
+                json['daily_closeout'] as Map<String, dynamic>,
+              )
+              : null,
     );
   }
 }
@@ -1343,3 +1370,524 @@ class TipSummary {
         .map((k, v) => MapEntry(k, (v as num).toDouble())),
   );
 }
+
+// ── Module A: Payroll, Daily Closeout & Tip Pooling ──────────────────────────
+
+class EmployeeTipAllocation {
+  final String userId;
+  final String userName;
+  final double confirmedHours;
+  final double allocatedTip;
+
+  EmployeeTipAllocation({
+    required this.userId,
+    required this.userName,
+    required this.confirmedHours,
+    required this.allocatedTip,
+  });
+
+  factory EmployeeTipAllocation.fromJson(Map<String, dynamic> json) =>
+      EmployeeTipAllocation(
+        userId: json['user_id'].toString(),
+        userName: json['user_name'] ?? '',
+        confirmedHours: (json['confirmed_hours'] as num?)?.toDouble() ?? 0.0,
+        allocatedTip: (json['allocated_tip'] as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+class DailyCloseoutSummary {
+  final String? id;
+  final String date;
+  final double dailyRevenue;
+  final double tipPool;
+  final String? notes;
+  final double confirmedHours;
+  final double scheduledHours;
+  final double laborCost;
+  final double laborCostPct;
+  final bool isClosedOut;
+  final List<EmployeeTipAllocation> tipAllocations;
+
+  DailyCloseoutSummary({
+    this.id,
+    required this.date,
+    required this.dailyRevenue,
+    required this.tipPool,
+    this.notes,
+    required this.confirmedHours,
+    required this.scheduledHours,
+    required this.laborCost,
+    required this.laborCostPct,
+    required this.isClosedOut,
+    this.tipAllocations = const [],
+  });
+
+  factory DailyCloseoutSummary.fromJson(Map<String, dynamic> json) =>
+      DailyCloseoutSummary(
+        id: json['id']?.toString(),
+        date: json['date']?.toString() ?? '',
+        dailyRevenue: (json['daily_revenue'] as num?)?.toDouble() ?? 0.0,
+        tipPool: (json['tip_pool'] as num?)?.toDouble() ?? 0.0,
+        notes: json['notes'] as String?,
+        confirmedHours: (json['confirmed_hours'] as num?)?.toDouble() ?? 0.0,
+        scheduledHours: (json['scheduled_hours'] as num?)?.toDouble() ?? 0.0,
+        laborCost: (json['labor_cost'] as num?)?.toDouble() ?? 0.0,
+        laborCostPct: (json['labor_cost_pct'] as num?)?.toDouble() ?? 0.0,
+        isClosedOut: json['is_closed_out'] == true,
+        tipAllocations:
+            (json['tip_allocations'] as List? ?? [])
+                .map(
+                  (e) => EmployeeTipAllocation.fromJson(
+                    e as Map<String, dynamic>,
+                  ),
+                )
+                .toList(),
+      );
+}
+
+class PayrollEmployeeItem {
+  final String userId;
+  final String userName;
+  final double hourlyRate;
+  final double confirmedHours;
+  final double pendingHours;
+  final int shiftsCount;
+  final double basePay;
+  final double allocatedTips;
+  final double totalPay;
+
+  PayrollEmployeeItem({
+    required this.userId,
+    required this.userName,
+    required this.hourlyRate,
+    required this.confirmedHours,
+    required this.pendingHours,
+    required this.shiftsCount,
+    required this.basePay,
+    required this.allocatedTips,
+    required this.totalPay,
+  });
+
+  factory PayrollEmployeeItem.fromJson(Map<String, dynamic> json) =>
+      PayrollEmployeeItem(
+        userId: json['user_id'].toString(),
+        userName: json['user_name'] ?? '',
+        hourlyRate: (json['hourly_rate'] as num?)?.toDouble() ?? 0.0,
+        confirmedHours: (json['confirmed_hours'] as num?)?.toDouble() ?? 0.0,
+        pendingHours: (json['pending_hours'] as num?)?.toDouble() ?? 0.0,
+        shiftsCount: (json['shifts_count'] as num?)?.toInt() ?? 0,
+        basePay: (json['base_pay'] as num?)?.toDouble() ?? 0.0,
+        allocatedTips: (json['allocated_tips'] as num?)?.toDouble() ?? 0.0,
+        totalPay: (json['total_pay'] as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+class MonthlyPayrollSummary {
+  final int year;
+  final int month;
+  final List<PayrollEmployeeItem> items;
+  final double totalConfirmedHours;
+  final double totalPendingHours;
+  final double totalBasePay;
+  final double totalTips;
+  final double totalPayroll;
+  final double totalMonthlyRevenue;
+  final double monthlyLaborCostPct;
+
+  MonthlyPayrollSummary({
+    required this.year,
+    required this.month,
+    required this.items,
+    required this.totalConfirmedHours,
+    required this.totalPendingHours,
+    required this.totalBasePay,
+    required this.totalTips,
+    required this.totalPayroll,
+    required this.totalMonthlyRevenue,
+    required this.monthlyLaborCostPct,
+  });
+
+  factory MonthlyPayrollSummary.fromJson(Map<String, dynamic> json) =>
+      MonthlyPayrollSummary(
+        year: (json['year'] as num).toInt(),
+        month: (json['month'] as num).toInt(),
+        items:
+            (json['items'] as List? ?? [])
+                .map(
+                  (e) =>
+                      PayrollEmployeeItem.fromJson(e as Map<String, dynamic>),
+                )
+                .toList(),
+        totalConfirmedHours:
+            (json['total_confirmed_hours'] as num?)?.toDouble() ?? 0.0,
+        totalPendingHours:
+            (json['total_pending_hours'] as num?)?.toDouble() ?? 0.0,
+        totalBasePay: (json['total_base_pay'] as num?)?.toDouble() ?? 0.0,
+        totalTips: (json['total_tips'] as num?)?.toDouble() ?? 0.0,
+        totalPayroll: (json['total_payroll'] as num?)?.toDouble() ?? 0.0,
+        totalMonthlyRevenue:
+            (json['total_monthly_revenue'] as num?)?.toDouble() ?? 0.0,
+        monthlyLaborCostPct:
+            (json['monthly_labor_cost_pct'] as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+class EmployeeDailyEarningItem {
+  final String date;
+  final String status;
+  final double hours;
+  final double hourlyRate;
+  final double basePay;
+  final double allocatedTip;
+  final double totalPay;
+
+  EmployeeDailyEarningItem({
+    required this.date,
+    required this.status,
+    required this.hours,
+    required this.hourlyRate,
+    required this.basePay,
+    required this.allocatedTip,
+    required this.totalPay,
+  });
+
+  factory EmployeeDailyEarningItem.fromJson(Map<String, dynamic> json) =>
+      EmployeeDailyEarningItem(
+        date: json['date']?.toString() ?? '',
+        status: json['status']?.toString() ?? '',
+        hours: (json['hours'] as num?)?.toDouble() ?? 0.0,
+        hourlyRate: (json['hourly_rate'] as num?)?.toDouble() ?? 0.0,
+        basePay: (json['base_pay'] as num?)?.toDouble() ?? 0.0,
+        allocatedTip: (json['allocated_tip'] as num?)?.toDouble() ?? 0.0,
+        totalPay: (json['total_pay'] as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+class EmployeeMonthlyEarnings {
+  final int year;
+  final int month;
+  final String userId;
+  final String userName;
+  final double hourlyRate;
+  final double confirmedHours;
+  final double pendingHours;
+  final double basePay;
+  final double allocatedTips;
+  final double totalPay;
+  final List<EmployeeDailyEarningItem> dailyBreakdown;
+
+  EmployeeMonthlyEarnings({
+    required this.year,
+    required this.month,
+    required this.userId,
+    required this.userName,
+    required this.hourlyRate,
+    required this.confirmedHours,
+    required this.pendingHours,
+    required this.basePay,
+    required this.allocatedTips,
+    required this.totalPay,
+    this.dailyBreakdown = const [],
+  });
+
+  factory EmployeeMonthlyEarnings.fromJson(Map<String, dynamic> json) =>
+      EmployeeMonthlyEarnings(
+        year: (json['year'] as num).toInt(),
+        month: (json['month'] as num).toInt(),
+        userId: json['user_id'].toString(),
+        userName: json['user_name'] ?? '',
+        hourlyRate: (json['hourly_rate'] as num?)?.toDouble() ?? 0.0,
+        confirmedHours: (json['confirmed_hours'] as num?)?.toDouble() ?? 0.0,
+        pendingHours: (json['pending_hours'] as num?)?.toDouble() ?? 0.0,
+        basePay: (json['base_pay'] as num?)?.toDouble() ?? 0.0,
+        allocatedTips: (json['allocated_tips'] as num?)?.toDouble() ?? 0.0,
+        totalPay: (json['total_pay'] as num?)?.toDouble() ?? 0.0,
+        dailyBreakdown:
+            (json['daily_breakdown'] as List? ?? [])
+                .map(
+                  (e) => EmployeeDailyEarningItem.fromJson(
+                    e as Map<String, dynamic>,
+                  ),
+                )
+                .toList(),
+      );
+}
+
+// ── Module B: Operational Checklists & Digital HACCP Registry ────────────────
+
+class ChecklistItemModel {
+  final String id;
+  final String templateId;
+  final String title;
+  final bool isMandatory;
+  final int sortOrder;
+  final bool isCompleted;
+  final DateTime? completedAt;
+  final String? completedByUserName;
+
+  ChecklistItemModel({
+    required this.id,
+    required this.templateId,
+    required this.title,
+    required this.isMandatory,
+    required this.sortOrder,
+    this.isCompleted = false,
+    this.completedAt,
+    this.completedByUserName,
+  });
+
+  factory ChecklistItemModel.fromJson(Map<String, dynamic> json) =>
+      ChecklistItemModel(
+        id: json['id'].toString(),
+        templateId: json['template_id'].toString(),
+        title: json['title'] ?? '',
+        isMandatory: json['is_mandatory'] ?? true,
+        sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+        isCompleted: json['is_completed'] == true,
+        completedAt:
+            json['completed_at'] != null
+                ? DateTime.tryParse(json['completed_at'].toString())
+                : null,
+        completedByUserName: json['completed_by_user_name'] as String?,
+      );
+}
+
+class ChecklistTemplateModel {
+  final String id;
+  final String title;
+  final String? description;
+  final int? roleId;
+  final String? roleName;
+  final String shiftPeriod; // OPENING, CLOSING, ALL
+  final bool isMandatory;
+  final bool isActive;
+  final List<ChecklistItemModel> items;
+  final int completedCount;
+  final int totalCount;
+
+  ChecklistTemplateModel({
+    required this.id,
+    required this.title,
+    this.description,
+    this.roleId,
+    this.roleName,
+    required this.shiftPeriod,
+    required this.isMandatory,
+    this.isActive = true,
+    this.items = const [],
+    this.completedCount = 0,
+    this.totalCount = 0,
+  });
+
+  factory ChecklistTemplateModel.fromJson(Map<String, dynamic> json) {
+    final parsedItems =
+        (json['items'] as List? ?? [])
+            .map((e) => ChecklistItemModel.fromJson(e as Map<String, dynamic>))
+            .toList();
+    return ChecklistTemplateModel(
+      id: json['id'].toString(),
+      title: json['title'] ?? '',
+      description: json['description'] as String?,
+      roleId: (json['role_id'] as num?)?.toInt(),
+      roleName: json['role_name'] as String?,
+      shiftPeriod: json['shift_period']?.toString() ?? 'OPENING',
+      isMandatory: json['is_mandatory'] ?? true,
+      isActive: json['is_active'] ?? true,
+      items: parsedItems,
+      completedCount:
+          (json['completed_count'] as num?)?.toInt() ??
+          parsedItems.where((i) => i.isCompleted).length,
+      totalCount:
+          (json['total_count'] as num?)?.toInt() ?? parsedItems.length,
+    );
+  }
+}
+
+class ClockoutValidationResult {
+  final String date;
+  final bool allMandatoryCompleted;
+  final int missingMandatoryCount;
+  final List<Map<String, dynamic>> missingItems;
+
+  ClockoutValidationResult({
+    required this.date,
+    required this.allMandatoryCompleted,
+    required this.missingMandatoryCount,
+    this.missingItems = const [],
+  });
+
+  factory ClockoutValidationResult.fromJson(Map<String, dynamic> json) =>
+      ClockoutValidationResult(
+        date: json['date']?.toString() ?? '',
+        allMandatoryCompleted: json['all_mandatory_completed'] == true,
+        missingMandatoryCount:
+            (json['missing_mandatory_count'] as num?)?.toInt() ?? 0,
+        missingItems:
+            (json['missing_items'] as List? ?? [])
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList(),
+      );
+}
+
+class HaccpDeviceModel {
+  final String id;
+  final String name;
+  final double minTemp;
+  final double maxTemp;
+  final bool isActive;
+
+  HaccpDeviceModel({
+    required this.id,
+    required this.name,
+    required this.minTemp,
+    required this.maxTemp,
+    this.isActive = true,
+  });
+
+  factory HaccpDeviceModel.fromJson(Map<String, dynamic> json) =>
+      HaccpDeviceModel(
+        id: json['id'].toString(),
+        name: json['name'] ?? '',
+        minTemp: (json['min_temp'] as num?)?.toDouble() ?? 0.0,
+        maxTemp: (json['max_temp'] as num?)?.toDouble() ?? 4.0,
+        isActive: json['is_active'] ?? true,
+      );
+}
+
+class HaccpLogModel {
+  final String id;
+  final String logType; // TEMPERATURE, SANITATION
+  final String? deviceId;
+  final String deviceName;
+  final double? minTemp;
+  final double? maxTemp;
+  final double? measuredTemp;
+  final bool isWithinNorm;
+  final String? correctiveAction;
+  final String userId;
+  final String userName;
+  final DateTime createdAt;
+
+  HaccpLogModel({
+    required this.id,
+    required this.logType,
+    this.deviceId,
+    required this.deviceName,
+    this.minTemp,
+    this.maxTemp,
+    this.measuredTemp,
+    required this.isWithinNorm,
+    this.correctiveAction,
+    required this.userId,
+    required this.userName,
+    required this.createdAt,
+  });
+
+  factory HaccpLogModel.fromJson(Map<String, dynamic> json) => HaccpLogModel(
+    id: json['id'].toString(),
+    logType: json['log_type']?.toString() ?? 'TEMPERATURE',
+    deviceId: json['device_id']?.toString(),
+    deviceName: json['device_name'] ?? '',
+    minTemp: (json['min_temp'] as num?)?.toDouble(),
+    maxTemp: (json['max_temp'] as num?)?.toDouble(),
+    measuredTemp: (json['measured_temp'] as num?)?.toDouble(),
+    isWithinNorm: json['is_within_norm'] ?? true,
+    correctiveAction: json['corrective_action'] as String?,
+    userId: json['user_id'].toString(),
+    userName: json['user_name'] ?? '',
+    createdAt: DateTime.parse(json['created_at'].toString()),
+  );
+}
+
+// ── Module C: Announcement Board with Read Receipts ──────────────────────────
+
+class AnnouncementReaderModel {
+  final String userId;
+  final String userName;
+  final DateTime? readAt;
+
+  AnnouncementReaderModel({
+    required this.userId,
+    required this.userName,
+    this.readAt,
+  });
+
+  factory AnnouncementReaderModel.fromJson(Map<String, dynamic> json) =>
+      AnnouncementReaderModel(
+        userId: json['user_id'].toString(),
+        userName: json['user_name'] ?? '',
+        readAt:
+            json['read_at'] != null
+                ? DateTime.tryParse(json['read_at'].toString())
+                : null,
+      );
+}
+
+class AnnouncementModel {
+  final String id;
+  final String title;
+  final String content;
+  final bool isPinned;
+  final String authorId;
+  final String authorName;
+  final DateTime createdAt;
+  // Employee fields
+  final bool isRead;
+  final DateTime? readAt;
+  // Manager fields
+  final int readCount;
+  final int totalTargetCount;
+  final List<AnnouncementReaderModel> readBy;
+  final List<AnnouncementReaderModel> unreadBy;
+
+  AnnouncementModel({
+    required this.id,
+    required this.title,
+    required this.content,
+    required this.isPinned,
+    required this.authorId,
+    required this.authorName,
+    required this.createdAt,
+    this.isRead = false,
+    this.readAt,
+    this.readCount = 0,
+    this.totalTargetCount = 0,
+    this.readBy = const [],
+    this.unreadBy = const [],
+  });
+
+  factory AnnouncementModel.fromJson(Map<String, dynamic> json) =>
+      AnnouncementModel(
+        id: json['id'].toString(),
+        title: json['title'] ?? '',
+        content: json['content'] ?? '',
+        isPinned: json['is_pinned'] == true,
+        authorId: json['author_id'].toString(),
+        authorName: json['author_name'] ?? 'Manager',
+        createdAt: DateTime.parse(json['created_at'].toString()),
+        isRead: json['is_read'] == true,
+        readAt:
+            json['read_at'] != null
+                ? DateTime.tryParse(json['read_at'].toString())
+                : null,
+        readCount: (json['read_count'] as num?)?.toInt() ?? 0,
+        totalTargetCount: (json['total_target_count'] as num?)?.toInt() ?? 0,
+        readBy:
+            (json['read_by'] as List? ?? [])
+                .map(
+                  (e) => AnnouncementReaderModel.fromJson(
+                    e as Map<String, dynamic>,
+                  ),
+                )
+                .toList(),
+        unreadBy:
+            (json['unread_by'] as List? ?? [])
+                .map(
+                  (e) => AnnouncementReaderModel.fromJson(
+                    e as Map<String, dynamic>,
+                  ),
+                )
+                .toList(),
+      );
+}
+

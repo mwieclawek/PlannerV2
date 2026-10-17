@@ -302,7 +302,8 @@ def get_pending_attendance(
         "check_in": a.check_in.strftime("%H:%M"),
         "check_out": a.check_out.strftime("%H:%M"),
         "was_scheduled": a.was_scheduled,
-        "status": a.status.value
+        "status": a.status.value,
+        "checklist_skip_reason": a.checklist_skip_reason
     } for a in attendances]
 
 @router.put("/attendance/{attendance_id}/confirm")
@@ -520,7 +521,8 @@ def get_all_attendance(
         "check_in": a.check_in.strftime("%H:%M"),
         "check_out": a.check_out.strftime("%H:%M"),
         "was_scheduled": a.was_scheduled,
-        "status": a.status.value
+        "status": a.status.value,
+        "checklist_skip_reason": a.checklist_skip_reason
     } for a in attendances]
 
 @router.post("/attendance", response_model=AttendanceResponse)
@@ -808,3 +810,267 @@ def get_shift_audit_log(
             )
         )
     return res
+
+
+# ==============================================================================
+# MODULE A, B, C: Payroll / Closeout, Checklists & HACCP, Announcements
+# ==============================================================================
+
+from fastapi import Request
+from ..services.operations_service import OperationsService
+from ..tenant_context import set_current_tenant_id
+from ..schemas import (
+    DailyCloseoutCreate,
+    DailyCloseoutSummaryResponse,
+    MonthlyPayrollResponse,
+    ChecklistTemplateCreate,
+    ChecklistTemplateResponse,
+    EmployeeChecklistView,
+    HaccpDeviceCreate,
+    HaccpDeviceResponse,
+    HaccpLogCreate,
+    HaccpLogResponse,
+    AnnouncementCreate,
+    AnnouncementManagerResponse,
+)
+
+def get_operations_service(
+    session: Session = Depends(get_session),
+    tenant_id: int = Depends(require_tenant),
+) -> OperationsService:
+    return OperationsService(session, tenant_id)
+
+async def _resolve_export_manager(
+    request: Request,
+    token: Optional[str],
+    session: Session,
+) -> User:
+    """Resolve manager user from either ?token= query param or Authorization: Bearer header."""
+    resolved_token = token
+    if not resolved_token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            resolved_token = auth_header.split(" ", 1)[1].strip()
+    if not resolved_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = await verify_user_token(resolved_token, session)
+    if user.role_system != RoleSystem.MANAGER:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if user.tenant_id is not None:
+        set_current_tenant_id(user.tenant_id)
+    return user
+
+
+# --- Module A: Daily Closeout & Payroll ---
+
+@router.post("/closeouts", response_model=DailyCloseoutSummaryResponse)
+def upsert_daily_closeout(
+    data: DailyCloseoutCreate,
+    ops: OperationsService = Depends(get_operations_service),
+    current_user: User = Depends(get_manager_user),
+):
+    return ops.upsert_daily_closeout(data, current_user.id)
+
+@router.get("/closeouts", response_model=List[DailyCloseoutSummaryResponse])
+def get_closeouts_range(
+    start_date: date,
+    end_date: date,
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    return ops.get_closeouts_range(start_date, end_date)
+
+@router.get("/closeouts/{target_date}", response_model=DailyCloseoutSummaryResponse)
+def get_daily_closeout_summary(
+    target_date: date,
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    return ops.get_daily_closeout_summary(target_date)
+
+@router.get("/payroll", response_model=MonthlyPayrollResponse)
+def get_monthly_payroll(
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    return ops.get_monthly_payroll(year, month)
+
+@router.get("/payroll/export/csv")
+async def export_monthly_payroll_csv(
+    request: Request,
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+    token: Optional[str] = Query(None),
+    session: Session = Depends(get_session),
+):
+    user = await _resolve_export_manager(request, token, session)
+    ops = OperationsService(session, user.tenant_id)
+    csv_buf = ops.export_monthly_payroll_csv(year, month)
+    return StreamingResponse(
+        csv_buf,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename=payroll_{year}_{month:02d}.csv"},
+    )
+
+@router.get("/payroll/export/pdf")
+async def export_monthly_payroll_pdf(
+    request: Request,
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+    token: Optional[str] = Query(None),
+    session: Session = Depends(get_session),
+):
+    user = await _resolve_export_manager(request, token, session)
+    ops = OperationsService(session, user.tenant_id)
+    pdf_buf = ops.export_monthly_payroll_pdf(year, month)
+    return StreamingResponse(
+        pdf_buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=payroll_{year}_{month:02d}.pdf"},
+    )
+
+
+# --- Module B: Operational Checklists & Digital HACCP ---
+
+@router.get("/checklists", response_model=List[ChecklistTemplateResponse])
+def get_checklist_templates(
+    include_inactive: bool = Query(False),
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    return ops.get_checklist_templates(include_inactive=include_inactive)
+
+@router.post("/checklists", response_model=ChecklistTemplateResponse, status_code=201)
+def create_checklist_template(
+    data: ChecklistTemplateCreate,
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    return ops.create_checklist_template(data)
+
+@router.put("/checklists/{template_id}", response_model=ChecklistTemplateResponse)
+def update_checklist_template(
+    template_id: UUID,
+    data: ChecklistTemplateCreate,
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    return ops.update_checklist_template(template_id, data)
+
+@router.delete("/checklists/{template_id}")
+def delete_checklist_template(
+    template_id: UUID,
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    ops.delete_checklist_template(template_id)
+    return {"status": "deleted"}
+
+@router.get("/checklists/daily/{target_date}", response_model=List[EmployeeChecklistView])
+def get_manager_daily_checklists(
+    target_date: date,
+    ops: OperationsService = Depends(get_operations_service),
+    current_user: User = Depends(get_manager_user),
+):
+    return ops.get_employee_checklists(current_user, target_date)
+
+@router.get("/haccp/devices", response_model=List[HaccpDeviceResponse])
+def get_haccp_devices(
+    include_inactive: bool = Query(False),
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    return ops.get_haccp_devices(active_only=not include_inactive)
+
+@router.post("/haccp/devices", response_model=HaccpDeviceResponse, status_code=201)
+def create_haccp_device(
+    data: HaccpDeviceCreate,
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    return ops.create_haccp_device(data)
+
+@router.delete("/haccp/devices/{device_id}")
+def delete_haccp_device(
+    device_id: UUID,
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    ops.delete_haccp_device(device_id)
+    return {"status": "deleted"}
+
+@router.get("/haccp/logs", response_model=List[HaccpLogResponse])
+def get_haccp_logs(
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    violations_only: bool = Query(False),
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    return ops.get_haccp_logs(start_date=start_date, end_date=end_date, violations_only=violations_only)
+
+@router.post("/haccp/logs", response_model=HaccpLogResponse, status_code=201)
+def create_manager_haccp_log(
+    data: HaccpLogCreate,
+    ops: OperationsService = Depends(get_operations_service),
+    current_user: User = Depends(get_manager_user),
+):
+    return ops.create_haccp_log(current_user, data)
+
+@router.get("/haccp/export/pdf")
+async def export_haccp_pdf(
+    request: Request,
+    start_date: date,
+    end_date: date,
+    token: Optional[str] = Query(None),
+    session: Session = Depends(get_session),
+):
+    user = await _resolve_export_manager(request, token, session)
+    ops = OperationsService(session, user.tenant_id)
+    pdf_buf = ops.export_haccp_pdf(start_date, end_date)
+    return StreamingResponse(
+        pdf_buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=haccp_sanepid_{start_date}_{end_date}.pdf"},
+    )
+
+
+# --- Module C: Announcements & Read Receipts ---
+
+@router.get("/announcements", response_model=List[AnnouncementManagerResponse])
+def get_manager_announcements(
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    return ops.get_manager_announcements()
+
+@router.post("/announcements", response_model=AnnouncementManagerResponse, status_code=201)
+def create_announcement(
+    data: AnnouncementCreate,
+    background_tasks: BackgroundTasks,
+    ops: OperationsService = Depends(get_operations_service),
+    current_user: User = Depends(get_manager_user),
+):
+    return ops.create_announcement(current_user, data, background_tasks=background_tasks)
+
+@router.get("/announcements/{announcement_id}/receipts", response_model=AnnouncementManagerResponse)
+def get_announcement_receipts(
+    announcement_id: UUID,
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    return ops.get_announcement_receipts(announcement_id)
+
+@router.delete("/announcements/{announcement_id}")
+def delete_announcement(
+    announcement_id: UUID,
+    ops: OperationsService = Depends(get_operations_service),
+    _: User = Depends(get_manager_user),
+):
+    ops.delete_announcement(announcement_id)
+    return {"status": "deleted"}
+
+

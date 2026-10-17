@@ -60,6 +60,7 @@ class ManagerService:
             is_active=user_in.is_active,
             target_hours_per_month=user_in.target_hours_per_month,
             target_shifts_per_month=user_in.target_shifts_per_month,
+            hourly_rate=user_in.hourly_rate,
             manager_pin=hashed_pin,
         )
         self.session.add(user)
@@ -71,7 +72,12 @@ class ManagerService:
 
     # --- Roles ---
     def create_role(self, role_in: JobRoleCreate) -> JobRole:
-        role = JobRole(tenant_id=self.tenant_id, name=role_in.name, color_hex=role_in.color_hex)
+        role = JobRole(
+            tenant_id=self.tenant_id,
+            name=role_in.name,
+            color_hex=role_in.color_hex,
+            hourly_rate=role_in.hourly_rate,
+        )
         self.session.add(role)
         self.session.commit()
         self.session.refresh(role)
@@ -87,6 +93,8 @@ class ManagerService:
             raise HTTPException(status_code=404, detail="Role not found")
         role.name = role_in.name
         role.color_hex = role_in.color_hex
+        if "hourly_rate" in role_in.model_fields_set or role_in.hourly_rate is not None:
+            role.hourly_rate = role_in.hourly_rate
         self.session.add(role)
         self.session.commit()
         self.session.refresh(role)
@@ -409,7 +417,7 @@ class ManagerService:
 
         # Mass-assignment guard: only these columns may ever be written through this endpoint.
         allowed = {"full_name", "email", "role_system", "target_hours_per_month",
-                   "target_shifts_per_month", "is_active"}
+                   "target_shifts_per_month", "hourly_rate", "is_active"}
         was_active = user.is_active
         for key, value in data.items():
             if key in allowed:
@@ -487,12 +495,13 @@ class ManagerService:
                 "created_at": user.created_at,
                 "role_system": user.role_system,
                 "target_hours_per_month": user.target_hours_per_month,
-            "target_shifts_per_month": user.target_shifts_per_month,
-            "is_active": user.is_active,
-            "job_roles": [r.id for r in user.job_roles],
-            "is_google_calendar_connected": bool(
-                user.encrypted_google_access_token or user.encrypted_google_refresh_token
-            ),
+                "target_shifts_per_month": user.target_shifts_per_month,
+                "hourly_rate": user.hourly_rate,
+                "is_active": user.is_active,
+                "job_roles": [r.id for r in user.job_roles],
+                "is_google_calendar_connected": bool(
+                    user.encrypted_google_access_token or user.encrypted_google_refresh_token
+                ),
             }
             
             if next_shift:
@@ -712,11 +721,16 @@ class ManagerService:
                 "reviewed_at": req.reviewed_at
             })
 
+        from .operations_service import OperationsService
+        ops = OperationsService(self.session, self.tenant_id)
+        daily_closeout = ops.get_daily_closeout_summary(today)
+
         return {
             "working_today": working_today,
             "missing_confirmations": missing_responses,
             "open_giveaways": open_giveaways,
-            "pending_leave_requests": pending_leave_reqs
+            "pending_leave_requests": pending_leave_reqs,
+            "daily_closeout": daily_closeout,
         }
 
     # --- Shift Giveaway ---

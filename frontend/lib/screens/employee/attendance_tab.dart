@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../models/models.dart';
 import '../../providers/providers.dart';
 
 class AttendanceTab extends ConsumerStatefulWidget {
@@ -13,6 +14,7 @@ class AttendanceTab extends ConsumerStatefulWidget {
 
 class _AttendanceTabState extends ConsumerState<AttendanceTab> {
   List<Map<String, dynamic>>? _attendances;
+  EmployeeMonthlyEarnings? _earnings;
   bool _isLoading = true;
   String? _error;
 
@@ -40,8 +42,17 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
       );
 
       final attendances = await api.getMyAttendance(startDate, endDate);
+      EmployeeMonthlyEarnings? earnings;
+      try {
+        earnings = await api.getMyMonthlyEarnings(
+          _selectedMonth.year,
+          _selectedMonth.month,
+        );
+      } catch (_) {}
+
       setState(() {
         _attendances = attendances;
+        _earnings = earnings;
         _isLoading = false;
       });
     } catch (e) {
@@ -257,7 +268,93 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
   ) async {
     try {
       final api = ref.read(apiServiceProvider);
-      final result = await api.registerAttendance(date, checkIn, checkOut);
+      String? skipReason;
+
+      // Validate mandatory checklists before clock-out
+      try {
+        final validation = await api.validateClockoutChecklists(date: date);
+        if (!validation.allMandatoryCompleted && mounted) {
+          final reasonCtrl = TextEditingController();
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder:
+                (ctx) => AlertDialog(
+                  title: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                      SizedBox(width: 8),
+                      Expanded(child: Text('Niewykonane zadania z checklisty')),
+                    ],
+                  ),
+                  content: SizedBox(
+                    width: 360,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Przed rejestracją wyjścia poniższe zadania obowiązkowe nie zostały odhaczone:',
+                        ),
+                        const SizedBox(height: 8),
+                        ...validation.missingItems.map(
+                          (item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.error_outline,
+                                  size: 16,
+                                  color: Colors.red,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    (item['title'] ?? item['label'] ?? '').toString(),
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: reasonCtrl,
+                          decoration: const InputDecoration(
+                            labelText:
+                                'Powód pominięcia zadań obowiązkowych *',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Wróć do checklisty'),
+                    ),
+                    FilledButton(
+                      onPressed: () {
+                        if (reasonCtrl.text.trim().isEmpty) return;
+                        skipReason = reasonCtrl.text.trim();
+                        Navigator.pop(ctx, true);
+                      },
+                      child: const Text('Zarejestruj mimo to'),
+                    ),
+                  ],
+                ),
+          );
+          if (proceed != true) return;
+        }
+      } catch (_) {}
+
+      final result = await api.registerAttendance(
+        date,
+        checkIn,
+        checkOut,
+        checklistSkipReason: skipReason,
+      );
 
       if (mounted) {
         final requiresApproval = result['requires_approval'] == true;
@@ -319,7 +416,7 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
             decoration: BoxDecoration(
               color: Theme.of(
                 context,
-              ).colorScheme.primaryContainer.withOpacity(0.3),
+              ).colorScheme.primaryContainer.withValues(alpha: 0.3),
               border: Border(
                 bottom: BorderSide(
                   color: Theme.of(context).colorScheme.outlineVariant,
@@ -452,7 +549,7 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
           margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: colorScheme.primaryContainer.withOpacity(0.4),
+            color: colorScheme.primaryContainer.withValues(alpha: 0.4),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -491,6 +588,49 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
             ],
           ),
         ),
+        if (_earnings != null)
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.teal.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.teal.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Moje zarobki w tym miesiącu',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.teal.shade900,
+                      ),
+                    ),
+                    Text(
+                      'Baza: ${_earnings!.basePay.toStringAsFixed(2)} PLN • Napiwki: ${_earnings!.allocatedTips.toStringAsFixed(2)} PLN',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  '${_earnings!.totalPay.toStringAsFixed(2)} PLN',
+                  style: GoogleFonts.outfit(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.teal.shade800,
+                  ),
+                ),
+              ],
+            ),
+          ),
         // Attendance list
         Expanded(
           child: ListView.builder(

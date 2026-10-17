@@ -207,6 +207,7 @@ def register_attendance(
     target_date: date,
     check_in: str,  # HH:MM
     check_out: str, # HH:MM
+    checklist_skip_reason: Optional[str] = None,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -240,7 +241,8 @@ def register_attendance(
         check_out=datetime.strptime(check_out, "%H:%M").time(),
         was_scheduled=was_scheduled,
         status=status,
-        schedule_id=schedule.id if schedule else None
+        schedule_id=schedule.id if schedule else None,
+        checklist_skip_reason=checklist_skip_reason,
     )
     session.add(attendance)
     session.commit()
@@ -250,7 +252,8 @@ def register_attendance(
         "id": str(attendance.id),
         "status": status.value,
         "was_scheduled": was_scheduled,
-        "requires_approval": not was_scheduled
+        "requires_approval": not was_scheduled,
+        "checklist_skip_reason": attendance.checklist_skip_reason,
     }
 
 @router.get("/attendance/my")
@@ -275,7 +278,8 @@ def get_my_attendance(
         "check_in": a.check_in.strftime("%H:%M"),
         "check_out": a.check_out.strftime("%H:%M"),
         "was_scheduled": a.was_scheduled,
-        "status": a.status.value
+        "status": a.status.value,
+        "checklist_skip_reason": a.checklist_skip_reason
     } for a in attendances]
 
 
@@ -1026,3 +1030,117 @@ def cancel_leave_request(
     session.add(req)
     session.commit()
     return {"status": "cancelled"}
+
+
+# ==============================================================================
+# MODULE A, B, C: Employee Earnings, Checklists & HACCP, Announcements
+# ==============================================================================
+
+from fastapi import Query
+from ..services.operations_service import OperationsService
+from ..schemas import (
+    EmployeeMonthlyEarningsResponse,
+    EmployeeChecklistView,
+    EmployeeChecklistItemView,
+    ChecklistToggleRequest,
+    ClockoutValidationResponse,
+    HaccpDeviceResponse,
+    HaccpLogCreate,
+    HaccpLogResponse,
+    AnnouncementEmployeeResponse,
+)
+
+def get_employee_ops_service(
+    session: Session = Depends(get_session),
+    tenant_id: int = Depends(require_tenant),
+) -> OperationsService:
+    return OperationsService(session, tenant_id)
+
+
+# --- Module A: Employee Monthly Earnings ---
+
+@router.get("/payroll/my", response_model=EmployeeMonthlyEarningsResponse)
+def get_my_monthly_earnings(
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+    ops: OperationsService = Depends(get_employee_ops_service),
+    current_user: User = Depends(get_current_user),
+):
+    return ops.get_employee_monthly_earnings(current_user, year, month)
+
+
+# --- Module B: Employee Operational Checklists & Digital HACCP ---
+
+@router.get("/checklists", response_model=List[EmployeeChecklistView])
+def get_my_daily_checklists(
+    target_date: Optional[date] = Query(None),
+    ops: OperationsService = Depends(get_employee_ops_service),
+    current_user: User = Depends(get_current_user),
+):
+    d = target_date or date.today()
+    return ops.get_employee_checklists(current_user, d)
+
+@router.post("/checklists/items/{item_id}/toggle", response_model=EmployeeChecklistItemView)
+def toggle_checklist_item(
+    item_id: UUID,
+    payload: Optional[ChecklistToggleRequest] = None,
+    ops: OperationsService = Depends(get_employee_ops_service),
+    current_user: User = Depends(get_current_user),
+):
+    d = (payload.date if payload and payload.date else None) or date.today()
+    is_comp = payload.is_completed if payload else None
+    return ops.toggle_checklist_item(current_user, item_id, d, is_completed=is_comp)
+
+@router.get("/checklists/validate-clockout", response_model=ClockoutValidationResponse)
+def validate_clockout_checklists(
+    target_date: Optional[date] = Query(None),
+    ops: OperationsService = Depends(get_employee_ops_service),
+    current_user: User = Depends(get_current_user),
+):
+    d = target_date or date.today()
+    return ops.validate_clockout_checklists(current_user, d)
+
+@router.get("/haccp/devices", response_model=List[HaccpDeviceResponse])
+def get_employee_haccp_devices(
+    ops: OperationsService = Depends(get_employee_ops_service),
+    _: User = Depends(get_current_user),
+):
+    return ops.get_haccp_devices(active_only=True)
+
+@router.get("/haccp/logs", response_model=List[HaccpLogResponse])
+def get_employee_haccp_logs(
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    violations_only: bool = Query(False),
+    ops: OperationsService = Depends(get_employee_ops_service),
+    _: User = Depends(get_current_user),
+):
+    return ops.get_haccp_logs(start_date=start_date, end_date=end_date, violations_only=violations_only)
+
+@router.post("/haccp/logs", response_model=HaccpLogResponse, status_code=201)
+def create_employee_haccp_log(
+    data: HaccpLogCreate,
+    ops: OperationsService = Depends(get_employee_ops_service),
+    current_user: User = Depends(get_current_user),
+):
+    return ops.create_haccp_log(current_user, data)
+
+
+# --- Module C: Employee Announcements & Read Confirmation ---
+
+@router.get("/announcements", response_model=List[AnnouncementEmployeeResponse])
+def get_employee_announcements(
+    ops: OperationsService = Depends(get_employee_ops_service),
+    current_user: User = Depends(get_current_user),
+):
+    return ops.get_employee_announcements(current_user)
+
+@router.post("/announcements/{announcement_id}/read")
+def mark_announcement_read(
+    announcement_id: UUID,
+    ops: OperationsService = Depends(get_employee_ops_service),
+    current_user: User = Depends(get_current_user),
+):
+    return ops.mark_announcement_read(current_user, announcement_id)
+
+

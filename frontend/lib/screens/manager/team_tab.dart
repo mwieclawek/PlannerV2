@@ -95,6 +95,9 @@ class _TeamTabState extends ConsumerState<TeamTab> {
     final emailController = TextEditingController(
       text: user.email ?? '',
     );
+    final hourlyRateController = TextEditingController(
+      text: user.hourlyRate != null ? user.hourlyRate!.toStringAsFixed(2) : '',
+    );
     bool isLoading = false;
 
     showDialog(
@@ -103,9 +106,9 @@ class _TeamTabState extends ConsumerState<TeamTab> {
           (context) => StatefulBuilder(
             builder:
                 (context, setDialogState) => AlertDialog(
-                  title: Text('Edytuj dane: '),
+                  title: const Text('Edytuj dane pracownika'),
                   content: SizedBox(
-                    width: 300,
+                    width: 320,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -144,6 +147,20 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                           ),
                           keyboardType: TextInputType.emailAddress,
                         ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: hourlyRateController,
+                          decoration: InputDecoration(
+                            labelText: 'Stawka godzinowa (PLN/h)',
+                            prefixIcon: const Icon(Icons.payments_outlined),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -162,6 +179,11 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                                     firstNameController.text.trim();
                                 final lastName = lastNameController.text.trim();
                                 final email = emailController.text.trim();
+                                final rate = double.tryParse(
+                                  hourlyRateController.text
+                                      .replaceAll(',', '.')
+                                      .trim(),
+                                );
                                 if (firstName.isEmpty) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
@@ -182,6 +204,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                                     user.id,
                                     fullName: fullName,
                                     email: email.isNotEmpty ? email : null,
+                                    hourlyRate: rate,
                                   );
                                   if (context.mounted) {
                                     Navigator.pop(context);
@@ -198,7 +221,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('Błąd: '),
+                                        content: Text('Błąd: $e'),
                                         backgroundColor: Colors.red,
                                       ),
                                     );
@@ -637,7 +660,9 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '@${user.username}',
+                        user.hourlyRate != null
+                            ? '@${user.username} • ${user.hourlyRate!.toStringAsFixed(2)} PLN/h'
+                            : '@${user.username}',
                         style: TextStyle(color: Colors.grey.shade600),
                       ),
 
@@ -836,6 +861,7 @@ class _TeamTabState extends ConsumerState<TeamTab> {
     final emailController = TextEditingController();
     final hoursController = TextEditingController();
     final shiftsController = TextEditingController();
+    final hourlyRateController = TextEditingController();
     String roleSystem = 'EMPLOYEE';
     bool isLoading = false;
 
@@ -937,6 +963,16 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: hourlyRateController,
+                              keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              decoration: const InputDecoration(
+                                labelText: 'Domyślna stawka godzinowa (PLN/h)',
+                              ),
+                            ),
                             if (isLoading)
                               const Padding(
                                 padding: EdgeInsets.only(top: 16.0),
@@ -980,6 +1016,11 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                                     ),
                                     targetShiftsPerMonth: int.tryParse(
                                       shiftsController.text,
+                                    ),
+                                    hourlyRate: double.tryParse(
+                                      hourlyRateController.text
+                                          .replaceAll(',', '.')
+                                          .trim(),
                                     ),
                                   );
 

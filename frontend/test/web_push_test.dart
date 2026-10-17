@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/services/api_service.dart';
 import 'package:frontend/services/push_service.dart';

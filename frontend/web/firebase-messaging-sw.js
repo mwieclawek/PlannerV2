@@ -17,14 +17,23 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message:', payload);
+  // If the FCM payload already contains a standard `notification` object,
+  // the browser / Firebase SDK displays it automatically unless we deduplicate by tag.
   const notificationTitle =
     payload.notification?.title || payload.data?.title || 'Planista';
   const notificationOptions = {
     body: payload.notification?.body || payload.data?.body || '',
-    icon: '/icons/Icon-192.png',
+    icon: payload.notification?.icon || '/icons/Icon-192.png',
     badge: '/icons/Icon-192.png',
+    tag: payload.data?.tag || 'plannerv2-push',
+    renotify: false,
     data: payload.data || {},
   };
+
+  if (payload.notification) {
+    // Let the browser replace any auto-displayed notification with the same tag, or skip if already shown
+    return self.registration.showNotification(notificationTitle, notificationOptions);
+  }
 
   return self.registration.showNotification(notificationTitle, notificationOptions);
 });

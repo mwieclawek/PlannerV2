@@ -234,13 +234,25 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
           as _i6.Future<List<_i3.JobRole>>);
 
   @override
-  _i6.Future<_i3.JobRole> createRole(String? name, String? colorHex) =>
+  _i6.Future<_i3.JobRole> createRole(
+    String? name,
+    String? colorHex, {
+    double? hourlyRate,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#createRole, [name, colorHex]),
+            Invocation.method(
+              #createRole,
+              [name, colorHex],
+              {#hourlyRate: hourlyRate},
+            ),
             returnValue: _i6.Future<_i3.JobRole>.value(
               _FakeJobRole_2(
                 this,
-                Invocation.method(#createRole, [name, colorHex]),
+                Invocation.method(
+                  #createRole,
+                  [name, colorHex],
+                  {#hourlyRate: hourlyRate},
+                ),
               ),
             ),
           )
@@ -431,6 +443,7 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
     String? roleSystem,
     int? targetHoursPerMonth,
     int? targetShiftsPerMonth,
+    double? hourlyRate,
     bool? isActive,
     bool? clearTargets = false,
   }) =>
@@ -444,6 +457,7 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
                 #roleSystem: roleSystem,
                 #targetHoursPerMonth: targetHoursPerMonth,
                 #targetShiftsPerMonth: targetShiftsPerMonth,
+                #hourlyRate: hourlyRate,
                 #isActive: isActive,
                 #clearTargets: clearTargets,
               },
@@ -462,6 +476,7 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
     String? email,
     int? targetHoursPerMonth,
     int? targetShiftsPerMonth,
+    double? hourlyRate,
   }) =>
       (super.noSuchMethod(
             Invocation.method(#createUser, [], {
@@ -472,6 +487,7 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
               #email: email,
               #targetHoursPerMonth: targetHoursPerMonth,
               #targetShiftsPerMonth: targetShiftsPerMonth,
+              #hourlyRate: hourlyRate,
             }),
             returnValue: _i6.Future<void>.value(),
             returnValueForMissingStub: _i6.Future<void>.value(),
@@ -555,9 +571,18 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
           as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i6.Future<void> updateRole(int? roleId, String? name, String? colorHex) =>
+  _i6.Future<void> updateRole(
+    int? roleId,
+    String? name,
+    String? colorHex, {
+    double? hourlyRate,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#updateRole, [roleId, name, colorHex]),
+            Invocation.method(
+              #updateRole,
+              [roleId, name, colorHex],
+              {#hourlyRate: hourlyRate},
+            ),
             returnValue: _i6.Future<void>.value(),
             returnValueForMissingStub: _i6.Future<void>.value(),
           )
@@ -716,10 +741,15 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
   _i6.Future<Map<String, dynamic>> registerAttendance(
     DateTime? date,
     String? checkIn,
-    String? checkOut,
-  ) =>
+    String? checkOut, {
+    String? checklistSkipReason,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#registerAttendance, [date, checkIn, checkOut]),
+            Invocation.method(
+              #registerAttendance,
+              [date, checkIn, checkOut],
+              {#checklistSkipReason: checklistSkipReason},
+            ),
             returnValue: _i6.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},
             ),

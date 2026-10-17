@@ -12,6 +12,7 @@ import 'my_schedule_screen.dart';
 import 'attendance_tab.dart';
 import 'employee_giveaway_tab.dart';
 import 'leave_requests_tab.dart';
+import 'employee_operations_tab.dart';
 import '../../widgets/help_dialog.dart';
 import '../../widgets/notification_bell.dart';
 import '../../providers/module_provider.dart';
@@ -610,6 +611,11 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
             return const EmployeeGiveawayTab();
           }
 
+          if (_selectedIndex == 4) {
+            // Operations & Announcements Tab
+            return const EmployeeOperationsTab();
+          }
+
           // Availability Tab (_selectedIndex == 1)
           return DefaultTabController(
             length: 2,
@@ -760,6 +766,11 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                     )
                     : const Icon(Icons.swap_horiz),
             label: 'Giełda',
+          ),
+          const NavigationDestination(
+            icon: Icon(Icons.assignment_turned_in_outlined),
+            selectedIcon: Icon(Icons.assignment_turned_in),
+            label: 'Operacje',
           ),
         ],
       ),

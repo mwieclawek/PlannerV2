@@ -117,10 +117,18 @@ class ApiService {
     return (response.data as List).map((e) => JobRole.fromJson(e)).toList();
   }
 
-  Future<JobRole> createRole(String name, String colorHex) async {
+  Future<JobRole> createRole(
+    String name,
+    String colorHex, {
+    double? hourlyRate,
+  }) async {
     final response = await _dio.post(
       '/manager/roles',
-      data: {'name': name, 'color_hex': colorHex},
+      data: {
+        'name': name,
+        'color_hex': colorHex,
+        if (hourlyRate != null) 'hourly_rate': hourlyRate,
+      },
     );
     return JobRole.fromJson(response.data);
   }
@@ -302,6 +310,7 @@ class ApiService {
     String? roleSystem,
     int? targetHoursPerMonth,
     int? targetShiftsPerMonth,
+    double? hourlyRate,
     bool? isActive,
     bool clearTargets = false, // New parameter to explicitly clear targets
   }) async {
@@ -310,6 +319,7 @@ class ApiService {
     if (email != null) data['email'] = email;
     if (roleSystem != null) data['role_system'] = roleSystem;
     if (isActive != null) data['is_active'] = isActive;
+    if (hourlyRate != null) data['hourly_rate'] = hourlyRate;
 
     if (clearTargets) {
       data['target_hours_per_month'] = null;
@@ -334,6 +344,7 @@ class ApiService {
     String? email,
     int? targetHoursPerMonth,
     int? targetShiftsPerMonth,
+    double? hourlyRate,
   }) async {
     await _dio.post(
       '/manager/users',
@@ -347,6 +358,7 @@ class ApiService {
           'target_hours_per_month': targetHoursPerMonth,
         if (targetShiftsPerMonth != null)
           'target_shifts_per_month': targetShiftsPerMonth,
+        if (hourlyRate != null) 'hourly_rate': hourlyRate,
       },
     );
   }
@@ -427,10 +439,19 @@ class ApiService {
   }
 
   // Update Role
-  Future<void> updateRole(int roleId, String name, String colorHex) async {
+  Future<void> updateRole(
+    int roleId,
+    String name,
+    String colorHex, {
+    double? hourlyRate,
+  }) async {
     await _dio.put(
       '/manager/roles/$roleId',
-      data: {'name': name, 'color_hex': colorHex},
+      data: {
+        'name': name,
+        'color_hex': colorHex,
+        if (hourlyRate != null) 'hourly_rate': hourlyRate,
+      },
     );
   }
 
@@ -563,14 +584,17 @@ class ApiService {
   Future<Map<String, dynamic>> registerAttendance(
     DateTime date,
     String checkIn,
-    String checkOut,
-  ) async {
+    String checkOut, {
+    String? checklistSkipReason,
+  }) async {
     final response = await _dio.post(
       '/employee/attendance',
       queryParameters: {
         'target_date': date.toIso8601String().split('T')[0],
         'check_in': checkIn,
         'check_out': checkOut,
+        if (checklistSkipReason != null && checklistSkipReason.isNotEmpty)
+          'checklist_skip_reason': checklistSkipReason,
       },
     );
     return response.data;
@@ -1157,5 +1181,303 @@ class ApiService {
     final response = await _dio.get('/pos/v2/tips/my', queryParameters: params);
     return TipSummary.fromJson(response.data);
   }
+
+  // ── Module A: Payroll, Daily Closeout & Tip Pooling ────────────────────────
+
+  Future<DailyCloseoutSummary> upsertDailyCloseout({
+    required DateTime date,
+    required double dailyRevenue,
+    required double tipPool,
+    String? notes,
+  }) async {
+    final response = await _dio.post(
+      '/manager/closeouts',
+      data: {
+        'date': date.toIso8601String().split('T')[0],
+        'daily_revenue': dailyRevenue,
+        'tip_pool': tipPool,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      },
+    );
+    return DailyCloseoutSummary.fromJson(
+      response.data as Map<String, dynamic>,
+    );
+  }
+
+  Future<DailyCloseoutSummary> getDailyCloseoutSummary(DateTime date) async {
+    final d = date.toIso8601String().split('T')[0];
+    final response = await _dio.get('/manager/closeouts/$d');
+    return DailyCloseoutSummary.fromJson(
+      response.data as Map<String, dynamic>,
+    );
+  }
+
+  Future<MonthlyPayrollSummary> getMonthlyPayroll(int year, int month) async {
+    final response = await _dio.get(
+      '/manager/payroll',
+      queryParameters: {'year': year, 'month': month},
+    );
+    return MonthlyPayrollSummary.fromJson(
+      response.data as Map<String, dynamic>,
+    );
+  }
+
+  String getPayrollExportCsvUrl(int year, int month, {String? token}) {
+    String url = '$baseUrl/manager/payroll/export/csv?year=$year&month=$month';
+    if (token != null) url += '&token=$token';
+    return url;
+  }
+
+  String getPayrollExportPdfUrl(int year, int month, {String? token}) {
+    String url = '$baseUrl/manager/payroll/export/pdf?year=$year&month=$month';
+    if (token != null) url += '&token=$token';
+    return url;
+  }
+
+  Future<EmployeeMonthlyEarnings> getMyMonthlyEarnings(
+    int year,
+    int month,
+  ) async {
+    final response = await _dio.get(
+      '/employee/payroll/my',
+      queryParameters: {'year': year, 'month': month},
+    );
+    return EmployeeMonthlyEarnings.fromJson(
+      response.data as Map<String, dynamic>,
+    );
+  }
+
+  // ── Module B: Operational Checklists & Digital HACCP Registry ──────────────
+
+  Future<List<ChecklistTemplateModel>> getChecklistTemplates({
+    bool includeInactive = false,
+  }) async {
+    final response = await _dio.get(
+      '/manager/checklists',
+      queryParameters: {'include_inactive': includeInactive},
+    );
+    return (response.data as List)
+        .map((e) => ChecklistTemplateModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<ChecklistTemplateModel> createChecklistTemplate({
+    required String title,
+    String? description,
+    int? roleId,
+    required String shiftPeriod,
+    required bool isMandatory,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final response = await _dio.post(
+      '/manager/checklists',
+      data: {
+        'title': title,
+        if (description != null && description.isNotEmpty)
+          'description': description,
+        'role_id': roleId,
+        'shift_period': shiftPeriod,
+        'is_mandatory': isMandatory,
+        'is_active': true,
+        'items': items,
+      },
+    );
+    return ChecklistTemplateModel.fromJson(
+      response.data as Map<String, dynamic>,
+    );
+  }
+
+  Future<void> deleteChecklistTemplate(String templateId) async {
+    await _dio.delete('/manager/checklists/$templateId');
+  }
+
+  Future<List<ChecklistTemplateModel>> getManagerDailyChecklists(
+    DateTime date,
+  ) async {
+    final d = date.toIso8601String().split('T')[0];
+    final response = await _dio.get('/manager/checklists/daily/$d');
+    return (response.data as List)
+        .map((e) => ChecklistTemplateModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<ChecklistTemplateModel>> getEmployeeChecklists({
+    DateTime? date,
+  }) async {
+    final response = await _dio.get(
+      '/employee/checklists',
+      queryParameters: {
+        if (date != null) 'target_date': date.toIso8601String().split('T')[0],
+      },
+    );
+    return (response.data as List)
+        .map((e) => ChecklistTemplateModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<ChecklistItemModel> toggleChecklistItem(
+    String itemId, {
+    DateTime? date,
+    bool? isCompleted,
+  }) async {
+    final response = await _dio.post(
+      '/employee/checklists/items/$itemId/toggle',
+      data: {
+        if (date != null) 'date': date.toIso8601String().split('T')[0],
+        if (isCompleted != null) 'is_completed': isCompleted,
+      },
+    );
+    return ChecklistItemModel.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<ClockoutValidationResult> validateClockoutChecklists({
+    DateTime? date,
+  }) async {
+    final response = await _dio.get(
+      '/employee/checklists/validate-clockout',
+      queryParameters: {
+        if (date != null) 'target_date': date.toIso8601String().split('T')[0],
+      },
+    );
+    return ClockoutValidationResult.fromJson(
+      response.data as Map<String, dynamic>,
+    );
+  }
+
+  Future<List<HaccpDeviceModel>> getHaccpDevices({
+    bool isManager = false,
+  }) async {
+    final path = isManager ? '/manager/haccp/devices' : '/employee/haccp/devices';
+    final response = await _dio.get(path);
+    return (response.data as List)
+        .map((e) => HaccpDeviceModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<HaccpDeviceModel> createHaccpDevice({
+    required String name,
+    required double minTemp,
+    required double maxTemp,
+  }) async {
+    final response = await _dio.post(
+      '/manager/haccp/devices',
+      data: {
+        'name': name,
+        'min_temp': minTemp,
+        'max_temp': maxTemp,
+        'is_active': true,
+      },
+    );
+    return HaccpDeviceModel.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteHaccpDevice(String deviceId) async {
+    await _dio.delete('/manager/haccp/devices/$deviceId');
+  }
+
+  Future<List<HaccpLogModel>> getHaccpLogs({
+    required bool isManager,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool violationsOnly = false,
+  }) async {
+    final path = isManager ? '/manager/haccp/logs' : '/employee/haccp/logs';
+    final response = await _dio.get(
+      path,
+      queryParameters: {
+        if (startDate != null)
+          'start_date': startDate.toIso8601String().split('T')[0],
+        if (endDate != null)
+          'end_date': endDate.toIso8601String().split('T')[0],
+        if (violationsOnly) 'violations_only': true,
+      },
+    );
+    return (response.data as List)
+        .map((e) => HaccpLogModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<HaccpLogModel> createHaccpLog({
+    required bool isManager,
+    required String logType,
+    String? deviceId,
+    String? deviceName,
+    double? measuredTemp,
+    String? correctiveAction,
+  }) async {
+    final path = isManager ? '/manager/haccp/logs' : '/employee/haccp/logs';
+    final response = await _dio.post(
+      path,
+      data: {
+        'log_type': logType,
+        if (deviceId != null) 'device_id': deviceId,
+        if (deviceName != null && deviceName.isNotEmpty)
+          'device_name': deviceName,
+        if (measuredTemp != null) 'measured_temp': measuredTemp,
+        if (correctiveAction != null && correctiveAction.isNotEmpty)
+          'corrective_action': correctiveAction,
+      },
+    );
+    return HaccpLogModel.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  String getHaccpExportPdfUrl(
+    DateTime startDate,
+    DateTime endDate, {
+    String? token,
+  }) {
+    final start = startDate.toIso8601String().split('T')[0];
+    final end = endDate.toIso8601String().split('T')[0];
+    String url =
+        '$baseUrl/manager/haccp/export/pdf?start_date=$start&end_date=$end';
+    if (token != null) url += '&token=$token';
+    return url;
+  }
+
+  // ── Module C: Announcement Board with Read Receipts ────────────────────────
+
+  Future<List<AnnouncementModel>> getManagerAnnouncements() async {
+    final response = await _dio.get('/manager/announcements');
+    return (response.data as List)
+        .map((e) => AnnouncementModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<AnnouncementModel> createAnnouncement({
+    required String title,
+    required String content,
+    bool isPinned = false,
+  }) async {
+    final response = await _dio.post(
+      '/manager/announcements',
+      data: {'title': title, 'content': content, 'is_pinned': isPinned},
+    );
+    return AnnouncementModel.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<AnnouncementModel> getAnnouncementReceipts(
+    String announcementId,
+  ) async {
+    final response = await _dio.get(
+      '/manager/announcements/$announcementId/receipts',
+    );
+    return AnnouncementModel.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<void> deleteAnnouncement(String announcementId) async {
+    await _dio.delete('/manager/announcements/$announcementId');
+  }
+
+  Future<List<AnnouncementModel>> getEmployeeAnnouncements() async {
+    final response = await _dio.get('/employee/announcements');
+    return (response.data as List)
+        .map((e) => AnnouncementModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> markAnnouncementRead(String announcementId) async {
+    await _dio.post('/employee/announcements/$announcementId/read');
+  }
 }
+
 

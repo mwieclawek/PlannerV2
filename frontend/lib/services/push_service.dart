@@ -29,8 +29,27 @@ class PushService {
 
   Future<NotificationSettings> requestPermission() async {
     if (kIsWeb) {
-      // Direct Web Notification API request (required for iOS Safari PWA / modern browsers)
-      await WebNotificationHelper.instance.requestPermission();
+      // Avoid sequential async requestPermission calls that consume the transient user gesture token.
+      // Calling _messaging.requestPermission() directly invokes the browser Notification permission prompt once.
+      try {
+        final settings = await _messaging.requestPermission(
+          alert: true,
+          announcement: false,
+          badge: true,
+          carPlay: false,
+          criticalAlert: false,
+          provisional: false,
+          sound: true,
+        );
+        if (settings.authorizationStatus == AuthorizationStatus.notDetermined &&
+            WebNotificationHelper.instance.permissionStatus == 'default') {
+          await WebNotificationHelper.instance.requestPermission();
+        }
+        return settings;
+      } catch (e) {
+        debugPrint('Fallback to WebNotificationHelper.requestPermission: $e');
+        await WebNotificationHelper.instance.requestPermission();
+      }
     }
 
     return await _messaging.requestPermission(
@@ -46,9 +65,14 @@ class PushService {
 
   Future<bool> requestPermissionAndRegister() async {
     try {
+      if (kIsWeb && WebNotificationHelper.instance.permissionStatus == 'granted') {
+        final token = await fetchAndRegisterToken();
+        return token != null;
+      }
       final settings = await requestPermission();
       if (settings.authorizationStatus == AuthorizationStatus.authorized ||
-          settings.authorizationStatus == AuthorizationStatus.provisional) {
+          settings.authorizationStatus == AuthorizationStatus.provisional ||
+          (kIsWeb && WebNotificationHelper.instance.permissionStatus == 'granted')) {
         await fetchAndRegisterToken();
         return true;
       }
@@ -60,9 +84,21 @@ class PushService {
 
   Future<String?> fetchAndRegisterToken() async {
     try {
-      final token = await _messaging.getToken(
-        vapidKey: kIsWeb ? _resolvedVapidKey : null,
-      );
+      String? token;
+      if (kIsWeb) {
+        try {
+          token = await _messaging.getToken(vapidKey: _resolvedVapidKey);
+        } catch (vapidErr) {
+          if (_resolvedVapidKey != null) {
+            debugPrint('Ponawianie pobrania tokena FCM bez klucza VAPID: $vapidErr');
+            token = await _messaging.getToken();
+          } else {
+            rethrow;
+          }
+        }
+      } else {
+        token = await _messaging.getToken();
+      }
 
       if (token != null) {
         debugPrint('FCM Token: $token');
@@ -76,30 +112,32 @@ class PushService {
   }
 
   Future<void> initialize() async {
-    // 1. Request permissions (required on iOS and Web)
+    // 1. Handle permissions and token registration
     try {
-      NotificationSettings settings;
       if (kIsWeb) {
         final status = WebNotificationHelper.instance.permissionStatus;
         if (status == 'granted') {
-          settings = await requestPermission();
+          debugPrint('Web notification permission already granted, registering FCM token');
+          await fetchAndRegisterToken();
         } else {
-          // On web, if not granted yet, try to request; catch if browser requires user gesture
-          settings = await requestPermission();
+          // Modern browsers block automatic Notification.requestPermission() without a User Gesture.
+          // Defer permission prompt until user clicks the enable button in NotificationBell.
+          debugPrint(
+            'Web notification permission status is "$status" - waiting for user gesture to request permission.',
+          );
         }
       } else {
-        settings = await requestPermission();
-      }
-
-      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
-          settings.authorizationStatus == AuthorizationStatus.provisional) {
-        debugPrint('User granted permission');
-        await fetchAndRegisterToken();
-      } else {
-        debugPrint('User declined or has not accepted permission');
+        final settings = await requestPermission();
+        if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+            settings.authorizationStatus == AuthorizationStatus.provisional) {
+          debugPrint('User granted permission');
+          await fetchAndRegisterToken();
+        } else {
+          debugPrint('User declined or has not accepted permission');
+        }
       }
     } catch (e) {
-      debugPrint('Info: permission request during initialize deferred: $e');
+      debugPrint('Info: permission check during initialize deferred: $e');
     }
 
     // 2. Listen to token refreshes

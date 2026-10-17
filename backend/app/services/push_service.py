@@ -47,11 +47,50 @@ class PushService:
         If Firebase is not initialized, logs the intention instead.
         """
         tokens = self._get_user_tokens(user_id)
-        send_push_to_tokens(tokens, title, body, data)
+        send_push_to_tokens(tokens, title, body, data, session=self.session)
 
-def send_push_to_tokens(tokens: List[str], title: str, body: str, data: Optional[dict] = None) -> None:
+
+def _remove_stale_tokens(stale_tokens: List[str], session: Optional[Session] = None) -> None:
+    if not stale_tokens:
+        return
+    try:
+        if session is not None:
+            devices = session.exec(
+                select(UserDevice).where(UserDevice.fcm_token.in_(stale_tokens))
+            ).all()
+            for dev in devices:
+                session.delete(dev)
+            session.commit()
+            logger.info(f"Removed {len(devices)} unregistered FCM token(s) from database.")
+        else:
+            from ..database import engine
+            with Session(engine) as own_session:
+                devices = own_session.exec(
+                    select(UserDevice).where(UserDevice.fcm_token.in_(stale_tokens))
+                ).all()
+                for dev in devices:
+                    own_session.delete(dev)
+                own_session.commit()
+                logger.info(f"Removed {len(devices)} unregistered FCM token(s) from database.")
+    except Exception as cleanup_err:
+        logger.error(f"Failed to remove stale FCM tokens: {cleanup_err}")
+
+
+def send_push_to_tokens(
+    tokens: List[str],
+    title: str,
+    body: str,
+    data: Optional[dict] = None,
+    session: Optional[Session] = None,
+) -> None:
     if not tokens:
         return
+
+    # FCM Admin SDK requires all keys and values in the `data` dictionary to be strings
+    str_data = {str(k): str(v) for k, v in (data or {}).items() if v is not None}
+    str_data.setdefault("title", str(title))
+    str_data.setdefault("body", str(body))
+    str_data.setdefault("tag", "plannerv2-push")
 
     if not firebase_initialized:
         logger.info(f"[MOCK PUSH] Would send to {len(tokens)} devices - Title: '{title}', Body: '{body}'")
@@ -59,10 +98,19 @@ def send_push_to_tokens(tokens: List[str], title: str, body: str, data: Optional
 
     message = messaging.MulticastMessage(
         notification=messaging.Notification(
-            title=title,
-            body=body,
+            title=str(title),
+            body=str(body),
         ),
-        data=data or {},
+        webpush=messaging.WebpushConfig(
+            notification=messaging.WebpushNotification(
+                title=str(title),
+                body=str(body),
+                icon="/icons/Icon-192.png",
+                badge="/icons/Icon-192.png",
+                tag=str_data.get("tag", "plannerv2-push"),
+            ),
+        ),
+        data=str_data,
         tokens=tokens,
     )
 
@@ -71,10 +119,22 @@ def send_push_to_tokens(tokens: List[str], title: str, body: str, data: Optional
         logger.info(f"Push notification sent. {response.success_count} success, {response.failure_count} failures.")
         
         if response.failure_count > 0:
+            stale_tokens: List[str] = []
             responses = response.responses
             for idx, resp in enumerate(responses):
                 if not resp.success:
-                    logger.warning(f"Failed to send to token {tokens[idx]}: {resp.exception}")
+                    exc = resp.exception
+                    logger.warning(f"Failed to send to token {tokens[idx]}: {exc}")
+                    exc_code = getattr(exc, "code", None)
+                    if (
+                        isinstance(exc, messaging.UnregisteredError)
+                        or exc_code in ("UNREGISTERED", "NOT_FOUND")
+                        or "Unregistered" in type(exc).__name__
+                    ):
+                        stale_tokens.append(tokens[idx])
+            if stale_tokens:
+                _remove_stale_tokens(stale_tokens, session=session)
                     
     except Exception as e:
         logger.error(f"Error sending push notification via FCM: {e}")
+

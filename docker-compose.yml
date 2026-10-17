@@ -18,14 +18,24 @@ services:
     restart: unless-stopped
     depends_on:
       - db
+    volumes:
+      - ${FIREBASE_KEY_PATH:-./firebase-admin-key.json}:/app/firebase-admin-key.json:ro
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+      - MANAGER_REGISTRATION_PIN=${MANAGER_REGISTRATION_PIN:-}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/firebase-admin-key.json}
     networks:
       - plannerv2-network
 
   nginx:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        FLUTTER_ENV: ${FLUTTER_ENV:-dev}
+        FCM_VAPID_KEY: ${FCM_VAPID_KEY:-}
     restart: unless-stopped
     ports:
       - "80:80"

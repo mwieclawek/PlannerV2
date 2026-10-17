@@ -26,6 +26,7 @@ class FakeApiService implements ApiService {
     String? email,
     int? targetHoursPerMonth,
     int? targetShiftsPerMonth,
+    double? hourlyRate,
   }) async {
     // Simulate network delay
     await Future.delayed(const Duration(milliseconds: 10));
@@ -38,6 +39,7 @@ class FakeApiService implements ApiService {
       jobRoleIds: [],
       targetHoursPerMonth: targetHoursPerMonth,
       targetShiftsPerMonth: targetShiftsPerMonth,
+      hourlyRate: hourlyRate,
     ));
   }
 

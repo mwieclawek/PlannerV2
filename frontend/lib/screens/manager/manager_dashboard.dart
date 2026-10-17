@@ -7,6 +7,7 @@ import 'scheduler_wrapper_tab.dart';
 import 'home_tab.dart';
 import 'team_tab.dart';
 import 'attendance_approval_tab.dart';
+import 'operations_hub_tab.dart';
 
 import '../../widgets/qr_config_dialog.dart';
 import '../../widgets/notification_bell.dart';
@@ -90,6 +91,7 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
               SchedulerWrapperTab(),
               AttendanceApprovalTab(),
               TeamTab(),
+              OperationsHubTab(),
             ],
           );
         },
@@ -160,6 +162,11 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
             icon: Icon(Icons.people_outlined),
             selectedIcon: Icon(Icons.people),
             label: 'Zespół',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.analytics_outlined),
+            selectedIcon: Icon(Icons.analytics),
+            label: 'Operacje',
           ),
         ],
       ),

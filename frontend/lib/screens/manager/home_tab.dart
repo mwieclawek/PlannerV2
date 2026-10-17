@@ -175,6 +175,14 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                         },
                       ),
 
+                      _buildSectionTitle(
+                        'Zamknięcie dnia i Labor Cost',
+                        Icons.payments_rounded,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildDailyCloseoutCard(data.dailyCloseout),
+                      const SizedBox(height: 32),
+
                       _buildSectionTitle('Dzisiaj w pracy', Icons.work_rounded),
                       const SizedBox(height: 12),
                       _buildDayTimeline(data.workingToday),
@@ -1139,6 +1147,324 @@ class _HomeTabState extends ConsumerState<HomeTab> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDailyCloseoutCard(DailyCloseoutSummary? closeout) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final revenue = closeout?.dailyRevenue ?? 0.0;
+    final tipPool = closeout?.tipPool ?? 0.0;
+    final laborCost = closeout?.laborCost ?? 0.0;
+    final laborPct =
+        (closeout != null && closeout.dailyRevenue > 0)
+            ? closeout.laborCostPct
+            : null;
+    final hours = closeout?.confirmedHours ?? 0.0;
+    final allocations = closeout?.tipAllocations ?? const [];
+
+    Color badgeColor = Colors.green;
+    if (laborPct != null) {
+      if (laborPct > 35) {
+        badgeColor = Colors.red;
+      } else if (laborPct > 28) {
+        badgeColor = Colors.orange;
+      }
+    }
+
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Wskaźnik Labor Cost %',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: badgeColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: badgeColor.withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: Text(
+                            laborPct != null
+                                ? '${laborPct.toStringAsFixed(1)}%'
+                                : 'Wprowadź utarg',
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: badgeColor,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Koszt pracy: ${laborCost.toStringAsFixed(2)} PLN (${hours.toStringAsFixed(1)}h)',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () => _showDailyCloseoutDialog(closeout),
+                  icon: const Icon(Icons.point_of_sale, size: 18),
+                  label: const Text('Zamknij dzień'),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _closeoutMetricTile(
+                    icon: Icons.attach_money,
+                    label: 'Utarg dzienny',
+                    value: '${revenue.toStringAsFixed(2)} PLN',
+                    color: colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _closeoutMetricTile(
+                    icon: Icons.volunteer_activism_outlined,
+                    label: 'Pula napiwków (Tip Pool)',
+                    value: '${tipPool.toStringAsFixed(2)} PLN',
+                    color: Colors.teal,
+                  ),
+                ),
+              ],
+            ),
+            if (allocations.isNotEmpty && tipPool > 0) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Podział napiwków wg zatwierdzonych godzin:',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children:
+                    allocations
+                        .map(
+                          (a) => Chip(
+                            visualDensity: VisualDensity.compact,
+                            avatar: const Icon(Icons.person, size: 14),
+                            label: Text(
+                              '${a.userName}: ${a.allocatedTip.toStringAsFixed(2)} PLN (${a.confirmedHours.toStringAsFixed(1)}h)',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                          ),
+                        )
+                        .toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _closeoutMetricTile({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: GoogleFonts.outfit(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDailyCloseoutDialog(DailyCloseoutSummary? current) {
+    final revenueController = TextEditingController(
+      text: current != null && current.dailyRevenue > 0
+          ? current.dailyRevenue.toStringAsFixed(2)
+          : '',
+    );
+    final tipController = TextEditingController(
+      text: current != null && current.tipPool > 0
+          ? current.tipPool.toStringAsFixed(2)
+          : '',
+    );
+    final notesController = TextEditingController(text: current?.notes ?? '');
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => StatefulBuilder(
+            builder:
+                (ctx, setDialogState) => AlertDialog(
+                  title: const Text('Szybkie zamknięcie dnia'),
+                  content: SizedBox(
+                    width: 360,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextField(
+                          controller: revenueController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Utarg dzienny z kasy (PLN)',
+                            prefixIcon: Icon(Icons.point_of_sale),
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: tipController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Pula napiwków Tip Pool (PLN)',
+                            prefixIcon: Icon(Icons.volunteer_activism),
+                            border: OutlineInputBorder(),
+                            helperText:
+                                'Zostanie podzielona proporcjonalnie do zatwierdzonych godzin',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: notesController,
+                          decoration: const InputDecoration(
+                            labelText: 'Notatka (opcjonalnie)',
+                            prefixIcon: Icon(Icons.notes),
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: saving ? null : () => Navigator.pop(ctx),
+                      child: const Text('Anuluj'),
+                    ),
+                    FilledButton(
+                      onPressed:
+                          saving
+                              ? null
+                              : () async {
+                                setDialogState(() => saving = true);
+                                try {
+                                  final rev =
+                                      double.tryParse(
+                                        revenueController.text.replaceAll(
+                                          ',',
+                                          '.',
+                                        ),
+                                      ) ??
+                                      0.0;
+                                  final tips =
+                                      double.tryParse(
+                                        tipController.text.replaceAll(',', '.'),
+                                      ) ??
+                                      0.0;
+                                  await ref
+                                      .read(apiServiceProvider)
+                                      .upsertDailyCloseout(
+                                        date: DateTime.now(),
+                                        dailyRevenue: rev,
+                                        tipPool: tips,
+                                        notes:
+                                            notesController.text.trim().isEmpty
+                                                ? null
+                                                : notesController.text.trim(),
+                                      );
+                                  if (ctx.mounted) {
+                                    Navigator.pop(ctx);
+                                    _refresh();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Zamknięcie dnia zapisane',
+                                        ),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  setDialogState(() => saving = false);
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Błąd: $e'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                      child: const Text('Zapisz'),
+                    ),
+                  ],
+                ),
+          ),
     );
   }
 }
