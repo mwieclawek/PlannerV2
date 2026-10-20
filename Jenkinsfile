@@ -182,6 +182,7 @@ pipeline {
                             --restart unless-stopped plannerv2-backend:dev
 
                             docker cp "\${FIREBASE_KEY}" plannerv2-backend-dev-new:/app/firebase-admin-key.json
+                            docker exec plannerv2-db-dev psql -U planner_user -d planner_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'planner_db' AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';" >/dev/null 2>&1 || true
                             docker start plannerv2-backend-dev-new
                         """
                     }
@@ -190,14 +191,20 @@ pipeline {
                     echo "🔍 Weryfikacja nowego Backendu DEV i Migracji..."
                     sh '''
                         HEALTH_OK=false
-                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev-new)" = "false" ]; then
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev-new 2>/dev/null)" != "true" ]; then
                             echo "❌ Nowy Backend DEV upadł podczas startu! Logi:"
                             docker logs plannerv2-backend-dev-new
                             docker rm -f plannerv2-backend-dev-new
                             exit 1
                         fi
 
-                        for i in 1 2 3 4 5; do
+                        for i in $(seq 1 20); do
+                            if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-dev-new 2>/dev/null)" != "true" ]; then
+                                echo "❌ Kontener plannerv2-backend-dev-new zatrzymał się przedwcześnie! Logi:"
+                                docker logs plannerv2-backend-dev-new
+                                break
+                            fi
+
                             HEALTH=$(docker exec plannerv2-backend-dev-new curl -sf http://localhost:8000/health 2>/dev/null || echo '{}')
                             echo "Health response from new: $HEALTH"
                             if echo "$HEALTH" | grep -q '"migration_current":true'; then
@@ -206,6 +213,11 @@ pipeline {
                                 break
                             else
                                 echo "⚠️ Próba $i: Migracje nie gotowe, czekam..."
+                                if [ "$i" -eq 5 ]; then
+                                    echo "⚠️ Migracje DEV trwają dłużej niż 25s, zwalniam blokady tabel starego backendu..."
+                                    docker stop plannerv2-backend-dev || true
+                                    docker exec plannerv2-db-dev psql -U planner_user -d planner_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'planner_db' AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';" >/dev/null 2>&1 || true
+                                fi
                                 sleep 5
                             fi
                         done
@@ -359,6 +371,7 @@ pipeline {
                             --restart unless-stopped plannerv2-backend:latest
 
                             docker cp "\${FIREBASE_KEY}" plannerv2-backend-new:/app/firebase-admin-key.json
+                            docker exec plannerv2-db psql -U planner_user -d planner_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'planner_db' AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';" >/dev/null 2>&1 || true
                             docker start plannerv2-backend-new
                         """
                     }
@@ -367,14 +380,20 @@ pipeline {
                     echo "🔍 Weryfikacja nowego Backendu PROD i Migracji..."
                     sh '''
                         HEALTH_OK=false
-                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-new)" = "false" ]; then
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-new 2>/dev/null)" != "true" ]; then
                             echo "❌ Nowy Backend PROD upadł podczas startu! Logi:"
                             docker logs plannerv2-backend-new
                             docker rm -f plannerv2-backend-new
                             exit 1
                         fi
 
-                        for i in 1 2 3 4 5; do
+                        for i in $(seq 1 20); do
+                            if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-backend-new 2>/dev/null)" != "true" ]; then
+                                echo "❌ Kontener plannerv2-backend-new zatrzymał się przedwcześnie! Logi:"
+                                docker logs plannerv2-backend-new
+                                break
+                            fi
+
                             HEALTH=$(docker exec plannerv2-backend-new curl -sf http://localhost:8000/health 2>/dev/null || echo '{}')
                             echo "Health response from new: $HEALTH"
                             if echo "$HEALTH" | grep -q '"migration_current":true'; then
@@ -383,6 +402,11 @@ pipeline {
                                 break
                             else
                                 echo "⚠️ Próba $i: Migracje nie gotowe, czekam..."
+                                if [ "$i" -eq 5 ]; then
+                                    echo "⚠️ Migracje PROD trwają dłużej niż 25s, zwalniam blokady tabel starego backendu..."
+                                    docker stop plannerv2-backend || true
+                                    docker exec plannerv2-db psql -U planner_user -d planner_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'planner_db' AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';" >/dev/null 2>&1 || true
+                                fi
                                 sleep 5
                             fi
                         done

@@ -26,19 +26,22 @@ COPY app/ backend/app/
 COPY alembic.ini .
 COPY alembic/ alembic/
 
-# Set PYTHONPATH so python can find the 'backend' package
+# Set PYTHONPATH so python can find the 'backend' package and disable stdout buffering
 ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
 # Expose port
 EXPOSE 8000
 
 # Create entrypoint script that runs migrations then starts server
 RUN echo '#!/bin/sh\n\
-    echo "Running database migrations..."\n\
-    alembic upgrade head\n\
-    echo "Starting uvicorn server..."\n\
-    exec uvicorn backend.app.main:app --host 0.0.0.0 --port 8000\n\
-    ' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+set -e\n\
+echo "Running database migrations..."\n\
+alembic upgrade head\n\
+echo "Database migrations completed successfully."\n\
+echo "Starting uvicorn server..."\n\
+exec uvicorn backend.app.main:app --host 0.0.0.0 --port 8000\n\
+' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Run entrypoint script
 CMD ["/app/entrypoint.sh"]
