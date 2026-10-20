@@ -97,3 +97,17 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("androidx.camera:camera-core:1.4.1")
+    implementation("androidx.camera:camera-camera2:1.4.1")
+    implementation("androidx.camera:camera-lifecycle:1.4.1")
+}
+
+configurations.all {
+    resolutionStrategy {
+        force("androidx.camera:camera-core:1.4.1")
+        force("androidx.camera:camera-camera2:1.4.1")
+        force("androidx.camera:camera-lifecycle:1.4.1")
+    }
+}
