@@ -696,7 +696,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
   ) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 540;
+        final isWide = constraints.maxWidth >= 768;
 
         final shiftDetails = Row(
           children: [
@@ -761,6 +761,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                   const SizedBox(height: 4),
                   Wrap(
                     spacing: 12,
+                    runSpacing: 4,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Row(
@@ -772,11 +773,14 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                             color: Color(0xFF64748B),
                           ),
                           const SizedBox(width: 4),
-                          Text(
-                            '${_formatTimeWithoutSeconds(shift.startTime)} - ${_formatTimeWithoutSeconds(shift.endTime)}',
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              color: const Color(0xFF64748B),
+                          Flexible(
+                            child: Text(
+                              '${_formatTimeWithoutSeconds(shift.startTime)} - ${_formatTimeWithoutSeconds(shift.endTime)}',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: const Color(0xFF64748B),
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -790,11 +794,14 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                             color: Color(0xFF64748B),
                           ),
                           const SizedBox(width: 4),
-                          Text(
-                            shift.roleName,
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              color: const Color(0xFF64748B),
+                          Flexible(
+                            child: Text(
+                              shift.roleName,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: const Color(0xFF64748B),
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -816,7 +823,10 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
               children: [
                 Expanded(child: shiftDetails),
                 const SizedBox(width: 16),
-                actions,
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: actions,
+                ),
               ],
             ),
           );
