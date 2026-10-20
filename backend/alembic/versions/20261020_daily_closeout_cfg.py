@@ -1,6 +1,6 @@
 """add enable_daily_closeout to restaurantconfig
 
-Revision ID: 20261020_add_enable_daily_closeout
+Revision ID: 20261020_daily_closeout_cfg
 Revises: 20261020_add_require_checklists
 Create Date: 2026-10-20 18:30:00
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '20261020_add_enable_daily_closeout'
+revision: str = '20261020_daily_closeout_cfg'
 down_revision: Union[str, None] = '20261020_add_require_checklists'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
