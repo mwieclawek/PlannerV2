@@ -241,3 +241,14 @@ final tipPoolEnabledProvider = FutureProvider.autoDispose<bool>((ref) async {
     }
   }
 });
+
+// Daily Closeout Module enabled flag (from backend config)
+final dailyCloseoutEnabledProvider = FutureProvider.autoDispose<bool>((ref) async {
+  final api = ref.watch(apiServiceProvider);
+  try {
+    final cfg = await api.getConfig();
+    return cfg['enable_daily_closeout'] != false;
+  } catch (_) {
+    return true;
+  }
+});

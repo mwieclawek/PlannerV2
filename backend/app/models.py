@@ -37,6 +37,7 @@ class RestaurantConfig(SQLModel, table=True):
     attendance_required_from: Optional[date_type] = Field(default=None, sa_column=Column(Date, nullable=True))
     require_checklists: bool = Field(default=True)
     enable_tip_pool: bool = Field(default=True)
+    enable_daily_closeout: bool = Field(default=True)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

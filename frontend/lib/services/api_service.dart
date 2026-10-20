@@ -650,6 +650,7 @@ class ApiService {
     bool clearAttendanceRequiredFrom = false,
     bool? enableTipPool,
     bool? requireChecklists,
+    bool? enableDailyCloseout,
   }) async {
     final data = <String, dynamic>{
       'name': name,
@@ -670,6 +671,9 @@ class ApiService {
     }
     if (requireChecklists != null) {
       data['require_checklists'] = requireChecklists;
+    }
+    if (enableDailyCloseout != null) {
+      data['enable_daily_closeout'] = enableDailyCloseout;
     }
     await _dio.post('/manager/config', data: data);
   }

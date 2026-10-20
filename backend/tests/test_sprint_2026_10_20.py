@@ -33,6 +33,7 @@ async def test_config_attendance_and_tip_pool_options(
             "require_attendance_registration": True,
             "attendance_required_from": "2026-10-01",
             "enable_tip_pool": False,
+            "enable_daily_closeout": False,
         },
         headers=auth_headers,
     )
@@ -41,6 +42,7 @@ async def test_config_attendance_and_tip_pool_options(
     assert data["require_attendance_registration"] is True
     assert data["attendance_required_from"] == "2026-10-01"
     assert data["enable_tip_pool"] is False
+    assert data["enable_daily_closeout"] is False
 
     # Employee can also fetch config flags
     emp = User(
@@ -64,6 +66,7 @@ async def test_config_attendance_and_tip_pool_options(
     assert ec["require_attendance_registration"] is True
     assert ec["attendance_required_from"] == "2026-10-01"
     assert ec["enable_tip_pool"] is False
+    assert ec["enable_daily_closeout"] is False
 
 
 @pytest.mark.asyncio

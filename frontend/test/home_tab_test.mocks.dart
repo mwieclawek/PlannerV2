@@ -710,6 +710,7 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
     bool? clearAttendanceRequiredFrom = false,
     bool? enableTipPool,
     bool? requireChecklists,
+    bool? enableDailyCloseout,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
@@ -722,6 +723,7 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
                 #clearAttendanceRequiredFrom: clearAttendanceRequiredFrom,
                 #enableTipPool: enableTipPool,
                 #requireChecklists: requireChecklists,
+                #enableDailyCloseout: enableDailyCloseout,
               },
             ),
             returnValue: _i6.Future<void>.value(),

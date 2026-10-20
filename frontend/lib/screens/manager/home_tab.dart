@@ -73,6 +73,9 @@ class _HomeTabState extends ConsumerState<HomeTab> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final enableTipPool = ref.watch(tipPoolEnabledProvider).valueOrNull ?? true;
+    final enableDailyCloseout =
+        ref.watch(dailyCloseoutEnabledProvider).valueOrNull ?? true;
 
     return RefreshIndicator(
       onRefresh: () async => _refresh(),
@@ -175,13 +178,18 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                         },
                       ),
 
-                      _buildSectionTitle(
-                        'Zamknięcie dnia i Labor Cost',
-                        Icons.payments_rounded,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildDailyCloseoutCard(data.dailyCloseout),
-                      const SizedBox(height: 32),
+                      if (enableDailyCloseout) ...[
+                        _buildSectionTitle(
+                          'Zamknięcie dnia i Labor Cost',
+                          Icons.payments_rounded,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildDailyCloseoutCard(
+                          data.dailyCloseout,
+                          enableTipPool: enableTipPool,
+                        ),
+                        const SizedBox(height: 32),
+                      ],
 
                       _buildSectionTitle('Dzisiaj w pracy', Icons.work_rounded),
                       const SizedBox(height: 12),
@@ -1192,7 +1200,10 @@ class _HomeTabState extends ConsumerState<HomeTab> {
     );
   }
 
-  Widget _buildDailyCloseoutCard(DailyCloseoutSummary? closeout) {
+  Widget _buildDailyCloseoutCard(
+    DailyCloseoutSummary? closeout, {
+    bool enableTipPool = true,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
     final revenue = closeout?.dailyRevenue ?? 0.0;
     final tipPool = closeout?.tipPool ?? 0.0;
@@ -1273,7 +1284,7 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                   ],
                 ),
                 FilledButton.tonalIcon(
-                  onPressed: () => _showDailyCloseoutDialog(closeout),
+                  onPressed: () => _showDailyCloseoutDialog(closeout, enableTipPool: enableTipPool),
                   icon: const Icon(Icons.point_of_sale, size: 18),
                   label: const Text('Zamknij dzień'),
                 ),
@@ -1290,18 +1301,20 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                     color: colorScheme.primary,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _closeoutMetricTile(
-                    icon: Icons.volunteer_activism_outlined,
-                    label: 'Pula napiwków (Tip Pool)',
-                    value: '${tipPool.toStringAsFixed(2)} PLN',
-                    color: Colors.teal,
+                if (enableTipPool) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _closeoutMetricTile(
+                      icon: Icons.volunteer_activism_outlined,
+                      label: 'Pula napiwków (Tip Pool)',
+                      value: '${tipPool.toStringAsFixed(2)} PLN',
+                      color: Colors.teal,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
-            if (allocations.isNotEmpty && tipPool > 0) ...[
+            if (enableTipPool && allocations.isNotEmpty && tipPool > 0) ...[
               const SizedBox(height: 12),
               Text(
                 'Podział napiwków wg zatwierdzonych godzin:',
@@ -1379,7 +1392,10 @@ class _HomeTabState extends ConsumerState<HomeTab> {
     );
   }
 
-  void _showDailyCloseoutDialog(DailyCloseoutSummary? current) {
+  void _showDailyCloseoutDialog(
+    DailyCloseoutSummary? current, {
+    bool enableTipPool = true,
+  }) {
     final revenueController = TextEditingController(
       text: current != null && current.dailyRevenue > 0
           ? current.dailyRevenue.toStringAsFixed(2)
@@ -1416,20 +1432,22 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                             border: OutlineInputBorder(),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: tipController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
+                        if (enableTipPool) ...[
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: tipController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Pula napiwków Tip Pool (PLN)',
+                              prefixIcon: Icon(Icons.volunteer_activism),
+                              border: OutlineInputBorder(),
+                              helperText:
+                                  'Zostanie podzielona proporcjonalnie do zatwierdzonych godzin',
+                            ),
                           ),
-                          decoration: const InputDecoration(
-                            labelText: 'Pula napiwków Tip Pool (PLN)',
-                            prefixIcon: Icon(Icons.volunteer_activism),
-                            border: OutlineInputBorder(),
-                            helperText:
-                                'Zostanie podzielona proporcjonalnie do zatwierdzonych godzin',
-                          ),
-                        ),
+                        ],
                         const SizedBox(height: 12),
                         TextField(
                           controller: notesController,
@@ -1463,10 +1481,15 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                                       ) ??
                                       0.0;
                                   final tips =
-                                      double.tryParse(
-                                        tipController.text.replaceAll(',', '.'),
-                                      ) ??
-                                      0.0;
+                                      enableTipPool
+                                          ? (double.tryParse(
+                                                tipController.text.replaceAll(
+                                                  ',',
+                                                  '.',
+                                                ),
+                                              ) ??
+                                              0.0)
+                                          : 0.0;
                                   await ref
                                       .read(apiServiceProvider)
                                       .upsertDailyCloseout(

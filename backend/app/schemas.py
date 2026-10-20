@@ -369,14 +369,16 @@ class ConfigUpdate(BaseModel):
     attendance_required_from: Optional[date_type] = None
     require_checklists: Optional[bool] = None
     enable_tip_pool: Optional[bool] = None
+    enable_daily_closeout: Optional[bool] = None
 
 class ConfigResponse(ConfigBase):
     id: int
     pos_enabled: bool = False
     require_attendance_registration: bool = False
     attendance_required_from: Optional[date_type] = None
-    require_checklists: bool = False
+    require_checklists: bool = True
     enable_tip_pool: bool = True
+    enable_daily_closeout: bool = True
     tenant_id: Optional[int] = None
 
     @model_validator(mode='before')
@@ -399,8 +401,9 @@ class ConfigResponse(ConfigBase):
                     "pos_enabled": getattr(data, "pos_enabled", False),
                     "require_attendance_registration": getattr(data, "require_attendance_registration", False),
                     "attendance_required_from": getattr(data, "attendance_required_from", None),
-                    "require_checklists": getattr(data, "require_checklists", False),
+                    "require_checklists": getattr(data, "require_checklists", True),
                     "enable_tip_pool": getattr(data, "enable_tip_pool", True),
+                    "enable_daily_closeout": getattr(data, "enable_daily_closeout", True),
                     "tenant_id": getattr(data, "tenant_id", getattr(data, "id", None)),
                 }
         return data

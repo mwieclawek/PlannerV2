@@ -297,8 +297,9 @@ def get_employee_restaurant_config(
             "name": "Restauracja",
             "require_attendance_registration": False,
             "attendance_required_from": None,
-            "require_checklists": False,
+            "require_checklists": True,
             "enable_tip_pool": True,
+            "enable_daily_closeout": True,
             "pos_enabled": False,
         }
     return {
@@ -306,8 +307,9 @@ def get_employee_restaurant_config(
         "name": config.name,
         "require_attendance_registration": bool(config.require_attendance_registration),
         "attendance_required_from": config.attendance_required_from.isoformat() if config.attendance_required_from else None,
-        "require_checklists": bool(getattr(config, "require_checklists", False)),
+        "require_checklists": bool(getattr(config, "require_checklists", True)),
         "enable_tip_pool": bool(config.enable_tip_pool),
+        "enable_daily_closeout": bool(getattr(config, "enable_daily_closeout", True)),
         "pos_enabled": bool(config.pos_enabled),
     }
 

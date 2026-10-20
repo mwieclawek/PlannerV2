@@ -87,6 +87,7 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
   DateTime? _attendanceRequiredFrom;
   bool _enableTipPool = true;
   bool _requireChecklists = false;
+  bool _enableDailyCloseout = true;
   bool _isLoginEnabled = true;
 
   @override
@@ -123,6 +124,7 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
           _requireAttendanceRegistration =
               config['require_attendance_registration'] == true;
           _requireChecklists = config['require_checklists'] == true;
+          _enableDailyCloseout = config['enable_daily_closeout'] != false;
           final rawFrom = config['attendance_required_from'];
           if (rawFrom is String && rawFrom.isNotEmpty) {
             _attendanceRequiredFrom = DateTime.tryParse(rawFrom);
@@ -172,10 +174,12 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
             clearAttendanceRequiredFrom: _attendanceRequiredFrom == null,
             enableTipPool: _enableTipPool,
             requireChecklists: _requireChecklists,
+            enableDailyCloseout: _enableDailyCloseout,
           );
       // Refresh providers so UI updates immediately
       ref.invalidate(posEnabledProvider);
       ref.invalidate(tipPoolEnabledProvider);
+      ref.invalidate(dailyCloseoutEnabledProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -436,6 +440,29 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
                               value: _requireChecklists,
                               onChanged:
                                   (val) => setState(() => _requireChecklists = val),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Card(
+                            color: _enableDailyCloseout
+                                ? Colors.indigo.shade50
+                                : null,
+                            child: SwitchListTile(
+                              title: const Text('Moduł Zamknięcia Dnia i Labor Cost'),
+                              subtitle: Text(
+                                _enableDailyCloseout
+                                    ? 'Włączony — wskaźnik Labor Cost i rozliczenie utargu widoczne na pulpicie managera'
+                                    : 'Wyłączony — moduł zamknięcia dnia ukryty na pulpicie',
+                              ),
+                              secondary: Icon(
+                                Icons.payments_outlined,
+                                color: _enableDailyCloseout
+                                    ? Colors.indigo.shade700
+                                    : Colors.grey,
+                              ),
+                              value: _enableDailyCloseout,
+                              onChanged:
+                                  (val) => setState(() => _enableDailyCloseout = val),
                             ),
                           ),
                           const SizedBox(height: 12),
