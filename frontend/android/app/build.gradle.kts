@@ -15,8 +15,32 @@ plugins {
 val keyPropertiesFile = rootProject.file("key.properties")
 val keyProperties = Properties()
 if (keyPropertiesFile.exists()) {
-    keyProperties.load(FileInputStream(keyPropertiesFile))
+    FileInputStream(keyPropertiesFile).use { keyProperties.load(it) }
 }
+
+val releaseStoreFilePath: String? =
+    keyProperties.getProperty("storeFile")?.takeIf { it.isNotBlank() }
+        ?: System.getenv("KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
+val releaseStorePassword: String? =
+    keyProperties.getProperty("storePassword")?.takeIf { it.isNotBlank() }
+        ?: System.getenv("KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
+val releaseKeyAlias: String? =
+    keyProperties.getProperty("keyAlias")?.takeIf { it.isNotBlank() }
+        ?: System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() }
+val releaseKeyPassword: String? =
+    keyProperties.getProperty("keyPassword")?.takeIf { it.isNotBlank() }
+        ?: System.getenv("KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+
+val resolvedReleaseStoreFile = releaseStoreFilePath?.let { path ->
+    val candidate = file(path)
+    if (candidate.exists()) candidate else rootProject.file(path)
+}
+val isReleaseSigningConfigured: Boolean =
+    resolvedReleaseStoreFile != null &&
+        resolvedReleaseStoreFile.exists() &&
+        !releaseStorePassword.isNullOrBlank() &&
+        !releaseKeyAlias.isNullOrBlank() &&
+        !releaseKeyPassword.isNullOrBlank()
 
 android {
     namespace = "pl.planista.app"
@@ -34,11 +58,11 @@ android {
 
     signingConfigs {
         create("release") {
-            if (keyPropertiesFile.exists()) {
-                keyAlias = keyProperties["keyAlias"] as String
-                keyPassword = keyProperties["keyPassword"] as String
-                storeFile = file(keyProperties["storeFile"] as String)
-                storePassword = keyProperties["storePassword"] as String
+            if (isReleaseSigningConfigured) {
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                storeFile = resolvedReleaseStoreFile
+                storePassword = releaseStorePassword
             }
         }
     }
@@ -55,14 +79,17 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (keyPropertiesFile.exists()) {
+            signingConfig = if (isReleaseSigningConfigured) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
             }
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }

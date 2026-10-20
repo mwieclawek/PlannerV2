@@ -14,11 +14,18 @@
 -keep class kotlin.** { *; }
 -keep class kotlinx.** { *; }
 
-## Prevent stripping of annotations used by reflection
+## Prevent stripping of annotations and line numbers used by reflection & Crashlytics
 -keepattributes *Annotation*
 -keepattributes Signature
 -keepattributes InnerClasses
 -keepattributes EnclosingMethod
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+
+## OkHttp / Okio / Gson
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class com.google.gson.** { *; }
 
 ## Flutter Play Core (deferred components) — optional dependency, safe to ignore if unused
 -dontwarn com.google.android.play.core.splitcompat.SplitCompatApplication

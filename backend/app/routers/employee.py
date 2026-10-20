@@ -402,124 +402,45 @@ def get_missing_attendance(
 @router.get("/attendance/defaults/{target_date}")
 def get_attendance_defaults(
     target_date: date,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    service: EmployeeService = Depends(get_employee_service),
+    current_user: User = Depends(get_current_user),
 ):
     """Get default check-in/out times from schedule for a given date"""
-    schedule = session.exec(
-        select(Schedule).where(
-            Schedule.user_id == current_user.id,
-            Schedule.date == target_date
-        )
-    ).first()
-    
-    if schedule:
-        shift = session.get(ShiftDefinition, schedule.shift_def_id)
-        return {
-            "scheduled": True,
-            "check_in": shift.start_time.strftime("%H:%M") if shift else None,
-            "check_out": shift.end_time.strftime("%H:%M") if shift else None,
-            "shift_name": shift.name if shift else None
-        }
-    return {"scheduled": False, "check_in": None, "check_out": None, "shift_name": None}
+    return service.get_attendance_defaults(current_user, target_date)
+
 
 @router.post("/attendance")
 def register_attendance(
     target_date: date,
     check_in: str = "00:00",  # HH:MM
-    check_out: str = "00:00", # HH:MM
+    check_out: str = "00:00",  # HH:MM
     checklist_skip_reason: Optional[str] = None,
     is_absent: bool = False,
     absence_reason: Optional[str] = None,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    service: EmployeeService = Depends(get_employee_service),
+    current_user: User = Depends(get_current_user),
 ):
     """Register employee attendance (or absence on a scheduled shift) for a day"""
-    # Check if already registered
-    existing = session.exec(
-        select(Attendance).where(
-            Attendance.user_id == current_user.id,
-            Attendance.date == target_date
-        )
-    ).first()
-    
-    if existing:
-        return {"error": "Attendance already registered for this date"}
-    
-    # Check if was scheduled
-    schedule = session.exec(
-        select(Schedule).where(
-            Schedule.user_id == current_user.id,
-            Schedule.date == target_date
-        )
-    ).first()
-    
-    was_scheduled = schedule is not None
-    if is_absent:
-        if not absence_reason or not absence_reason.strip():
-            from fastapi import HTTPException
-            raise HTTPException(status_code=400, detail="Podaj powód nieobecności")
-        in_time = time(0, 0)
-        out_time = time(0, 0)
-        status = AttendanceStatus.CONFIRMED
-    else:
-        in_time = datetime.strptime(check_in, "%H:%M").time()
-        out_time = datetime.strptime(check_out, "%H:%M").time()
-        status = AttendanceStatus.CONFIRMED if was_scheduled else AttendanceStatus.PENDING
-    
-    attendance = Attendance(
-        user_id=current_user.id,
-        date=target_date,
-        check_in=in_time,
-        check_out=out_time,
-        was_scheduled=was_scheduled,
-        status=status,
-        schedule_id=schedule.id if schedule else None,
+    return service.register_attendance(
+        current_user=current_user,
+        target_date=target_date,
+        check_in=check_in,
+        check_out=check_out,
         checklist_skip_reason=checklist_skip_reason,
         is_absent=is_absent,
-        absence_reason=absence_reason.strip() if (is_absent and absence_reason) else None,
+        absence_reason=absence_reason,
     )
-    session.add(attendance)
-    session.commit()
-    session.refresh(attendance)
-    
-    return {
-        "id": str(attendance.id),
-        "status": status.value,
-        "was_scheduled": was_scheduled,
-        "requires_approval": (not was_scheduled) and (not is_absent),
-        "checklist_skip_reason": attendance.checklist_skip_reason,
-        "is_absent": attendance.is_absent,
-        "absence_reason": attendance.absence_reason,
-    }
+
 
 @router.get("/attendance/my")
 def get_my_attendance(
     start_date: date,
     end_date: date,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user)
+    service: EmployeeService = Depends(get_employee_service),
+    current_user: User = Depends(get_current_user),
 ):
     """Get employee's own attendance records"""
-    attendances = session.exec(
-        select(Attendance).where(
-            Attendance.user_id == current_user.id,
-            Attendance.date >= start_date,
-            Attendance.date <= end_date
-        )
-    ).all()
-    
-    return [{
-        "id": str(a.id),
-        "date": a.date.isoformat(),
-        "check_in": a.check_in.strftime("%H:%M"),
-        "check_out": a.check_out.strftime("%H:%M"),
-        "was_scheduled": a.was_scheduled,
-        "status": a.status.value,
-        "checklist_skip_reason": a.checklist_skip_reason,
-        "is_absent": bool(a.is_absent),
-        "absence_reason": a.absence_reason,
-    } for a in attendances]
+    return service.get_my_attendance(current_user, start_date, end_date)
 
 
 # Shift Giveaway Endpoints

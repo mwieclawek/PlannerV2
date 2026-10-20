@@ -1656,6 +1656,7 @@ class HaccpLogCreate(BaseModel):
     max_temp: Optional[float] = None
     measured_temp: Optional[float] = None
     corrective_action: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class HaccpLogResponse(BaseModel):

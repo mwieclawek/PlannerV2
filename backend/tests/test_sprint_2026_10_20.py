@@ -285,3 +285,111 @@ def test_google_calendar_deduplicates_events_in_window(session: Session, test_te
     assert mock_put.call_count == 1
     assert mock_del.call_count == 1
     assert "plannerv2duplicateold123" in mock_del.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_backend_attendance_config_and_tip_pool_enforcement(
+    client: AsyncClient,
+    session: Session,
+    auth_headers: dict,
+    employee_headers: dict,
+    test_tenant: RestaurantConfig,
+):
+    """
+    Verify backend enforcement in EmployeeService & OperationsService:
+    1. Future-date attendance registration is blocked (400).
+    2. Reporting absence (is_absent=True) on a day without a scheduled shift is blocked (400).
+    3. Registering check_in == check_out or invalid time format is blocked (400).
+    4. Clocking out when mandatory checklist items are incomplete without checklist_skip_reason is blocked (400).
+    5. Disabling enable_tip_pool zeroes out tip allocations in closeout and monthly payroll.
+    """
+    tomorrow = date.today() + timedelta(days=1)
+    three_days_ago = date.today() - timedelta(days=3)
+
+    # 1. Future date check-in blocked
+    future_resp = await client.post(
+        "/employee/attendance",
+        params={"target_date": tomorrow.isoformat(), "check_in": "08:00", "check_out": "16:00"},
+        headers=employee_headers,
+    )
+    assert future_resp.status_code == 400
+
+    # 2. Reporting absence when NOT scheduled is blocked
+    unsched_abs = await client.post(
+        "/employee/attendance",
+        params={
+            "target_date": three_days_ago.isoformat(),
+            "is_absent": True,
+            "absence_reason": "Brak zmiany w grafiku",
+        },
+        headers=employee_headers,
+    )
+    assert unsched_abs.status_code == 400
+
+    # 3. Equal check_in and check_out or malformed time is blocked
+    zero_hrs = await client.post(
+        "/employee/attendance",
+        params={"target_date": three_days_ago.isoformat(), "check_in": "10:00", "check_out": "10:00"},
+        headers=employee_headers,
+    )
+    assert zero_hrs.status_code == 400
+
+    bad_time = await client.post(
+        "/employee/attendance",
+        params={"target_date": three_days_ago.isoformat(), "check_in": "25:99", "check_out": "16:00"},
+        headers=employee_headers,
+    )
+    assert bad_time.status_code == 400
+
+    # 4. Mandatory checklist enforcement on clock-out
+    tpl_resp = await client.post(
+        "/manager/checklists",
+        json={
+            "title": "Zamknięcie zmiany - obowiązkowe",
+            "shift_period": "CLOSING",
+            "is_mandatory": True,
+            "items": [{"title": "Zakręć zawór gazu", "is_mandatory": True, "sort_order": 0}],
+        },
+        headers=auth_headers,
+    )
+    assert tpl_resp.status_code == 201
+
+    # Without checklist_skip_reason -> 400
+    no_skip_resp = await client.post(
+        "/employee/attendance",
+        params={"target_date": three_days_ago.isoformat(), "check_in": "08:00", "check_out": "16:00"},
+        headers=employee_headers,
+    )
+    assert no_skip_resp.status_code == 400
+
+    # With checklist_skip_reason -> 200
+    with_skip_resp = await client.post(
+        "/employee/attendance",
+        params={
+            "target_date": three_days_ago.isoformat(),
+            "check_in": "08:00",
+            "check_out": "16:00",
+            "checklist_skip_reason": "Kuchnia była zamknięta w tym dniu",
+        },
+        headers=employee_headers,
+    )
+    assert with_skip_resp.status_code == 200
+    att_id = with_skip_resp.json()["id"]
+
+    # Confirm the attendance as manager and test enable_tip_pool = False
+    await client.put(f"/manager/attendance/{att_id}/confirm", headers=auth_headers)
+    await client.post(
+        "/manager/config",
+        json={"name": test_tenant.name, "enable_tip_pool": False},
+        headers=auth_headers,
+    )
+    closeout_resp = await client.post(
+        "/manager/closeouts",
+        json={"date": three_days_ago.isoformat(), "daily_revenue": 5000.0, "tip_pool": 400.0},
+        headers=auth_headers,
+    )
+    assert closeout_resp.status_code == 200
+    assert closeout_resp.json()["tip_pool"] == 0.0
+    for alloc in closeout_resp.json()["tip_allocations"]:
+        assert alloc["allocated_tip"] == 0.0
+

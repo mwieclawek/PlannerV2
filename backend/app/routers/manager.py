@@ -26,7 +26,7 @@ router = APIRouter(prefix="/manager", tags=["manager"])
 
 # --- Dependencies ---
 def get_manager_user(current_user: User = Depends(get_current_user)):
-    if current_user.role_system != RoleSystem.MANAGER:
+    if current_user.role_system not in (RoleSystem.MANAGER, RoleSystem.ADMIN):
         raise HTTPException(status_code=403, detail="Not a manager")
     return current_user
 
@@ -49,8 +49,17 @@ def create_role(
     return service.create_role(role_in)
 
 @router.get("/roles", response_model=List[JobRoleResponse])
-def get_roles(service: ManagerService = Depends(get_manager_service), _: User = Depends(get_current_user)):
-    return service.get_roles()
+def get_roles(
+    service: ManagerService = Depends(get_manager_service),
+    current_user: User = Depends(get_current_user),
+):
+    roles = service.get_roles()
+    if current_user.role_system in (RoleSystem.MANAGER, RoleSystem.ADMIN):
+        return roles
+    return [
+        JobRoleResponse(id=r.id, name=r.name, color_hex=r.color_hex, hourly_rate=None)
+        for r in roles
+    ]
 
 @router.put("/roles/{role_id}", response_model=JobRoleResponse)
 def update_role(
@@ -861,8 +870,8 @@ async def _resolve_export_manager(
     if not resolved_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    user = await verify_user_token(resolved_token, session)
-    if user.role_system != RoleSystem.MANAGER:
+    user = await verify_user_token( resolved_token, session)
+    if user.role_system not in (RoleSystem.MANAGER, RoleSystem.ADMIN):
         raise HTTPException(status_code=403, detail="Not authorized")
     if user.tenant_id is not None:
         set_current_tenant_id(user.tenant_id)

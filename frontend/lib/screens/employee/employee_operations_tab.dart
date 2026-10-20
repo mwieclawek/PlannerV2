@@ -192,7 +192,7 @@ class _EmployeeChecklistsHaccpSubTabState
                               border: Border.all(color: Colors.red.shade300),
                             ),
                             child: Text(
-                              'UWAGA: Temperatura poza normą (${selectedDevice.minTemp}..${selectedDevice.maxTemp} °C)! Wprowadź działanie korygujące.',
+                              'UWAGA: Temperatura poza normą (${selectedDevice.minTemp}..${selectedDevice.maxTemp} °C)! Wymagane jest działanie korygujące – manager zostanie automatycznie powiadomiony.',
                               style: TextStyle(
                                 color: Colors.red.shade800,
                                 fontSize: 12,
@@ -203,10 +203,15 @@ class _EmployeeChecklistsHaccpSubTabState
                           const SizedBox(height: 12),
                           TextField(
                             controller: correctiveCtrl,
-                            decoration: const InputDecoration(
+                            onChanged: (_) => setDialogState(() {}),
+                            decoration: InputDecoration(
                               labelText: 'Działanie korygujące *',
                               hintText: 'np. Regulacja termostatu / serwis',
-                              border: OutlineInputBorder(),
+                              border: const OutlineInputBorder(),
+                              errorText:
+                                  correctiveCtrl.text.trim().isEmpty
+                                      ? 'Wymagane przy przekroczeniu normy'
+                                      : null,
                             ),
                           ),
                         ],
@@ -222,7 +227,17 @@ class _EmployeeChecklistsHaccpSubTabState
                   FilledButton(
                     onPressed: () async {
                       if (tempVal == null) return;
-                      if (isOut && correctiveCtrl.text.trim().isEmpty) return;
+                      if (isOut && correctiveCtrl.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Przekroczono bezpieczny zakres temperatury! Podaj działanie korygujące.',
+                            ),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
                       await ref
                           .read(apiServiceProvider)
                           .createHaccpLog(

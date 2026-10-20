@@ -302,3 +302,296 @@ class EmployeeService:
             })
         return response
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  AttendanceConfig & Attendance Registration Enforcement
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def get_missing_attendance(
+        self,
+        current_user,
+        background_tasks=None,
+    ) -> dict:
+        from datetime import datetime, timedelta
+        from fastapi import HTTPException
+        from ..models import Attendance, Notification, RestaurantConfig
+        from .push_service import PushService, send_push_to_tokens
+
+        if current_user.tenant_id != self.tenant_id:
+            raise HTTPException(status_code=403, detail="Brak dostępu do zasobów innej restauracji")
+
+        config = self.session.get(RestaurantConfig, self.tenant_id)
+        if not config or not getattr(config, "require_attendance_registration", False):
+            return {
+                "require_attendance_registration": False,
+                "attendance_required_from": None,
+                "missing": [],
+            }
+
+        today = date.today()
+        now_dt = datetime.now()
+        cutoff_start = getattr(config, "attendance_required_from", None) or (today - timedelta(days=30))
+        if cutoff_start < today - timedelta(days=60):
+            cutoff_start = today - timedelta(days=60)
+
+        if cutoff_start > today:
+            return {
+                "require_attendance_registration": True,
+                "attendance_required_from": cutoff_start.isoformat(),
+                "missing": [],
+            }
+
+        schedules = self.session.exec(
+            select(Schedule).where(
+                Schedule.user_id == current_user.id,
+                Schedule.date >= cutoff_start,
+                Schedule.date <= today,
+                Schedule.is_published == True,
+            ).order_by(Schedule.date.desc())
+        ).all()
+
+        existing_att = self.session.exec(
+            select(Attendance.date).where(
+                Attendance.user_id == current_user.id,
+                Attendance.date >= cutoff_start,
+                Attendance.date <= today,
+            )
+        ).all()
+        registered_dates = set(existing_att)
+
+        missing = []
+        push_svc = PushService(self.session)
+        commit_needed = False
+
+        for sch in schedules:
+            if sch.date in registered_dates:
+                continue
+            shift = self.session.get(ShiftDefinition, sch.shift_def_id)
+            if not shift:
+                continue
+
+            start_dt = datetime.combine(sch.date, shift.start_time)
+            end_dt = datetime.combine(sch.date, shift.end_time)
+            if end_dt <= start_dt:
+                end_dt += timedelta(days=1)
+
+            if now_dt < end_dt + timedelta(minutes=30):
+                continue
+
+            role = self.session.get(JobRole, sch.role_id) if sch.role_id else None
+            missing.append({
+                "schedule_id": str(sch.id),
+                "date": sch.date.isoformat(),
+                "shift_name": shift.name,
+                "role_name": role.name if role else None,
+                "start_time": shift.start_time.strftime("%H:%M"),
+                "end_time": shift.end_time.strftime("%H:%M"),
+            })
+
+            notif_title = f"Brak rejestracji obecności ({sch.date.isoformat()})"
+            already_notified = self.session.exec(
+                select(Notification).where(
+                    Notification.user_id == current_user.id,
+                    Notification.title == notif_title,
+                )
+            ).first()
+            if not already_notified:
+                notif_body = (
+                    f"Minęło 30 minut od zakończenia Twojej zmiany '{shift.name}' "
+                    f"({shift.start_time.strftime('%H:%M')} - {shift.end_time.strftime('%H:%M')}) "
+                    f"w dniu {sch.date.isoformat()}. Prosimy o zarejestrowanie obecności lub zgłoszenie nieobecności."
+                )
+                self.session.add(
+                    Notification(
+                        user_id=current_user.id,
+                        title=notif_title,
+                        body=notif_body,
+                    )
+                )
+                commit_needed = True
+                tokens = push_svc._get_user_tokens(current_user.id)
+                if tokens and background_tasks is not None:
+                    background_tasks.add_task(send_push_to_tokens, tokens, notif_title, notif_body)
+
+        if commit_needed:
+            self.session.commit()
+
+        return {
+            "require_attendance_registration": True,
+            "attendance_required_from": (
+                config.attendance_required_from.isoformat()
+                if getattr(config, "attendance_required_from", None)
+                else None
+            ),
+            "missing": missing,
+        }
+
+    def get_attendance_defaults(self, current_user, target_date: date) -> dict:
+        from fastapi import HTTPException
+
+        if current_user.tenant_id != self.tenant_id:
+            raise HTTPException(status_code=403, detail="Brak dostępu do zasobów innej restauracji")
+
+        schedule = self.session.exec(
+            select(Schedule).where(
+                Schedule.user_id == current_user.id,
+                Schedule.date == target_date,
+            )
+        ).first()
+
+        if schedule:
+            shift = self.session.get(ShiftDefinition, schedule.shift_def_id)
+            return {
+                "scheduled": True,
+                "check_in": shift.start_time.strftime("%H:%M") if shift else None,
+                "check_out": shift.end_time.strftime("%H:%M") if shift else None,
+                "shift_name": shift.name if shift else None,
+            }
+        return {"scheduled": False, "check_in": None, "check_out": None, "shift_name": None}
+
+    def register_attendance(
+        self,
+        current_user,
+        target_date: date,
+        check_in: str = "00:00",
+        check_out: str = "00:00",
+        checklist_skip_reason: Optional[str] = None,
+        is_absent: bool = False,
+        absence_reason: Optional[str] = None,
+    ) -> dict:
+        from datetime import datetime, time, timedelta
+        from fastapi import HTTPException
+        from ..models import Attendance, AttendanceStatus, RestaurantConfig
+        from .operations_service import OperationsService
+
+        if current_user.tenant_id != self.tenant_id:
+            raise HTTPException(status_code=403, detail="Brak dostępu do zasobów innej restauracji")
+
+        today = date.today()
+        # 1. Block premature / future-date attendance registration
+        if target_date > today:
+            raise HTTPException(
+                status_code=400,
+                detail="Nie można rejestrować obecności dla przyszłych dat (przedwczesne odbicie).",
+            )
+        if target_date < today - timedelta(days=60):
+            raise HTTPException(
+                status_code=400,
+                detail="Nie można rejestrować obecności starszej niż 60 dni.",
+            )
+
+        # 2. Check if already registered for this date
+        existing = self.session.exec(
+            select(Attendance).where(
+                Attendance.user_id == current_user.id,
+                Attendance.date == target_date,
+            )
+        ).first()
+        if existing:
+            return {"error": "Attendance already registered for this date"}
+
+        # 3. Check if employee was scheduled on target_date
+        schedule = self.session.exec(
+            select(Schedule).where(
+                Schedule.user_id == current_user.id,
+                Schedule.date == target_date,
+            )
+        ).first()
+        was_scheduled = schedule is not None
+
+        if is_absent:
+            if not was_scheduled:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Nie można zgłosić nieobecności w dniu bez zaplanowanej zmiany w grafiku.",
+                )
+            if not absence_reason or not absence_reason.strip():
+                raise HTTPException(status_code=400, detail="Podaj powód nieobecności")
+            in_time = time(0, 0)
+            out_time = time(0, 0)
+            status = AttendanceStatus.CONFIRMED
+        else:
+            try:
+                in_time = datetime.strptime(check_in.strip(), "%H:%M").time()
+                out_time = datetime.strptime(check_out.strip(), "%H:%M").time()
+            except (ValueError, AttributeError):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Nieprawidłowy format godzin wejścia/wyjścia (wymagany HH:MM).",
+                )
+
+            if in_time == out_time:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Godzina wyjścia musi różnić się od godziny wejścia.",
+                )
+
+            # Enforce mandatory checklists on clock-out
+            ops = OperationsService(self.session, self.tenant_id)
+            validation = ops.validate_clockout_checklists(current_user, target_date)
+            if not validation["all_mandatory_completed"] and (
+                not checklist_skip_reason or not checklist_skip_reason.strip()
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Niewykonane obowiązkowe zadania z checklisty zamknięcia. Podaj powód pominięcia (checklist_skip_reason).",
+                )
+
+            status = AttendanceStatus.CONFIRMED if was_scheduled else AttendanceStatus.PENDING
+
+        attendance = Attendance(
+            user_id=current_user.id,
+            date=target_date,
+            check_in=in_time,
+            check_out=out_time,
+            was_scheduled=was_scheduled,
+            status=status,
+            schedule_id=schedule.id if schedule else None,
+            checklist_skip_reason=checklist_skip_reason.strip() if checklist_skip_reason else None,
+            is_absent=is_absent,
+            absence_reason=absence_reason.strip() if (is_absent and absence_reason) else None,
+        )
+        self.session.add(attendance)
+        self.session.commit()
+        self.session.refresh(attendance)
+
+        return {
+            "id": str(attendance.id),
+            "status": status.value,
+            "was_scheduled": was_scheduled,
+            "requires_approval": (not was_scheduled) and (not is_absent),
+            "checklist_skip_reason": attendance.checklist_skip_reason,
+            "is_absent": attendance.is_absent,
+            "absence_reason": attendance.absence_reason,
+        }
+
+    def get_my_attendance(self, current_user, start_date: date, end_date: date) -> List[dict]:
+        from fastapi import HTTPException
+        from ..models import Attendance
+
+        if current_user.tenant_id != self.tenant_id:
+            raise HTTPException(status_code=403, detail="Brak dostępu do zasobów innej restauracji")
+
+        attendances = self.session.exec(
+            select(Attendance).where(
+                Attendance.user_id == current_user.id,
+                Attendance.date >= start_date,
+                Attendance.date <= end_date,
+            )
+        ).all()
+
+        return [
+            {
+                "id": str(a.id),
+                "date": a.date.isoformat(),
+                "check_in": a.check_in.strftime("%H:%M"),
+                "check_out": a.check_out.strftime("%H:%M"),
+                "was_scheduled": a.was_scheduled,
+                "status": a.status.value,
+                "checklist_skip_reason": a.checklist_skip_reason,
+                "is_absent": bool(a.is_absent),
+                "absence_reason": a.absence_reason,
+            }
+            for a in attendances
+        ]
+
+

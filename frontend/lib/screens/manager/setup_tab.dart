@@ -290,7 +290,7 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
                                     labelText: 'Zamknięcie (HH:MM)',
                                     hintText: '22:00',
                                     border: OutlineInputBorder(),
-                                    prefixIcon: Icon(Icons.access_time_filled),
+                                    prefixIcon: Icon(Icons.watch_later),
                                   ),
                                 ),
                               ),

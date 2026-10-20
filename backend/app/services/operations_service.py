@@ -55,9 +55,10 @@ class OperationsService:
 
             tid = get_current_tenant_id()
             if not tid:
-                first_rest = session.exec(select(RestaurantConfig)).first()
-                if first_rest:
-                    tid = first_rest.id
+                raise HTTPException(
+                    status_code=403,
+                    detail="Brak przypisanej restauracji (tenant_id)",
+                )
             self.tenant_id = tid
         else:
             self.tenant_id = tenant_id
@@ -65,6 +66,19 @@ class OperationsService:
     # ═══════════════════════════════════════════════════════════════════════════
     #  Helpers
     # ═══════════════════════════════════════════════════════════════════════════
+
+    def _verify_user_tenant(self, user: User) -> None:
+        if user.tenant_id != self.tenant_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Brak dostępu do zasobów innej restauracji",
+            )
+
+    def _is_tip_pool_enabled(self) -> bool:
+        cfg = self.session.get(RestaurantConfig, self.tenant_id)
+        if cfg is None:
+            return True
+        return bool(getattr(cfg, "enable_tip_pool", True))
 
     @staticmethod
     def _calc_duration_hours(start_t: time, end_t: time, ref_date: Optional[date] = None) -> float:
@@ -86,12 +100,21 @@ class OperationsService:
             return float(user.hourly_rate)
         if role_id:
             role = self.session.get(JobRole, role_id)
-            if role and role.hourly_rate is not None and role.hourly_rate > 0:
+            if (
+                role
+                and role.tenant_id == self.tenant_id
+                and role.hourly_rate is not None
+                and role.hourly_rate > 0
+            ):
                 return float(role.hourly_rate)
         if user.hourly_rate is not None:
             return float(user.hourly_rate)
         for r in getattr(user, "job_roles", []) or []:
-            if r.hourly_rate is not None and r.hourly_rate > 0:
+            if (
+                getattr(r, "tenant_id", self.tenant_id) == self.tenant_id
+                and r.hourly_rate is not None
+                and r.hourly_rate > 0
+            ):
                 return float(r.hourly_rate)
         return 0.0
 
@@ -107,8 +130,9 @@ class OperationsService:
             )
         ).first()
 
+        tip_pool_enabled = self._is_tip_pool_enabled()
         daily_revenue = float(closeout.daily_revenue) if closeout else 0.0
-        tip_pool = float(closeout.tip_pool) if closeout else 0.0
+        tip_pool = (float(closeout.tip_pool) if closeout else 0.0) if tip_pool_enabled else 0.0
 
         # Confirmed attendances on target_date
         attendances = self.session.exec(
@@ -196,6 +220,7 @@ class OperationsService:
         }
 
     def upsert_daily_closeout(self, data: DailyCloseoutCreate, manager_id: UUID) -> dict:
+        tip_pool_val = data.tip_pool if self._is_tip_pool_enabled() else 0.0
         closeout = self.session.exec(
             select(DailyCloseout).where(
                 DailyCloseout.tenant_id == self.tenant_id,
@@ -205,7 +230,7 @@ class OperationsService:
 
         if closeout:
             closeout.daily_revenue = data.daily_revenue
-            closeout.tip_pool = data.tip_pool
+            closeout.tip_pool = tip_pool_val
             closeout.notes = data.notes
             closeout.updated_at = datetime.now(timezone.utc)
         else:
@@ -213,7 +238,7 @@ class OperationsService:
                 tenant_id=self.tenant_id,
                 date=data.date,
                 daily_revenue=data.daily_revenue,
-                tip_pool=data.tip_pool,
+                tip_pool=tip_pool_val,
                 notes=data.notes,
                 created_by=manager_id,
             )
@@ -327,13 +352,15 @@ class OperationsService:
             elif att.status == AttendanceStatus.PENDING:
                 emp_stats[att.user_id]["pending_hours"] += hrs
 
-        # Allocate tips per day
-        for d, closeout in closeout_by_date.items():
-            if closeout.tip_pool > 0 and daily_total_confirmed.get(d, 0.0) > 0:
-                day_tot = daily_total_confirmed[d]
-                for uid, u_hrs in daily_confirmed_by_user.get(d, {}).items():
-                    if uid in emp_stats:
-                        emp_stats[uid]["allocated_tips"] += float(closeout.tip_pool) * (u_hrs / day_tot)
+        # Allocate tips per day (only if tip pool is enabled in RestaurantConfig)
+        tip_pool_enabled = self._is_tip_pool_enabled()
+        if tip_pool_enabled:
+            for d, closeout in closeout_by_date.items():
+                if closeout.tip_pool > 0 and daily_total_confirmed.get(d, 0.0) > 0:
+                    day_tot = daily_total_confirmed[d]
+                    for uid, u_hrs in daily_confirmed_by_user.get(d, {}).items():
+                        if uid in emp_stats:
+                            emp_stats[uid]["allocated_tips"] += float(closeout.tip_pool) * (u_hrs / day_tot)
 
         items = []
         total_confirmed_hours = 0.0
@@ -389,8 +416,10 @@ class OperationsService:
         }
 
     def get_employee_monthly_earnings(self, user: User, year: int, month: int) -> dict:
+        self._verify_user_tenant(user)
         first_day = date(year, month, 1)
         last_day = date(year, month, monthrange(year, month)[1])
+        tip_pool_enabled = self._is_tip_pool_enabled()
 
         # Compute full monthly context to get accurate tip pool shares per day
         attendances_all = self.session.exec(
@@ -422,8 +451,10 @@ class OperationsService:
 
         my_attendances = self.session.exec(
             select(Attendance)
+            .join(User, Attendance.user_id == User.id)
             .where(
                 Attendance.user_id == user.id,
+                User.tenant_id == self.tenant_id,
                 Attendance.date >= first_day,
                 Attendance.date <= last_day,
             )
@@ -454,7 +485,7 @@ class OperationsService:
                 base_pay += day_base
                 c = closeout_by_date.get(att.date)
                 tot_day_hrs = daily_total_confirmed.get(att.date, 0.0)
-                if c and c.tip_pool > 0 and tot_day_hrs > 0:
+                if tip_pool_enabled and c and c.tip_pool > 0 and tot_day_hrs > 0:
                     day_tip = float(c.tip_pool) * (hrs / tot_day_hrs)
                     allocated_tips += day_tip
             elif att.status == AttendanceStatus.PENDING and not is_abs:
@@ -740,6 +771,7 @@ class OperationsService:
         return applicable
 
     def get_employee_checklists(self, user: User, target_date: date) -> List[dict]:
+        self._verify_user_tenant(user)
         templates = self._get_applicable_templates_for_user(user, target_date)
         completions = self.session.exec(
             select(ChecklistCompletion).where(
@@ -795,9 +827,10 @@ class OperationsService:
         self,
         user: User,
         item_id: UUID,
-        target_date: date,
+        target_date: Optional[date] = None,
         is_completed: Optional[bool] = None,
     ) -> dict:
+        self._verify_user_tenant(user)
         item = self.session.get(ChecklistTemplateItem, item_id)
         if not item:
             raise HTTPException(status_code=404, detail="Checklist item not found")
@@ -805,11 +838,20 @@ class OperationsService:
         if not tpl or tpl.tenant_id != self.tenant_id:
             raise HTTPException(status_code=404, detail="Checklist template not found")
 
+        # Server-side timestamp enforcement: completed_at is always generated on the server (UTC)
+        effective_date = target_date or date.today()
+        if effective_date > date.today():
+            raise HTTPException(
+                status_code=400,
+                detail="Nie można odhaczać punktów checklisty dla przyszłych dat.",
+            )
+        server_now = datetime.now(timezone.utc)
+
         existing = self.session.exec(
             select(ChecklistCompletion).where(
                 ChecklistCompletion.tenant_id == self.tenant_id,
                 ChecklistCompletion.item_id == item.id,
-                ChecklistCompletion.date == target_date,
+                ChecklistCompletion.date == effective_date,
             )
         ).first()
 
@@ -818,7 +860,7 @@ class OperationsService:
         if existing:
             existing.is_completed = new_state
             existing.user_id = user.id
-            existing.completed_at = datetime.now(timezone.utc)
+            existing.completed_at = server_now
             self.session.add(existing)
             comp = existing
         else:
@@ -826,10 +868,10 @@ class OperationsService:
                 tenant_id=self.tenant_id,
                 template_id=tpl.id,
                 item_id=item.id,
-                date=target_date,
+                date=effective_date,
                 user_id=user.id,
                 is_completed=new_state,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=server_now,
             )
             self.session.add(comp)
 
@@ -848,6 +890,7 @@ class OperationsService:
         }
 
     def validate_clockout_checklists(self, user: User, target_date: date) -> dict:
+        self._verify_user_tenant(user)
         checklists = self.get_employee_checklists(user, target_date)
         missing_items = []
         for cl in checklists:
@@ -901,6 +944,7 @@ class OperationsService:
         self.session.commit()
 
     def create_haccp_log(self, user: User, data: HaccpLogCreate) -> dict:
+        self._verify_user_tenant(user)
         device_name = data.device_name
         min_temp = data.min_temp
         max_temp = data.max_temp
@@ -918,6 +962,8 @@ class OperationsService:
         if not device_name or not device_name.strip():
             raise HTTPException(status_code=400, detail="device_name or valid device_id is required")
 
+        action_note = (data.corrective_action or getattr(data, "notes", None) or "").strip() or None
+
         is_within_norm = True
         if data.log_type == HaccpLogType.TEMPERATURE:
             if data.measured_temp is None:
@@ -927,6 +973,14 @@ class OperationsService:
             if max_temp is not None and data.measured_temp > max_temp:
                 is_within_norm = False
 
+            if not is_within_norm and not action_note:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Przekroczono bezpieczny zakres temperatury! Wymagane jest podanie działania korygującego (corrective_action).",
+                )
+
+        # Always generate server-side UTC timestamp (never trust client payload)
+        server_now = datetime.now(timezone.utc)
         log_entry = HaccpLog(
             tenant_id=self.tenant_id,
             log_type=data.log_type,
@@ -936,11 +990,47 @@ class OperationsService:
             max_temp=max_temp,
             measured_temp=data.measured_temp,
             is_within_norm=is_within_norm,
-            corrective_action=data.corrective_action,
+            corrective_action=action_note,
             user_id=user.id,
-            created_at=datetime.now(timezone.utc),
+            created_at=server_now,
         )
         self.session.add(log_entry)
+
+        # Notify restaurant managers when a HACCP temperature violation occurs
+        if not is_within_norm:
+            managers = self.session.exec(
+                select(User).where(
+                    User.tenant_id == self.tenant_id,
+                    User.role_system.in_([RoleSystem.MANAGER, RoleSystem.ADMIN]),
+                    User.is_active == True,
+                )
+            ).all()
+            push_svc = PushService(self.session)
+            alert_title = f"Alarm HACCP: Przekroczenie temperatury ({device_name.strip()})"
+            norm_str = f"{min_temp if min_temp is not None else '-'}..{max_temp if max_temp is not None else '-'}°C"
+            alert_body = (
+                f"Urządzenie {device_name.strip()}: zmierzono {data.measured_temp}°C "
+                f"(norma: {norm_str}). Działanie: {action_note}"
+            )
+            mgr_tokens: List[str] = []
+            for mgr in managers:
+                self.session.add(
+                    Notification(
+                        user_id=mgr.id,
+                        title=alert_title,
+                        body=alert_body,
+                    )
+                )
+                mgr_tokens.extend(push_svc._get_user_tokens(mgr.id))
+            if mgr_tokens:
+                send_push_to_tokens(
+                    mgr_tokens,
+                    alert_title,
+                    alert_body,
+                    {"type": "HACCP_ALERT", "log_id": str(log_entry.id)},
+                    session=self.session,
+                )
+
         self.session.commit()
         self.session.refresh(log_entry)
 
@@ -1076,6 +1166,7 @@ class OperationsService:
         data: AnnouncementCreate,
         background_tasks: Optional[BackgroundTasks] = None,
     ) -> dict:
+        self._verify_user_tenant(author)
         ann = Announcement(
             tenant_id=self.tenant_id,
             author_id=author.id,
@@ -1103,6 +1194,8 @@ class OperationsService:
 
         all_tokens: List[str] = []
         for emp in active_employees:
+            if emp.tenant_id != self.tenant_id:
+                continue
             self.session.add(
                 Notification(
                     user_id=emp.id,
@@ -1141,7 +1234,8 @@ class OperationsService:
         author = self.session.get(User, ann.author_id)
         receipts = self.session.exec(
             select(AnnouncementReadReceipt).where(
-                AnnouncementReadReceipt.announcement_id == ann.id
+                AnnouncementReadReceipt.announcement_id == ann.id,
+                AnnouncementReadReceipt.tenant_id == self.tenant_id,
             )
         ).all()
         receipt_by_user = {r.user_id: r for r in receipts}
@@ -1163,12 +1257,12 @@ class OperationsService:
                     "read_at": None,
                 })
 
-        # Also include any non-active or manager readers who confirmed
+        # Also include any non-active or manager readers who confirmed within the same tenant
         active_ids = {e.id for e in active_employees}
         for r in receipts:
             if r.user_id not in active_ids:
                 u = self.session.get(User, r.user_id)
-                if u:
+                if u and u.tenant_id == self.tenant_id:
                     read_by.append({
                         "user_id": u.id,
                         "user_name": u.full_name,
@@ -1227,6 +1321,7 @@ class OperationsService:
         self.session.commit()
 
     def get_employee_announcements(self, user: User) -> List[dict]:
+        self._verify_user_tenant(user)
         announcements = self.session.exec(
             select(Announcement)
             .where(Announcement.tenant_id == self.tenant_id)
@@ -1267,6 +1362,7 @@ class OperationsService:
         return items
 
     def mark_announcement_read(self, user: User, announcement_id: UUID) -> dict:
+        self._verify_user_tenant(user)
         ann = self.session.get(Announcement, announcement_id)
         if not ann or ann.tenant_id != self.tenant_id:
             raise HTTPException(status_code=404, detail="Announcement not found")
@@ -1275,6 +1371,7 @@ class OperationsService:
             select(AnnouncementReadReceipt).where(
                 AnnouncementReadReceipt.announcement_id == ann.id,
                 AnnouncementReadReceipt.user_id == user.id,
+                AnnouncementReadReceipt.tenant_id == self.tenant_id,
             )
         ).first()
 

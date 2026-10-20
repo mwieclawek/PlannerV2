@@ -537,6 +537,204 @@ async def test_multi_tenant_isolation_and_rbac_for_new_modules(
     # Manager B cannot view receipts or delete Tenant A's announcement
     b_receipts = await client.get(f"/manager/announcements/{tenant_a_ann_id}/receipts", headers=mgr_b_headers)
     assert b_receipts.status_code == 404
+    b_del_ann = await client.delete(f"/manager/announcements/{tenant_a_ann_id}", headers=mgr_b_headers)
+    assert b_del_ann.status_code == 404
+
+    # Create a checklist template and HACCP device in Tenant A
+    tpl_resp = await client.post(
+        "/manager/checklists",
+        json={
+            "title": "Tenant A Checklist",
+            "shift_period": "OPENING",
+            "is_mandatory": True,
+            "items": [{"title": "Tenant A Item", "is_mandatory": True, "sort_order": 0}],
+        },
+        headers=auth_headers,
+    )
+    assert tpl_resp.status_code == 201
+    tenant_a_tpl_id = tpl_resp.json()["id"]
+    tenant_a_item_id = tpl_resp.json()["items"][0]["id"]
+
+    dev_resp = await client.post(
+        "/manager/haccp/devices",
+        json={"name": "Tenant A Fridge", "min_temp": 0.0, "max_temp": 4.0},
+        headers=auth_headers,
+    )
+    assert dev_resp.status_code == 201
+    tenant_a_dev_id = dev_resp.json()["id"]
+
+    # Create Employee B in Tenant B
+    emp_b = User(
+        tenant_id=tenant_b.id,
+        username="employee_b",
+        password_hash=get_password_hash("secret"),
+        full_name="Employee B",
+        role_system=RoleSystem.EMPLOYEE,
+    )
+    session.add(emp_b)
+    session.commit()
+    session.refresh(emp_b)
+    emp_b_token = create_access_token(data={"sub": emp_b.username, "tenant_id": str(tenant_b.id)})
+    emp_b_headers = {"Authorization": f"Bearer {emp_b_token}"}
+
+    # Cross-Tenant IDOR checks: Tenant B cannot toggle Tenant A's checklist item, log to Tenant A's HACCP device, or mark Tenant A's announcement as read
+    idor_toggle = await client.post(f"/employee/checklists/items/{tenant_a_item_id}/toggle", headers=emp_b_headers)
+    assert idor_toggle.status_code == 404
+
+    idor_haccp = await client.post(
+        "/employee/haccp/logs",
+        json={"log_type": "TEMPERATURE", "device_id": tenant_a_dev_id, "measured_temp": 2.0},
+        headers=emp_b_headers,
+    )
+    assert idor_haccp.status_code == 404
+
+    idor_ann_read = await client.post(f"/employee/announcements/{tenant_a_ann_id}/read", headers=emp_b_headers)
+    assert idor_ann_read.status_code == 404
+
+    # Manager B cannot update or delete Tenant A's checklist template or HACCP device
+    idor_del_tpl = await client.delete(f"/manager/checklists/{tenant_a_tpl_id}", headers=mgr_b_headers)
+    assert idor_del_tpl.status_code == 404
+
+    idor_del_dev = await client.delete(f"/manager/haccp/devices/{tenant_a_dev_id}", headers=mgr_b_headers)
+    assert idor_del_dev.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_payroll_security_no_hourly_rate_leakage_to_employees(
+    client: AsyncClient,
+    session: Session,
+    auth_headers: dict,
+    employee_headers: dict,
+    test_tenant: RestaurantConfig,
+):
+    """Ensure hourly_rate and payroll summaries never leak to other employees on shared endpoints."""
+    role_resp = await client.post(
+        "/manager/roles",
+        json={"name": "Szef Kuchni", "color_hex": "#FF5722", "hourly_rate": 45.0},
+        headers=auth_headers,
+    )
+    assert role_resp.status_code == 200
+    assert role_resp.json()["hourly_rate"] == 45.0
+
+    # Manager sees hourly_rate on GET /manager/roles
+    mgr_roles = await client.get("/manager/roles", headers=auth_headers)
+    assert mgr_roles.status_code == 200
+    assert any(r["hourly_rate"] == 45.0 for r in mgr_roles.json())
+
+    # Employee calling GET /manager/roles gets hourly_rate masked (None)
+    emp_roles = await client.get("/manager/roles", headers=employee_headers)
+    assert emp_roles.status_code == 200
+    for r in emp_roles.json():
+        assert r["hourly_rate"] is None
+
+    # Employee cannot access full payroll or closeout endpoints
+    today_iso = date.today().isoformat()
+    assert (await client.get(f"/manager/payroll?year={date.today().year}&month={date.today().month}", headers=employee_headers)).status_code == 403
+    assert (await client.get(f"/manager/closeouts/{today_iso}", headers=employee_headers)).status_code == 403
+    assert (await client.get(f"/manager/payroll/export/csv?year={date.today().year}&month={date.today().month}", headers=employee_headers)).status_code == 403
+    assert (await client.get(f"/manager/payroll/export/pdf?year={date.today().year}&month={date.today().month}", headers=employee_headers)).status_code == 403
+
+    # Shared schedule endpoints do not expose hourly_rate
+    all_sched = await client.get(
+        f"/employee/schedules/all?start_date={today_iso}&end_date={today_iso}",
+        headers=employee_headers,
+    )
+    assert all_sched.status_code == 200
+    for item in all_sched.json():
+        assert "hourly_rate" not in item
+        assert "base_pay" not in item
+
+
+@pytest.mark.asyncio
+async def test_haccp_and_checklist_timestamp_integrity_and_violation_alerts(
+    client: AsyncClient,
+    session: Session,
+    auth_headers: dict,
+    employee_headers: dict,
+):
+    """
+    Verify:
+    1. Out-of-norm HACCP temperature without corrective_action is rejected (400).
+    2. Out-of-norm HACCP temperature with corrective_action succeeds and notifies the manager.
+    3. Client attempts to backdate created_at / completed_at in HACCP and Checklist payloads are ignored.
+    """
+    from app.models import Notification
+    from sqlmodel import select
+
+    manager_user = session.exec(select(User).where(User.username == "manager_test")).first()
+    assert manager_user is not None
+
+    dev_resp = await client.post(
+        "/manager/haccp/devices",
+        json={"name": "Chłodnia mięsna", "min_temp": 0.0, "max_temp": 4.0},
+        headers=auth_headers,
+    )
+    assert dev_resp.status_code == 201
+    device_id = dev_resp.json()["id"]
+
+    # 1. Out-of-norm temperature WITHOUT corrective_action must be rejected (400)
+    bad_haccp = await client.post(
+        "/employee/haccp/logs",
+        json={
+            "log_type": "TEMPERATURE",
+            "device_id": device_id,
+            "measured_temp": 9.5,
+            "corrective_action": "   ",
+        },
+        headers=employee_headers,
+    )
+    assert bad_haccp.status_code == 400
+
+    # 2. Out-of-norm temperature WITH corrective_action (and attempted backdated created_at) succeeds
+    #    and ignores the backdated timestamp, while creating a manager Notification
+    ok_haccp = await client.post(
+        "/employee/haccp/logs",
+        json={
+            "log_type": "TEMPERATURE",
+            "device_id": device_id,
+            "measured_temp": 9.5,
+            "corrective_action": "Przeniesiono towar do chłodni zapasowej i wezwano serwis",
+            "created_at": "2020-01-01T00:00:00Z",
+        },
+        headers=employee_headers,
+    )
+    assert ok_haccp.status_code == 201
+    log_data = ok_haccp.json()
+    assert log_data["is_within_norm"] is False
+    assert not log_data["created_at"].startswith("2020-")
+    assert log_data["created_at"].startswith(str(date.today().year))
+
+    mgr_notifs = session.exec(
+        select(Notification).where(
+            Notification.user_id == manager_user.id,
+        )
+    ).all()
+    assert any("Alarm HACCP" in n.title and "Chłodnia mięsna" in n.body for n in mgr_notifs)
+
+    # 3. Checklist item toggle ignores backdated date and completed_at in payload
+    tpl_resp = await client.post(
+        "/manager/checklists",
+        json={
+            "title": "Test Integrity Checklist",
+            "shift_period": "OPENING",
+            "is_mandatory": True,
+            "items": [{"title": "Sprawdź plomby", "is_mandatory": True, "sort_order": 0}],
+        },
+        headers=auth_headers,
+    )
+    assert tpl_resp.status_code == 201
+    item_id = tpl_resp.json()["items"][0]["id"]
+
+    toggle_resp = await client.post(
+        f"/employee/checklists/items/{item_id}/toggle",
+        json={"date": "2020-01-01", "completed_at": "2020-01-01T05:00:00Z", "is_completed": True},
+        headers=employee_headers,
+    )
+    assert toggle_resp.status_code == 200
+    t_data = toggle_resp.json()
+    assert t_data["is_completed"] is True
+    assert not t_data["completed_at"].startswith("2020-")
+    assert t_data["completed_at"].startswith(str(date.today().year))
 
 
 def test_push_service_in_memory_json_credentials(monkeypatch):
@@ -556,4 +754,5 @@ def test_push_service_in_memory_json_credentials(monkeypatch):
     mock_cert.assert_called_once_with({"type": "service_account", "project_id": "test-proj"})
     mock_init.assert_called_once_with("mock-cred-obj")
     monkeypatch.setattr(push_service, "firebase_initialized", False)
+
 

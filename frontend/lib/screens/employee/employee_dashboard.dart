@@ -744,7 +744,10 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
       appBar: AppBar(
         title: Text(
           appBarTitle,
-          style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
@@ -998,8 +1001,8 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
           label: 'Dostępność',
         ),
         const HoverSidebarDestination(
-          icon: Icon(Icons.access_time_outlined),
-          selectedIcon: Icon(Icons.access_time_filled),
+          icon: Icon(Icons.access_time),
+          selectedIcon: Icon(Icons.watch_later),
           label: 'Obecność',
         ),
         HoverSidebarDestination(
