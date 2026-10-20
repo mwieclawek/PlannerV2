@@ -24,11 +24,13 @@ class FakeAuthNotifier extends StateNotifier<AsyncValue<User?>> implements AuthN
   ));
   
   @override
-  Future<void> login(String username, String password, {String? tenantSlug}) async {}
+  Future<void> login(String username, String password, {String? tenantSlug, bool rememberMe = true}) async {}
   @override
   Future<void> register(String username, String password, String fullName, String roleSystem, {String? managerPin}) async {}
   @override
   Future<void> logout() async {}
+  @override
+  Future<User?> refreshUser() async => state.value;
 }
 
 @GenerateMocks([ApiService])
@@ -42,6 +44,8 @@ void main() {
 
   testWidgets('Toggling "Cała załoga" loads team schedule', (WidgetTester tester) async {
     // Stub API responses
+    when(mockApiService.getMissingAttendance())
+        .thenAnswer((_) async => {'missing': []});
     when(mockApiService.getEmployeeSchedule(any, any))
         .thenAnswer((_) async => [
               EmployeeScheduleEntry(

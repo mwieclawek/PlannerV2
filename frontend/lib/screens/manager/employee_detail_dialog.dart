@@ -150,6 +150,18 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
           'Kliknij edytuj, aby zarządzać',
           onTap: widget.onEditRoles,
         ),
+        const SizedBox(height: 8),
+        _buildInfoRow(
+          Icons.payments_outlined,
+          'Stawka godzinowa',
+          widget.user.hourlyRate != null
+              ? '${widget.user.hourlyRate!.toStringAsFixed(2)} PLN/h'
+              : 'Nie ustawiono (kliknij, aby dodać)',
+          onTap: () {
+            Navigator.pop(context);
+            widget.onEdit();
+          },
+        ),
         if (widget.user.targetHoursPerMonth != null ||
             widget.user.targetShiftsPerMonth != null) ...[
           const SizedBox(height: 8),
@@ -157,6 +169,10 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
             Icons.track_changes,
             'Cele miesięczne',
             '${widget.user.targetHoursPerMonth ?? "-"}h / ${widget.user.targetShiftsPerMonth ?? "-"} zmian',
+            onTap: () {
+              Navigator.pop(context);
+              widget.onEdit();
+            },
           ),
         ],
         const SizedBox(height: 8),

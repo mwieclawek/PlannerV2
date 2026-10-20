@@ -139,16 +139,36 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
     }
   }
 
-  Future<void> login(String username, String password, {String? tenantSlug}) async {
+  Future<void> login(
+    String username,
+    String password, {
+    String? tenantSlug,
+    bool rememberMe = true,
+  }) async {
     state = const AsyncValue.loading();
     try {
-      await _api.login(username, password, tenantSlug: tenantSlug);
+      await _api.login(
+        username,
+        password,
+        tenantSlug: tenantSlug,
+        rememberMe: rememberMe,
+      );
       final user = await _api.getCurrentUser();
       state = AsyncValue.data(user);
       _pushService.initialize();
     } catch (e) {
       state = const AsyncValue.data(null);
       rethrow; // Rethrow so UI can show SnackBar
+    }
+  }
+
+  Future<User?> refreshUser() async {
+    try {
+      final user = await _api.getCurrentUser();
+      state = AsyncValue.data(user);
+      return user;
+    } catch (e) {
+      return state.valueOrNull;
     }
   }
 
@@ -203,5 +223,21 @@ final posEnabledProvider = FutureProvider<bool>((ref) async {
     return config['pos_enabled'] == true;
   } catch (e) {
     return false;
+  }
+});
+
+// Tip Pool enabled flag (works for both Manager and Employee)
+final tipPoolEnabledProvider = FutureProvider.autoDispose<bool>((ref) async {
+  final api = ref.watch(apiServiceProvider);
+  try {
+    final cfg = await api.getEmployeeRestaurantConfig();
+    return cfg['enable_tip_pool'] != false;
+  } catch (_) {
+    try {
+      final cfg = await api.getConfig();
+      return cfg['enable_tip_pool'] != false;
+    } catch (_) {
+      return true;
+    }
   }
 });

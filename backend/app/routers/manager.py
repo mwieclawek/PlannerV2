@@ -303,7 +303,9 @@ def get_pending_attendance(
         "check_out": a.check_out.strftime("%H:%M"),
         "was_scheduled": a.was_scheduled,
         "status": a.status.value,
-        "checklist_skip_reason": a.checklist_skip_reason
+        "checklist_skip_reason": a.checklist_skip_reason,
+        "is_absent": bool(a.is_absent),
+        "absence_reason": a.absence_reason,
     } for a in attendances]
 
 @router.put("/attendance/{attendance_id}/confirm")
@@ -393,7 +395,7 @@ async def export_attendance_pdf(
     # Calculate hours
     hours_map = {}
     for att in attendances:
-        if att.status == AttendanceStatus.CONFIRMED:
+        if att.status == AttendanceStatus.CONFIRMED and not getattr(att, "is_absent", False):
             start_dt = datetime.combine(att.date, att.check_in)
             end_dt = datetime.combine(att.date, att.check_out)
             if end_dt <= start_dt:
@@ -446,7 +448,10 @@ async def export_attendance_pdf(
             
         p.drawString(50, y, att.user.full_name)
         p.drawString(200, y, str(att.date))
-        p.drawString(300, y, f"{att.check_in.strftime('%H:%M')} - {att.check_out.strftime('%H:%M')}")
+        if getattr(att, "is_absent", False):
+            p.drawString(300, y, "NIEOBECNY")
+        else:
+            p.drawString(300, y, f"{att.check_in.strftime('%H:%M')} - {att.check_out.strftime('%H:%M')}")
         p.drawString(400, y, att.status.value)
         y -= 15
         
@@ -522,7 +527,9 @@ def get_all_attendance(
         "check_out": a.check_out.strftime("%H:%M"),
         "was_scheduled": a.was_scheduled,
         "status": a.status.value,
-        "checklist_skip_reason": a.checklist_skip_reason
+        "checklist_skip_reason": a.checklist_skip_reason,
+        "is_absent": bool(a.is_absent),
+        "absence_reason": a.absence_reason,
     } for a in attendances]
 
 @router.post("/attendance", response_model=AttendanceResponse)

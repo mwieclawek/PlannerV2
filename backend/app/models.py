@@ -33,6 +33,9 @@ class RestaurantConfig(SQLModel, table=True):
     slug: str = Field(unique=True, index=True)  # URL-safe identifier/code, e.g. "bella-italia"
     address: Optional[str] = None
     pos_enabled: bool = Field(default=False)
+    require_attendance_registration: bool = Field(default=False)
+    attendance_required_from: Optional[date_type] = Field(default=None, sa_column=Column(Date, nullable=True))
+    enable_tip_pool: bool = Field(default=True)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -249,6 +252,8 @@ class Attendance(SQLModel, table=True):
     status: AttendanceStatus = Field(default=AttendanceStatus.CONFIRMED)
     schedule_id: Optional[UUID] = Field(default=None, foreign_key="schedule.id")
     checklist_skip_reason: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
+    is_absent: bool = Field(default=False)
+    absence_reason: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     user: User = Relationship()

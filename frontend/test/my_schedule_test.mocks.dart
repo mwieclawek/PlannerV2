@@ -150,12 +150,13 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
     String? email,
     String? password, {
     String? tenantSlug,
+    bool? rememberMe = true,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #login,
               [email, password],
-              {#tenantSlug: tenantSlug},
+              {#tenantSlug: tenantSlug, #rememberMe: rememberMe},
             ),
             returnValue: _i6.Future<String>.value(
               _i5.dummyValue<String>(
@@ -163,7 +164,7 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
                 Invocation.method(
                   #login,
                   [email, password],
-                  {#tenantSlug: tenantSlug},
+                  {#tenantSlug: tenantSlug, #rememberMe: rememberMe},
                 ),
               ),
             ),
@@ -446,6 +447,7 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
     double? hourlyRate,
     bool? isActive,
     bool? clearTargets = false,
+    bool? clearHourlyRate = false,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
@@ -460,6 +462,7 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
                 #hourlyRate: hourlyRate,
                 #isActive: isActive,
                 #clearTargets: clearTargets,
+                #clearHourlyRate: clearHourlyRate,
               },
             ),
             returnValue: _i6.Future<void>.value(),
@@ -702,17 +705,47 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
     String? openingHours,
     String? address, {
     bool? posEnabled,
+    bool? requireAttendanceRegistration,
+    String? attendanceRequiredFrom,
+    bool? clearAttendanceRequiredFrom = false,
+    bool? enableTipPool,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #saveConfig,
               [name, openingHours, address],
-              {#posEnabled: posEnabled},
+              {
+                #posEnabled: posEnabled,
+                #requireAttendanceRegistration: requireAttendanceRegistration,
+                #attendanceRequiredFrom: attendanceRequiredFrom,
+                #clearAttendanceRequiredFrom: clearAttendanceRequiredFrom,
+                #enableTipPool: enableTipPool,
+              },
             ),
             returnValue: _i6.Future<void>.value(),
             returnValueForMissingStub: _i6.Future<void>.value(),
           )
           as _i6.Future<void>);
+
+  @override
+  _i6.Future<Map<String, dynamic>> getEmployeeRestaurantConfig() =>
+      (super.noSuchMethod(
+            Invocation.method(#getEmployeeRestaurantConfig, []),
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i6.Future<Map<String, dynamic>>);
+
+  @override
+  _i6.Future<Map<String, dynamic>> getMissingAttendance() =>
+      (super.noSuchMethod(
+            Invocation.method(#getMissingAttendance, []),
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
   _i6.Future<List<_i3.TeamAvailability>> getTeamAvailability(
@@ -743,12 +776,18 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
     String? checkIn,
     String? checkOut, {
     String? checklistSkipReason,
+    bool? isAbsent = false,
+    String? absenceReason,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
               #registerAttendance,
               [date, checkIn, checkOut],
-              {#checklistSkipReason: checklistSkipReason},
+              {
+                #checklistSkipReason: checklistSkipReason,
+                #isAbsent: isAbsent,
+                #absenceReason: absenceReason,
+              },
             ),
             returnValue: _i6.Future<Map<String, dynamic>>.value(
               <String, dynamic>{},

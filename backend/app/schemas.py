@@ -103,6 +103,10 @@ class UserUpdate(BaseModel):
     class Config:
         from_attributes = True
 
+class UserProfileUpdate(BaseModel):
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+
 # --- New Features Schemas ---
 
 class NextShiftInfo(BaseModel):
@@ -122,6 +126,7 @@ class UserResponse(UserBase):
     id: UUID
     created_at: datetime
     job_roles: List[int] = []
+    job_role_names: List[str] = []
     next_shift: Optional[NextShiftInfo] = None
     tenant_id: Optional[int] = None
     tenant_slug: Optional[str] = None
@@ -146,10 +151,12 @@ class UserResponse(UserBase):
         if hasattr(data, 'job_roles'):
             roles = data.job_roles
             if roles and hasattr(roles[0], 'id'):
+                data.__dict__['job_role_names'] = [r.name for r in roles if hasattr(r, 'name')]
                 data.__dict__['job_roles'] = [r.id for r in roles]
         elif isinstance(data, dict) and 'job_roles' in data:
             roles = data['job_roles']
             if roles and hasattr(roles[0], 'id'):
+                data['job_role_names'] = [r.name for r in roles if hasattr(r, 'name')]
                 data['job_roles'] = [r.id for r in roles]
         return data
 
@@ -358,10 +365,16 @@ class ConfigUpdate(BaseModel):
     opening_hours: Optional[str] = None
     address: Optional[str] = None
     pos_enabled: Optional[bool] = None
+    require_attendance_registration: Optional[bool] = None
+    attendance_required_from: Optional[date_type] = None
+    enable_tip_pool: Optional[bool] = None
 
 class ConfigResponse(ConfigBase):
     id: int
     pos_enabled: bool = False
+    require_attendance_registration: bool = False
+    attendance_required_from: Optional[date_type] = None
+    enable_tip_pool: bool = True
     tenant_id: Optional[int] = None
 
     @model_validator(mode='before')
@@ -376,7 +389,17 @@ class ConfigResponse(ConfigBase):
                     "close": h.close_time.strftime("%H:%M")
                 }
             if not isinstance(data, dict):
-                data.__dict__['opening_hours'] = json.dumps(hours_dict)
+                return {
+                    "id": getattr(data, "id", None),
+                    "name": getattr(data, "name", ""),
+                    "opening_hours": json.dumps(hours_dict),
+                    "address": getattr(data, "address", None),
+                    "pos_enabled": getattr(data, "pos_enabled", False),
+                    "require_attendance_registration": getattr(data, "require_attendance_registration", False),
+                    "attendance_required_from": getattr(data, "attendance_required_from", None),
+                    "enable_tip_pool": getattr(data, "enable_tip_pool", True),
+                    "tenant_id": getattr(data, "tenant_id", getattr(data, "id", None)),
+                }
         return data
 
     class Config:
@@ -445,6 +468,8 @@ class AttendanceBase(BaseModel):
     status: AttendanceStatus = AttendanceStatus.CONFIRMED
     schedule_id: Optional[UUID] = None
     checklist_skip_reason: Optional[str] = None
+    is_absent: bool = False
+    absence_reason: Optional[str] = None
 
 class AttendanceCreate(AttendanceBase):
     pass

@@ -20,6 +20,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _rememberMe = true;
 
   @override
   void dispose() {
@@ -48,6 +49,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             tenantSlug: _tenantSlugController.text.trim().isNotEmpty 
                 ? _tenantSlugController.text.trim() 
                 : null,
+            rememberMe: _rememberMe,
           );
       TextInput.finishAutofillContext();
     } catch (e) {
@@ -200,10 +202,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 autofillHints: const [AutofillHints.password],
                                 onSubmitted: (_) => _submit(),
                               ),
+                              const SizedBox(height: 8),
+                              CheckboxListTile(
+                                value: _rememberMe,
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => _rememberMe = val);
+                                  }
+                                },
+                                title: const Text(
+                                  'Nie wylogowuj mnie',
+                                  style: TextStyle(fontSize: 14),
+                                ),
+                                contentPadding: EdgeInsets.zero,
+                                controlAffinity: ListTileControlAffinity.leading,
+                                dense: true,
+                              ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
                           height: 50,

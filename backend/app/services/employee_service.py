@@ -108,19 +108,22 @@ class EmployeeService:
 
         try:
             response = httpx.post(token_url, data=data, timeout=15.0)
+            if response.status_code == 400 and redirect_uri != "postmessage":
+                # Web popup GIS code client always uses redirect_uri="postmessage"
+                data["redirect_uri"] = "postmessage"
+                response = httpx.post(token_url, data=data, timeout=15.0)
             response.raise_for_status()
             token_data = response.json()
             
             user.google_access_token = token_data.get("access_token")
             # Refresh token is returned only when the consent URL used access_type=offline
-            # (+ prompt=consent). Without it background sync dies after ~1h.
-            if "refresh_token" in token_data:
+            # (+ prompt=consent). Never overwrite an existing refresh_token with None.
+            if token_data.get("refresh_token"):
                 user.google_refresh_token = token_data.get("refresh_token")
-            else:
-                logger.error(
+            elif not user.google_refresh_token:
+                logger.warning(
                     f"Google did not return a refresh_token for user {user_id}; "
-                    "calendar sync will stop when the access token expires. "
-                    "Re-link with access_type=offline & prompt=consent."
+                    "calendar sync will stop when the access token expires."
                 )
             self.session.add(user)
             self.session.commit()

@@ -15,6 +15,7 @@ import 'leave_requests_tab.dart';
 import 'employee_operations_tab.dart';
 import '../../widgets/help_dialog.dart';
 import '../../widgets/notification_bell.dart';
+import '../../widgets/hover_sidebar_scaffold.dart';
 import '../../providers/module_provider.dart';
 import '../../utils/api_error_handler.dart';
 
@@ -46,6 +47,236 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
     setState(() {
       _selectedWeekStart = _selectedWeekStart.add(const Duration(days: 7));
     });
+  }
+
+  Future<void> _showMyAccountDialog() async {
+    final api = ref.read(apiServiceProvider);
+    var user = await ref.read(authProvider.notifier).refreshUser() ??
+        ref.read(currentUserProvider).valueOrNull;
+    if (user == null || !mounted) return;
+
+    final emailController = TextEditingController(text: user.email ?? '');
+    bool isSaving = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final current = user!;
+          final rolesText = current.jobRoleNames.isNotEmpty
+              ? current.jobRoleNames.join(', ')
+              : (current.jobRoleIds.isNotEmpty
+                  ? 'Przypisane (${current.jobRoleIds.length})'
+                  : 'Brak przypisanych ról');
+          final rateText = current.hourlyRate != null && current.hourlyRate! > 0
+              ? '${current.hourlyRate!.toStringAsFixed(2)} PLN / h'
+              : 'Domyślna dla roli / nieokreślona';
+          final targetHoursText = current.targetHoursPerMonth != null
+              ? '${current.targetHoursPerMonth} h / mies.'
+              : 'Brak limitu';
+          final targetShiftsText = current.targetShiftsPerMonth != null
+              ? '${current.targetShiftsPerMonth} zmian / mies.'
+              : 'Brak limitu';
+
+          Widget infoRow(IconData icon, String label, String value) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, size: 18, color: Theme.of(ctx).colorScheme.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          value,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.account_circle, color: Theme.of(ctx).colorScheme.primary),
+                const SizedBox(width: 8),
+                const Text('Moje konto'),
+              ],
+            ),
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Dane w systemie',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(ctx).colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(ctx).colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(ctx).colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          infoRow(Icons.badge_outlined, 'Imię i nazwisko', current.fullName),
+                          const Divider(height: 8),
+                          infoRow(Icons.person_outline, 'Login', current.username),
+                          const Divider(height: 8),
+                          infoRow(
+                            Icons.storefront_outlined,
+                            'Restauracja',
+                            current.tenantName != null
+                                ? '${current.tenantName} (${current.tenantSlug ?? "-"})'
+                                : (current.tenantSlug ?? 'Domyślna'),
+                          ),
+                          const Divider(height: 8),
+                          infoRow(Icons.work_outline, 'Stanowiska / Role', rolesText),
+                          const Divider(height: 8),
+                          infoRow(Icons.payments_outlined, 'Stawka godzinowa', rateText),
+                          const Divider(height: 8),
+                          infoRow(Icons.schedule_outlined, 'Cel godzinowy', targetHoursText),
+                          const Divider(height: 8),
+                          infoRow(Icons.event_note_outlined, 'Cel zmian', targetShiftsText),
+                          const Divider(height: 8),
+                          infoRow(
+                            Icons.calendar_today_outlined,
+                            'Konto utworzone',
+                            DateFormat('dd.MM.yyyy').format(current.createdAt.toLocal()),
+                          ),
+                          const Divider(height: 8),
+                          infoRow(
+                            Icons.sync_outlined,
+                            'Kalendarz Google',
+                            current.isGoogleCalendarConnected ? 'Połączony' : 'Niepołączony',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Adres e-mail',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(ctx).colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Twój adres email',
+                        hintText: 'np. jan.kowalski@example.com',
+                        prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.tonalIcon(
+                            onPressed: isSaving
+                                ? null
+                                : () async {
+                                    setDialogState(() => isSaving = true);
+                                    try {
+                                      final updated = await api.updateMyProfile(
+                                        email: emailController.text.trim(),
+                                      );
+                                      ref.invalidate(currentUserProvider);
+                                      await ref.read(authProvider.notifier).refreshUser();
+                                      setDialogState(() {
+                                        user = updated;
+                                        isSaving = false;
+                                      });
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Adres email został zaktualizowany'),
+                                            backgroundColor: Colors.green,
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      setDialogState(() => isSaving = false);
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Błąd: ${ApiErrorHandler.extractMessage(e)}',
+                                            ),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                      }
+                                    }
+                                  },
+                            icon: isSaving
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.save_outlined, size: 18),
+                            label: const Text('Zapisz email'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _showChangePasswordDialog();
+                          },
+                          icon: const Icon(Icons.lock_outline, size: 18),
+                          label: const Text('Zmień hasło'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Zamknij'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   void _showChangePasswordDialog() {
@@ -404,23 +635,22 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                         onPressed: () async {
                           setDialogState(() => isSigningIn = true);
                           try {
+                            final googleSignIn = GoogleSignIn(
+                              scopes: [
+                                'https://www.googleapis.com/auth/calendar.events',
+                              ],
+                              forceCodeForRefreshToken: true,
+                            );
+
                             String? authCode;
                             try {
-                              // On Web, request server auth code using GIS CodeClient to obtain offline refresh_token
-                              authCode = await requestServerAuthCodeOnWeb();
+                              // On Web, initialize plugin and request offline serverAuthCode (refresh_token)
+                              authCode = await requestServerAuthCodeOnWeb(googleSignIn);
                             } catch (_) {
                               authCode = null;
                             }
 
                             if (authCode == null) {
-                              final googleSignIn = GoogleSignIn(
-                                scopes: [
-                                  'https://www.googleapis.com/auth/calendar.events',
-                                ],
-                                serverClientId:
-                                    '357153331477-b6512tnr51gi4kslrh9f8tjndhdp74j7.apps.googleusercontent.com',
-                              );
-
                               final account = await googleSignIn.signIn();
                               if (account == null) {
                                 // User cancelled
@@ -504,12 +734,13 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
     final openGiveawaysCount = openGiveawaysAsync.valueOrNull ?? 0;
 
     String appBarTitle = 'Panel Pracownika';
-    if (_selectedIndex == 0) appBarTitle = 'Mój Grafik';
+    if (_selectedIndex == 0) appBarTitle = 'Home';
     if (_selectedIndex == 1) appBarTitle = 'Dostępność';
     if (_selectedIndex == 2) appBarTitle = 'Obecność';
     if (_selectedIndex == 3) appBarTitle = 'Giełda';
+    if (_selectedIndex == 4) appBarTitle = 'Operacje';
 
-    return Scaffold(
+    return HoverSidebarScaffold(
       appBar: AppBar(
         title: Text(
           appBarTitle,
@@ -530,6 +761,8 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
             onSelected: (value) async {
               if (value == 'logout') {
                 await ref.read(authProvider.notifier).logout();
+              } else if (value == 'my_account') {
+                _showMyAccountDialog();
               } else if (value == 'password') {
                 _showChangePasswordDialog();
               } else if (value == 'google_calendar') {
@@ -553,37 +786,47 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
                       ],
                     ),
                   ),
-                  const PopupMenuItem<String>(
-                    value: 'google_calendar',
-                    child: Row(
-                      children: [
-                        Icon(Icons.calendar_month, color: Colors.grey),
-                        SizedBox(width: 8),
-                        Text('Kalendarz Google'),
-                      ],
-                    ),
+                const PopupMenuItem<String>(
+                  value: 'my_account',
+                  child: Row(
+                    children: [
+                      Icon(Icons.account_circle, color: Colors.grey),
+                      SizedBox(width: 8),
+                      Text('Moje konto'),
+                    ],
                   ),
-                  const PopupMenuItem<String>(
-                    value: 'password',
-                    child: Row(
-                      children: [
-                        Icon(Icons.lock, color: Colors.grey),
-                        SizedBox(width: 8),
-                        Text('Zmień hasło'),
-                      ],
-                    ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'password',
+                  child: Row(
+                    children: [
+                      Icon(Icons.lock, color: Colors.grey),
+                      SizedBox(width: 8),
+                      Text('Zmień hasło'),
+                    ],
                   ),
-                  const PopupMenuItem<String>(
-                    value: 'logout',
-                    child: Row(
-                      children: [
-                        Icon(Icons.logout, color: Colors.grey),
-                        SizedBox(width: 8),
-                        Text('Wyloguj'),
-                      ],
-                    ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'google_calendar',
+                  child: Row(
+                    children: [
+                      Icon(Icons.calendar_month, color: Colors.grey),
+                      SizedBox(width: 8),
+                      Text('Kalendarz Google'),
+                    ],
                   ),
-                ];
+                ),
+                const PopupMenuItem<String>(
+                  value: 'logout',
+                  child: Row(
+                    children: [
+                      Icon(Icons.logout, color: Colors.grey),
+                      SizedBox(width: 8),
+                      Text('Wyloguj'),
+                    ],
+                  ),
+                ),
+              ];
             },
             child: const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
@@ -597,7 +840,7 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
           if (user == null) return const Center(child: Text('Nie zalogowano'));
 
           if (_selectedIndex == 0) {
-            // My Schedule Tab
+            // Home Tab (My Schedule + Unread Announcements + Missing Attendance)
             return const MyScheduleScreen();
           }
 
@@ -737,43 +980,51 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(child: Text('Błąd: $error')),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.calendar_month),
-            label: 'Mój Grafik',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.event_available),
-            label: 'Dostępność',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.access_time),
-            label: 'Obecność',
-          ),
-          NavigationDestination(
-            icon:
-                openGiveawaysCount > 0
-                    ? Badge(
-                      label: Text(openGiveawaysCount.toString()),
-                      child: const Icon(Icons.swap_horiz),
-                    )
-                    : const Icon(Icons.swap_horiz),
-            label: 'Giełda',
-          ),
-          const NavigationDestination(
-            icon: Icon(Icons.assignment_turned_in_outlined),
-            selectedIcon: Icon(Icons.assignment_turned_in),
-            label: 'Operacje',
-          ),
-        ],
-      ),
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (index) {
+        setState(() {
+          _selectedIndex = index;
+        });
+      },
+      destinations: [
+        const HoverSidebarDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home),
+          label: 'Home',
+        ),
+        const HoverSidebarDestination(
+          icon: Icon(Icons.event_available_outlined),
+          selectedIcon: Icon(Icons.event_available),
+          label: 'Dostępność',
+        ),
+        const HoverSidebarDestination(
+          icon: Icon(Icons.access_time_outlined),
+          selectedIcon: Icon(Icons.access_time_filled),
+          label: 'Obecność',
+        ),
+        HoverSidebarDestination(
+          icon:
+              openGiveawaysCount > 0
+                  ? Badge(
+                    label: Text(openGiveawaysCount.toString()),
+                    child: const Icon(Icons.swap_horiz),
+                  )
+                  : const Icon(Icons.swap_horiz),
+          selectedIcon:
+              openGiveawaysCount > 0
+                  ? Badge(
+                    label: Text(openGiveawaysCount.toString()),
+                    child: const Icon(Icons.swap_horiz),
+                  )
+                  : const Icon(Icons.swap_horiz),
+          label: 'Giełda',
+        ),
+        const HoverSidebarDestination(
+          icon: Icon(Icons.assignment_turned_in_outlined),
+          selectedIcon: Icon(Icons.assignment_turned_in),
+          label: 'Operacje',
+        ),
+      ],
     );
   }
 }

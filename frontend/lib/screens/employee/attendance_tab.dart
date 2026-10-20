@@ -63,13 +63,19 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
     }
   }
 
-  void _showRegisterDialog() {
-    DateTime selectedDate = DateTime.now();
-    String? checkIn;
-    String? checkOut;
+  void _showRegisterDialog({
+    DateTime? initialDate,
+    bool initialAbsent = false,
+  }) {
+    DateTime selectedDate = initialDate ?? DateTime.now();
+    final checkInCtrl = TextEditingController();
+    final checkOutCtrl = TextEditingController();
+    final absenceReasonCtrl = TextEditingController();
     bool isScheduled = false;
+    bool isAbsent = initialAbsent;
     String? shiftName;
     bool isLoadingDefaults = true;
+    String? validationError;
 
     showDialog(
       context: context,
@@ -86,9 +92,14 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
                   );
                   setDialogState(() {
                     isScheduled = defaults['scheduled'] ?? false;
-                    checkIn = defaults['check_in'];
-                    checkOut = defaults['check_out'];
-                    shiftName = defaults['shift_name'];
+                    checkInCtrl.text =
+                        (defaults['check_in'] ?? '08:00').toString();
+                    checkOutCtrl.text =
+                        (defaults['check_out'] ?? '16:00').toString();
+                    shiftName = defaults['shift_name']?.toString();
+                    if (!isScheduled) {
+                      isAbsent = false;
+                    }
                     isLoadingDefaults = false;
                   });
                 } catch (e) {
@@ -103,136 +114,179 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
               return AlertDialog(
                 title: const Text('Zarejestruj obecność'),
                 content: SizedBox(
-                  width: 300,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Date Picker
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.calendar_today),
-                        title: Text(
-                          DateFormat(
-                            'd MMMM yyyy',
-                            'pl_PL',
-                          ).format(selectedDate),
-                        ),
-                        trailing: const Icon(Icons.arrow_drop_down),
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: selectedDate,
-                            firstDate: DateTime.now().subtract(
-                              const Duration(days: 30),
-                            ),
-                            lastDate: DateTime.now(),
-                          );
-                          if (picked != null) {
-                            setDialogState(() {
-                              selectedDate = picked;
-                              isLoadingDefaults = true;
-                            });
-                          }
-                        },
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      if (isLoadingDefaults)
-                        const Center(child: CircularProgressIndicator())
-                      else ...[
-                        // Schedule info
-                        if (isScheduled)
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.green.shade200),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.check_circle,
-                                  color: Colors.green.shade700,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Planowana zmiana: $shiftName',
-                                    style: TextStyle(
-                                      color: Colors.green.shade700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        else
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.orange.shade200),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.warning,
-                                  color: Colors.orange.shade700,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Nieplanowana obecność - wymaga zatwierdzenia managera',
-                                    style: TextStyle(
-                                      color: Colors.orange.shade700,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                  width: 340,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Date Picker (Polish locale, Monday start)
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.calendar_today),
+                          title: Text(
+                            DateFormat(
+                              'EEEE, d MMMM yyyy',
+                              'pl_PL',
+                            ).format(selectedDate),
                           ),
+                          trailing: const Icon(Icons.arrow_drop_down),
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              locale: const Locale('pl', 'PL'),
+                              initialDate: selectedDate,
+                              firstDate: DateTime.now().subtract(
+                                const Duration(days: 60),
+                              ),
+                              lastDate: DateTime.now(),
+                            );
+                            if (picked != null) {
+                              setDialogState(() {
+                                selectedDate = picked;
+                                validationError = null;
+                                isLoadingDefaults = true;
+                              });
+                            }
+                          },
+                        ),
 
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
 
-                        // Time inputs
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                decoration: const InputDecoration(
-                                  labelText: 'Przyjście',
-                                  prefixIcon: Icon(Icons.login),
-                                  border: OutlineInputBorder(),
+                        if (isLoadingDefaults)
+                          const Center(child: CircularProgressIndicator())
+                        else ...[
+                          // Schedule info
+                          if (isScheduled)
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.green.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle,
+                                    color: Colors.green.shade700,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Planowana zmiana: $shiftName',
+                                      style: TextStyle(
+                                        color: Colors.green.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.orange.shade200,
                                 ),
-                                controller: TextEditingController(
-                                  text: checkIn ?? '',
-                                ),
-                                onChanged: (v) => checkIn = v,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.warning,
+                                    color: Colors.orange.shade700,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Nieplanowana obecność - wymaga zatwierdzenia managera',
+                                      style: TextStyle(
+                                        color: Colors.orange.shade700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: TextField(
-                                decoration: const InputDecoration(
-                                  labelText: 'Wyjście',
-                                  prefixIcon: Icon(Icons.logout),
-                                  border: OutlineInputBorder(),
-                                ),
-                                controller: TextEditingController(
-                                  text: checkOut ?? '',
-                                ),
-                                onChanged: (v) => checkOut = v,
+
+                          if (isScheduled) ...[
+                            const SizedBox(height: 12),
+                            CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              value: isAbsent,
+                              title: const Text(
+                                'Nieobecny (nie przyszedłem na zmianę)',
+                                style: TextStyle(fontSize: 14),
                               ),
+                              onChanged: (v) {
+                                setDialogState(() {
+                                  isAbsent = v ?? false;
+                                  validationError = null;
+                                });
+                              },
                             ),
                           ],
-                        ),
+
+                          const SizedBox(height: 12),
+
+                          if (isAbsent) ...[
+                            TextField(
+                              controller: absenceReasonCtrl,
+                              maxLines: 2,
+                              decoration: InputDecoration(
+                                labelText: 'Powód nieobecności *',
+                                hintText: 'np. Choroba, nagła sytuacja losowa',
+                                prefixIcon: const Icon(Icons.info_outline),
+                                border: const OutlineInputBorder(),
+                                errorText: validationError,
+                              ),
+                            ),
+                          ] else ...[
+                            // Time inputs
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    decoration: const InputDecoration(
+                                      labelText: 'Przyjście',
+                                      prefixIcon: Icon(Icons.login),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    controller: checkInCtrl,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: TextField(
+                                    decoration: const InputDecoration(
+                                      labelText: 'Wyjście',
+                                      prefixIcon: Icon(Icons.logout),
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    controller: checkOutCtrl,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (validationError != null) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                validationError!,
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
                 actions: [
@@ -245,14 +299,42 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
                         isLoadingDefaults
                             ? null
                             : () async {
-                              Navigator.pop(context);
-                              await _registerAttendance(
-                                selectedDate,
-                                checkIn!,
-                                checkOut!,
-                              );
+                              if (isAbsent) {
+                                final reason = absenceReasonCtrl.text.trim();
+                                if (reason.isEmpty) {
+                                  setDialogState(() {
+                                    validationError =
+                                        'Podaj powód nieobecności';
+                                  });
+                                  return;
+                                }
+                                Navigator.pop(context);
+                                await _registerAttendance(
+                                  selectedDate,
+                                  '00:00',
+                                  '00:00',
+                                  isAbsent: true,
+                                  absenceReason: reason,
+                                );
+                              } else {
+                                final inVal = checkInCtrl.text.trim();
+                                final outVal = checkOutCtrl.text.trim();
+                                if (inVal.isEmpty || outVal.isEmpty) {
+                                  setDialogState(() {
+                                    validationError =
+                                        'Podaj godziny przyjścia i wyjścia';
+                                  });
+                                  return;
+                                }
+                                Navigator.pop(context);
+                                await _registerAttendance(
+                                  selectedDate,
+                                  inVal,
+                                  outVal,
+                                );
+                              }
                             },
-                    child: const Text('Zarejestruj'),
+                    child: Text(isAbsent ? 'Zgłoś nieobecność' : 'Zarejestruj'),
                   ),
                 ],
               );
@@ -264,96 +346,108 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
   Future<void> _registerAttendance(
     DateTime date,
     String checkIn,
-    String checkOut,
-  ) async {
+    String checkOut, {
+    bool isAbsent = false,
+    String? absenceReason,
+  }) async {
     try {
       final api = ref.read(apiServiceProvider);
       String? skipReason;
 
-      // Validate mandatory checklists before clock-out
-      try {
-        final validation = await api.validateClockoutChecklists(date: date);
-        if (!validation.allMandatoryCompleted && mounted) {
-          final reasonCtrl = TextEditingController();
-          final proceed = await showDialog<bool>(
-            context: context,
-            builder:
-                (ctx) => AlertDialog(
-                  title: const Row(
-                    children: [
-                      Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                      SizedBox(width: 8),
-                      Expanded(child: Text('Niewykonane zadania z checklisty')),
-                    ],
-                  ),
-                  content: SizedBox(
-                    width: 360,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+      // Validate mandatory checklists before clock-out only when actually present
+      if (!isAbsent) {
+        try {
+          final validation = await api.validateClockoutChecklists(date: date);
+          if (!validation.allMandatoryCompleted && mounted) {
+            final reasonCtrl = TextEditingController();
+            final proceed = await showDialog<bool>(
+              context: context,
+              builder:
+                  (ctx) => AlertDialog(
+                    title: const Row(
                       children: [
-                        const Text(
-                          'Przed rejestracją wyjścia poniższe zadania obowiązkowe nie zostały odhaczone:',
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.orange,
                         ),
-                        const SizedBox(height: 8),
-                        ...validation.missingItems.map(
-                          (item) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.error_outline,
-                                  size: 16,
-                                  color: Colors.red,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    (item['title'] ?? item['label'] ?? '').toString(),
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: reasonCtrl,
-                          decoration: const InputDecoration(
-                            labelText:
-                                'Powód pominięcia zadań obowiązkowych *',
-                            border: OutlineInputBorder(),
-                          ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text('Niewykonane zadania z checklisty'),
                         ),
                       ],
                     ),
+                    content: SizedBox(
+                      width: 360,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Przed rejestracją wyjścia poniższe zadania obowiązkowe nie zostały odhaczone:',
+                          ),
+                          const SizedBox(height: 8),
+                          ...validation.missingItems.map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.error_outline,
+                                    size: 16,
+                                    color: Colors.red,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      (item['title'] ?? item['label'] ?? '')
+                                          .toString(),
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: reasonCtrl,
+                            decoration: const InputDecoration(
+                              labelText:
+                                  'Powód pominięcia zadań obowiązkowych *',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Wróć do checklisty'),
+                      ),
+                      FilledButton(
+                        onPressed: () {
+                          if (reasonCtrl.text.trim().isEmpty) return;
+                          skipReason = reasonCtrl.text.trim();
+                          Navigator.pop(ctx, true);
+                        },
+                        child: const Text('Zarejestruj mimo to'),
+                      ),
+                    ],
                   ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Wróć do checklisty'),
-                    ),
-                    FilledButton(
-                      onPressed: () {
-                        if (reasonCtrl.text.trim().isEmpty) return;
-                        skipReason = reasonCtrl.text.trim();
-                        Navigator.pop(ctx, true);
-                      },
-                      child: const Text('Zarejestruj mimo to'),
-                    ),
-                  ],
-                ),
-          );
-          if (proceed != true) return;
-        }
-      } catch (_) {}
+            );
+            if (proceed != true) return;
+          }
+        } catch (_) {}
+      }
 
       final result = await api.registerAttendance(
         date,
         checkIn,
         checkOut,
         checklistSkipReason: skipReason,
+        isAbsent: isAbsent,
+        absenceReason: absenceReason,
       );
 
       if (mounted) {
@@ -361,9 +455,11 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              requiresApproval
-                  ? 'Obecność zarejestrowana - oczekuje na zatwierdzenie'
-                  : 'Obecność zarejestrowana',
+              isAbsent
+                  ? 'Zgłoszono nieobecność na zmianie'
+                  : (requiresApproval
+                      ? 'Obecność zarejestrowana - oczekuje na zatwierdzenie'
+                      : 'Obecność zarejestrowana'),
             ),
             backgroundColor: requiresApproval ? Colors.orange : Colors.green,
           ),
@@ -466,7 +562,7 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showRegisterDialog,
+        onPressed: () => _showRegisterDialog(),
         icon: const Icon(Icons.add),
         label: const Text('Zarejestruj'),
         backgroundColor: Theme.of(context).colorScheme.primary,
@@ -529,18 +625,23 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
     int confirmedCount = 0;
     int pendingCount = 0;
     for (final a in _attendances!) {
+      final absent = a['is_absent'] == true;
       if (a['status'] == 'CONFIRMED') {
         confirmedCount++;
-        totalHours += _calcHours(
-          a['check_in'] as String,
-          a['check_out'] as String,
-        );
+        if (!absent) {
+          totalHours += _calcHours(
+            a['check_in'] as String,
+            a['check_out'] as String,
+          );
+        }
       } else if (a['status'] == 'PENDING') {
         pendingCount++;
       }
     }
 
     final colorScheme = Theme.of(context).colorScheme;
+    final tipPoolEnabled =
+        ref.watch(tipPoolEnabledProvider).valueOrNull ?? true;
 
     return Column(
       children: [
@@ -612,7 +713,9 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
                       ),
                     ),
                     Text(
-                      'Baza: ${_earnings!.basePay.toStringAsFixed(2)} PLN • Napiwki: ${_earnings!.allocatedTips.toStringAsFixed(2)} PLN',
+                      tipPoolEnabled
+                          ? 'Baza: ${_earnings!.basePay.toStringAsFixed(2)} PLN • Napiwki: ${_earnings!.allocatedTips.toStringAsFixed(2)} PLN'
+                          : 'Stawka: ${_earnings!.hourlyRate.toStringAsFixed(2)} PLN/h • Wynagrodzenie bazowe',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.grey.shade700,
@@ -621,7 +724,7 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
                   ],
                 ),
                 Text(
-                  '${_earnings!.totalPay.toStringAsFixed(2)} PLN',
+                  '${(tipPoolEnabled ? _earnings!.totalPay : _earnings!.basePay).toStringAsFixed(2)} PLN',
                   style: GoogleFonts.outfit(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -640,35 +743,62 @@ class _AttendanceTabState extends ConsumerState<AttendanceTab> {
               final a = _attendances![index];
               final date = DateTime.parse(a['date']);
               final status = a['status'] as String;
+              final isAbsent = a['is_absent'] == true;
+              final absenceReason = a['absence_reason']?.toString() ?? '';
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: _getStatusColor(status).withOpacity(0.2),
+                    backgroundColor:
+                        isAbsent
+                            ? Colors.deepOrange.withValues(alpha: 0.15)
+                            : _getStatusColor(status).withValues(alpha: 0.2),
                     child: Icon(
-                      status == 'CONFIRMED'
+                      isAbsent
+                          ? Icons.person_off_outlined
+                          : status == 'CONFIRMED'
                           ? Icons.check
                           : status == 'PENDING'
                           ? Icons.hourglass_empty
                           : Icons.close,
-                      color: _getStatusColor(status),
+                      color:
+                          isAbsent
+                              ? Colors.deepOrange
+                              : _getStatusColor(status),
                     ),
                   ),
                   title: Text(
                     DateFormat('EEEE, d MMMM', 'pl_PL').format(date),
                     style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                   ),
-                  subtitle: Text('${a['check_in']} - ${a['check_out']}'),
+                  subtitle:
+                      isAbsent
+                          ? Text(
+                            absenceReason.isNotEmpty
+                                ? 'Nieobecny — Powód: $absenceReason'
+                                : 'Nieobecny na zmianie',
+                            style: TextStyle(
+                              color: Colors.deepOrange.shade800,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          )
+                          : Text('${a['check_in']} - ${a['check_out']}'),
                   trailing: Chip(
                     label: Text(
-                      _getStatusLabel(status),
+                      isAbsent ? 'Nieobecny' : _getStatusLabel(status),
                       style: TextStyle(
-                        color: _getStatusColor(status),
+                        color:
+                            isAbsent
+                                ? Colors.deepOrange.shade800
+                                : _getStatusColor(status),
                         fontSize: 12,
                       ),
                     ),
-                    backgroundColor: _getStatusColor(status).withOpacity(0.1),
+                    backgroundColor:
+                        isAbsent
+                            ? Colors.deepOrange.withValues(alpha: 0.1)
+                            : _getStatusColor(status).withValues(alpha: 0.1),
                   ),
                 ),
               );

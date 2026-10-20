@@ -149,6 +149,8 @@ class OperationsService:
         total_confirmed_hours = 0.0
 
         for att in attendances:
+            if getattr(att, "is_absent", False):
+                continue
             hrs = self._calc_duration_hours(att.check_in, att.check_out, target_date)
             total_confirmed_hours += hrs
             confirmed_hours_by_user[att.user_id] = confirmed_hours_by_user.get(att.user_id, 0.0) + hrs
@@ -303,6 +305,9 @@ class OperationsService:
             if att.user_id not in emp_stats:
                 continue
 
+            if getattr(att, "is_absent", False):
+                continue
+
             hrs = self._calc_duration_hours(att.check_in, att.check_out, att.date)
             role_id = None
             if att.schedule_id and att.schedule_id in schedule_by_id:
@@ -401,6 +406,8 @@ class OperationsService:
 
         daily_total_confirmed: dict[date, float] = {}
         for att in attendances_all:
+            if getattr(att, "is_absent", False):
+                continue
             hrs = self._calc_duration_hours(att.check_in, att.check_out, att.date)
             daily_total_confirmed[att.date] = daily_total_confirmed.get(att.date, 0.0) + hrs
 
@@ -430,7 +437,8 @@ class OperationsService:
         daily_breakdown = []
 
         for att in my_attendances:
-            hrs = self._calc_duration_hours(att.check_in, att.check_out, att.date)
+            is_abs = bool(getattr(att, "is_absent", False))
+            hrs = 0.0 if is_abs else self._calc_duration_hours(att.check_in, att.check_out, att.date)
             role_id = None
             if att.schedule_id:
                 sch = self.session.get(Schedule, att.schedule_id)
@@ -440,7 +448,7 @@ class OperationsService:
 
             day_base = 0.0
             day_tip = 0.0
-            if att.status == AttendanceStatus.CONFIRMED:
+            if att.status == AttendanceStatus.CONFIRMED and not is_abs:
                 confirmed_hours += hrs
                 day_base = hrs * rate
                 base_pay += day_base
@@ -449,12 +457,12 @@ class OperationsService:
                 if c and c.tip_pool > 0 and tot_day_hrs > 0:
                     day_tip = float(c.tip_pool) * (hrs / tot_day_hrs)
                     allocated_tips += day_tip
-            elif att.status == AttendanceStatus.PENDING:
+            elif att.status == AttendanceStatus.PENDING and not is_abs:
                 pending_hours += hrs
 
             daily_breakdown.append({
                 "date": att.date,
-                "status": att.status.value,
+                "status": "ABSENT" if is_abs else att.status.value,
                 "hours": round(hrs, 2),
                 "hourly_rate": round(rate, 2),
                 "base_pay": round(day_base, 2),

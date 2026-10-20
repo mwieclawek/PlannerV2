@@ -21,7 +21,9 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
   bool _teamLoading = false;
   List<ScheduleEntry> _teamEntries = [];
   Map<String, dynamic>? _summary;
-  bool _teamGridView = false;
+  bool _teamGridView = true;
+  List<AnnouncementModel> _unreadAnnouncements = [];
+  List<Map<String, dynamic>> _missingAttendances = [];
 
   static DateTime _getMonday(DateTime date) {
     return date.subtract(Duration(days: date.weekday - 1));
@@ -35,6 +37,33 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     super.initState();
     _loadSchedule();
     _loadSummary();
+    _loadHomeExtras();
+  }
+
+  Future<void> _loadHomeExtras() async {
+    final api = ref.read(apiServiceProvider);
+    try {
+      final announcements = await api.getEmployeeAnnouncements();
+      if (mounted) {
+        setState(() {
+          _unreadAnnouncements =
+              announcements.where((a) => !a.isRead).toList();
+        });
+      }
+    } catch (_) {}
+
+    try {
+      final missingResp = await api.getMissingAttendance();
+      final rawList = missingResp['missing'] as List<dynamic>? ?? [];
+      if (mounted) {
+        setState(() {
+          _missingAttendances =
+              rawList
+                  .map((e) => Map<String, dynamic>.from(e as Map))
+                  .toList();
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadSummary() async {
@@ -111,6 +140,272 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     }
   }
 
+  Widget _buildUnreadAnnouncementsSection() {
+    if (_unreadAnnouncements.isEmpty) return const SizedBox.shrink();
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.campaign, color: colorScheme.primary, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Nowe ogłoszenia (${_unreadAnnouncements.length})',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ..._unreadAnnouncements.map(
+            (ann) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              color: colorScheme.primaryContainer.withValues(alpha: 0.25),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: colorScheme.primary, width: 1.5),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'NOWE OGŁOSZENIE',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            ann.title,
+                            style: GoogleFonts.outfit(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(ann.content),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${ann.authorName} • ${DateFormat('dd.MM.yyyy HH:mm').format(ann.createdAt.toLocal())}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        FilledButton.icon(
+                          onPressed: () async {
+                            await ref
+                                .read(apiServiceProvider)
+                                .markAnnouncementRead(ann.id);
+                            if (mounted) {
+                              setState(() {
+                                _unreadAnnouncements.removeWhere(
+                                  (a) => a.id == ann.id,
+                                );
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Ogłoszenie oznaczone jako przeczytane (dostępne w zakładce Operacje)',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.done_all, size: 16),
+                          label: const Text('Zapoznałem się'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMissingAttendanceBanner() {
+    if (_missingAttendances.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Card(
+        color: Colors.orange.shade50,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.orange.shade400, width: 1.5),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.orange.shade900,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Brakujące rejestracje obecności (${_missingAttendances.length})',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange.shade900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Poniższe zakończone zmiany z grafiku nie mają jeszcze zarejestrowanej obecności:',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: Colors.orange.shade900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              ..._missingAttendances.map((item) {
+                final rawDate = item['date']?.toString() ?? '';
+                final parsedDate = DateTime.tryParse(rawDate);
+                final dateLabel =
+                    parsedDate != null
+                        ? DateFormat('EEEE, d MMM yyyy', 'pl_PL').format(
+                          parsedDate,
+                        )
+                        : rawDate;
+                final shiftName = item['shift_name']?.toString() ?? '';
+                final startTime = item['start_time']?.toString() ?? '';
+                final endTime = item['end_time']?.toString() ?? '';
+                final roleName = item['role_name']?.toString() ?? '';
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$dateLabel • $shiftName ($roleName)',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Text(
+                            'Godziny w grafiku: $startTime - $endTime',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Wrap(
+                        spacing: 6,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed:
+                                parsedDate == null
+                                    ? null
+                                    : () => _showRegisterMissingDialog(
+                                      date: parsedDate,
+                                      shiftName: shiftName,
+                                      startTime: startTime,
+                                      endTime: endTime,
+                                      initialAbsent: true,
+                                    ),
+                            icon: const Icon(
+                              Icons.person_off_outlined,
+                              size: 16,
+                            ),
+                            label: const Text('Nieobecny'),
+                            style: OutlinedButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              foregroundColor: Colors.deepOrange.shade800,
+                              side: BorderSide(
+                                color: Colors.deepOrange.shade300,
+                              ),
+                            ),
+                          ),
+                          FilledButton.icon(
+                            onPressed:
+                                parsedDate == null
+                                    ? null
+                                    : () => _showRegisterMissingDialog(
+                                      date: parsedDate,
+                                      shiftName: shiftName,
+                                      startTime: startTime,
+                                      endTime: endTime,
+                                      initialAbsent: false,
+                                    ),
+                            icon: const Icon(Icons.how_to_reg, size: 16),
+                            label: const Text('Zarejestruj'),
+                            style: FilledButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSummaryCard() {
     if (_summary == null) return const SizedBox.shrink();
 
@@ -136,7 +431,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
-      color: colorScheme.primaryContainer.withOpacity(0.4),
+      color: colorScheme.primaryContainer.withValues(alpha: 0.4),
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
@@ -208,12 +503,18 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
         ? const Center(child: CircularProgressIndicator())
         : Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
+            constraints: const BoxConstraints(maxWidth: 1100),
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Unread Announcements (disappear once marked read)
+                  _buildUnreadAnnouncementsSection(),
+
+                  // Missing Attendance Registrations Banner above the schedule
+                  _buildMissingAttendanceBanner(),
+
                   // Week Selector
                   Card(
                     child: Padding(
@@ -262,6 +563,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
                       TextButton.icon(
                         onPressed: () {
                           _loadSchedule();
+                          _loadHomeExtras();
                           if (_showCoworkers) _loadTeamSchedule();
                         },
                         icon: const Icon(Icons.refresh, size: 18),
@@ -826,27 +1128,19 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     final currentUserId = user?.id ?? '';
     final myRoleIds = user?.jobRoleIds ?? [];
 
-    return shiftsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Text('Błąd ładowania zmian: $e'),
-      data: (shifts) => rolesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Text('Błąd ładowania ról: $e'),
-        data: (roles) => ScheduleViewer(
-          schedules: _teamEntries,
-          shifts: shifts,
-          roles: roles,
-          weekStart: _selectedWeekStart,
-          onAssignmentTap: (entry) {
-            if (entry.userId != currentUserId &&
-                myRoleIds.contains(entry.roleId) &&
-                !_isPast(entry.date) &&
-                !entry.isOnGiveaway) {
-              _showDirectSwapFromTeamView(entry);
-            }
-          },
-        ),
-      ),
+    return ScheduleViewer(
+      schedules: _teamEntries,
+      shifts: shiftsAsync.valueOrNull ?? const [],
+      roles: rolesAsync.valueOrNull ?? const [],
+      weekStart: _selectedWeekStart,
+      onAssignmentTap: (entry) {
+        if (entry.userId != currentUserId &&
+            myRoleIds.contains(entry.roleId) &&
+            !_isPast(entry.date) &&
+            !entry.isOnGiveaway) {
+          _showDirectSwapFromTeamView(entry);
+        }
+      },
     );
   }
 
@@ -1422,97 +1716,185 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
   }
 
   void _showRegisterPresenceDialog(EmployeeScheduleEntry shift) async {
-    setState(() => _isLoading = true);
-    try {
-      final api = ref.read(apiServiceProvider);
-      final defaults = await api.getAttendanceDefaults(shift.date);
-      setState(() => _isLoading = false);
+    _showRegisterMissingDialog(
+      date: shift.date,
+      shiftName: shift.shiftName,
+      startTime: shift.startTime,
+      endTime: shift.endTime,
+      initialAbsent: false,
+    );
+  }
 
-      if (!mounted) return;
+  void _showRegisterMissingDialog({
+    required DateTime date,
+    required String shiftName,
+    required String startTime,
+    required String endTime,
+    bool initialAbsent = false,
+  }) async {
+    final checkInController = TextEditingController(text: startTime);
+    final checkOutController = TextEditingController(text: endTime);
+    final absenceReasonController = TextEditingController();
+    bool isAbsent = initialAbsent;
+    String? errorMsg;
 
-      final checkInController = TextEditingController(
-        text: defaults['check_in'] ?? shift.startTime,
-      );
-      final checkOutController = TextEditingController(
-        text: defaults['check_out'] ?? shift.endTime,
-      );
-
-      showDialog(
-        context: context,
-        builder:
-            (context) => AlertDialog(
-              title: const Text('Zarejestruj obecność'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Zmiana: ${shift.shiftName}'),
-                  Text(
-                    'Data: ${DateFormat('d MMMM yyyy', 'pl_PL').format(shift.date)}',
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: checkInController,
-                    decoration: const InputDecoration(
-                      labelText: 'Godzina rozpoczęcia',
-                      prefixIcon: Icon(Icons.login),
-                      border: OutlineInputBorder(),
+    showDialog(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: const Text('Zarejestruj obecność'),
+                  content: SizedBox(
+                    width: 340,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Zmiana: $shiftName',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          'Data: ${DateFormat('EEEE, d MMMM yyyy', 'pl_PL').format(date)}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          value: isAbsent,
+                          title: const Text(
+                            'Nieobecny (nie przyszedłem na zmianę)',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                          onChanged: (val) {
+                            setDialogState(() {
+                              isAbsent = val ?? false;
+                              errorMsg = null;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        if (isAbsent)
+                          TextField(
+                            controller: absenceReasonController,
+                            maxLines: 2,
+                            decoration: InputDecoration(
+                              labelText: 'Powód nieobecności *',
+                              hintText: 'np. Choroba, nagła sytuacja losowa',
+                              prefixIcon: const Icon(Icons.info_outline),
+                              border: const OutlineInputBorder(),
+                              errorText: errorMsg,
+                            ),
+                          )
+                        else ...[
+                          TextField(
+                            controller: checkInController,
+                            decoration: const InputDecoration(
+                              labelText: 'Godzina rozpoczęcia',
+                              prefixIcon: Icon(Icons.login),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: checkOutController,
+                            decoration: const InputDecoration(
+                              labelText: 'Godzina zakończenia',
+                              prefixIcon: Icon(Icons.logout),
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          if (errorMsg != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              errorMsg!,
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: checkOutController,
-                    decoration: const InputDecoration(
-                      labelText: 'Godzina zakończenia',
-                      prefixIcon: Icon(Icons.logout),
-                      border: OutlineInputBorder(),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Anuluj'),
                     ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Anuluj'),
+                    FilledButton(
+                      onPressed: () {
+                        if (isAbsent) {
+                          final reason = absenceReasonController.text.trim();
+                          if (reason.isEmpty) {
+                            setDialogState(
+                              () => errorMsg = 'Podaj powód nieobecności',
+                            );
+                            return;
+                          }
+                          Navigator.pop(context);
+                          _submitAttendance(
+                            date,
+                            '00:00',
+                            '00:00',
+                            isAbsent: true,
+                            absenceReason: reason,
+                          );
+                        } else {
+                          final inVal = checkInController.text.trim();
+                          final outVal = checkOutController.text.trim();
+                          if (inVal.isEmpty || outVal.isEmpty) {
+                            setDialogState(
+                              () => errorMsg = 'Podaj godziny pracy',
+                            );
+                            return;
+                          }
+                          Navigator.pop(context);
+                          _submitAttendance(date, inVal, outVal);
+                        }
+                      },
+                      child: Text(isAbsent ? 'Zgłoś nieobecność' : 'Zapisz'),
+                    ),
+                  ],
                 ),
-                FilledButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _submitAttendance(
-                      shift.date,
-                      checkInController.text,
-                      checkOutController.text,
-                    );
-                  },
-                  child: const Text('Zapisz'),
-                ),
-              ],
-            ),
-      );
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd pobierania domyślnych wartości: $e')),
-        );
-      }
-    }
+          ),
+    );
   }
 
   Future<void> _submitAttendance(
     DateTime date,
     String checkIn,
-    String checkOut,
-  ) async {
+    String checkOut, {
+    bool isAbsent = false,
+    String? absenceReason,
+  }) async {
     setState(() => _isLoading = true);
     try {
       await ref
           .read(apiServiceProvider)
-          .registerAttendance(date, checkIn, checkOut);
+          .registerAttendance(
+            date,
+            checkIn,
+            checkOut,
+            isAbsent: isAbsent,
+            absenceReason: absenceReason,
+          );
+      await _loadHomeExtras();
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✓ Obecność zarejestrowana'),
+          SnackBar(
+            content: Text(
+              isAbsent
+                  ? '✓ Zgłoszono nieobecność na zmianie'
+                  : '✓ Obecność zarejestrowana',
+            ),
             backgroundColor: Colors.green,
           ),
         );

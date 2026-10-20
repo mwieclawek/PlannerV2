@@ -14,7 +14,7 @@ from ..auth_utils import (
     create_access_token, create_refresh_token, decode_token,
     ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user, ensure_tenant_active
 )
-from ..schemas import Token, UserCreate, UserResponse, UserPasswordChange
+from ..schemas import Token, UserCreate, UserResponse, UserPasswordChange, UserProfileUpdate
 from ..main import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -212,9 +212,11 @@ def read_users_me(current_user: User = Depends(get_current_user)):
         "role_system": current_user.role_system,
         "created_at": current_user.created_at,
         "job_roles": [role.id for role in current_user.job_roles] if current_user.job_roles else [],
+        "job_role_names": [role.name for role in current_user.job_roles] if current_user.job_roles else [],
         "is_active": current_user.is_active,
         "target_hours_per_month": current_user.target_hours_per_month,
         "target_shifts_per_month": current_user.target_shifts_per_month,
+        "hourly_rate": current_user.hourly_rate,
         "tenant_id": current_user.tenant_id,
         "tenant_slug": current_user.tenant.slug if current_user.tenant else None,
         "tenant_name": current_user.tenant.name if current_user.tenant else None,
@@ -223,6 +225,34 @@ def read_users_me(current_user: User = Depends(get_current_user)):
             current_user.encrypted_google_access_token or current_user.encrypted_google_refresh_token
         ),
     }
+
+
+@router.put("/me", response_model=UserResponse)
+def update_users_me(
+    profile_data: UserProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    data = profile_data.dict(exclude_unset=True)
+    if "email" in data:
+        new_email = data["email"].strip().lower() if data["email"] and data["email"].strip() else None
+        if new_email:
+            if not _is_email(new_email):
+                raise HTTPException(status_code=400, detail="Nieprawidłowy format adresu email")
+            existing = session.exec(
+                select(User).where(User.email == new_email, User.id != current_user.id)
+            ).first()
+            if existing:
+                raise HTTPException(status_code=400, detail="Ten adres email jest już przypisany do innego konta")
+        current_user.email = new_email
+
+    if "full_name" in data and data["full_name"] and data["full_name"].strip():
+        current_user.full_name = data["full_name"].strip()
+
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+    return read_users_me(current_user)
 
 
 @router.put("/change-password")

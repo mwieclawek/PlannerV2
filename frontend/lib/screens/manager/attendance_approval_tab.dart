@@ -576,9 +576,19 @@ class _AttendanceApprovalTabState extends ConsumerState<AttendanceApprovalTab>
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text('Data: ${attendance['date']}'),
-                                        Text(
-                                          'Godz: ${attendance['check_in']} - ${attendance['check_out']}',
-                                        ),
+                                        if (attendance['is_absent'] == true)
+                                          Text(
+                                            '🚫 NIEOBECNY — Powód: ${attendance['absence_reason'] ?? 'Brak'}',
+                                            style: TextStyle(
+                                              color:
+                                                  Colors.deepOrange.shade800,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          )
+                                        else
+                                          Text(
+                                            'Godz: ${attendance['check_in']} - ${attendance['check_out']}',
+                                          ),
                                         if (!(attendance['was_scheduled']
                                                 as bool) &&
                                             isPending)

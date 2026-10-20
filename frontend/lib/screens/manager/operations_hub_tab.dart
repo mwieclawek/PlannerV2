@@ -6,14 +6,14 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
 
-class OperationsHubTab extends StatefulWidget {
+class OperationsHubTab extends ConsumerStatefulWidget {
   const OperationsHubTab({super.key});
 
   @override
-  State<OperationsHubTab> createState() => _OperationsHubTabState();
+  ConsumerState<OperationsHubTab> createState() => _OperationsHubTabState();
 }
 
-class _OperationsHubTabState extends State<OperationsHubTab>
+class _OperationsHubTabState extends ConsumerState<OperationsHubTab>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
@@ -32,6 +32,8 @@ class _OperationsHubTabState extends State<OperationsHubTab>
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final tipPoolEnabled =
+        ref.watch(tipPoolEnabledProvider).valueOrNull ?? true;
     return Column(
       children: [
         Container(
@@ -41,13 +43,19 @@ class _OperationsHubTabState extends State<OperationsHubTab>
             labelColor: colorScheme.primary,
             unselectedLabelColor: colorScheme.onSurfaceVariant,
             indicatorColor: colorScheme.primary,
-            tabs: const [
-              Tab(text: 'Płace i Tip Pool', icon: Icon(Icons.payments_outlined)),
+            tabs: [
               Tab(
+                text: tipPoolEnabled ? 'Płace i Tip Pool' : 'Płace i Koszty',
+                icon: const Icon(Icons.payments_outlined),
+              ),
+              const Tab(
                 text: 'Checklisty i HACCP',
                 icon: Icon(Icons.assignment_turned_in_outlined),
               ),
-              Tab(text: 'Ogłoszenia', icon: Icon(Icons.campaign_outlined)),
+              const Tab(
+                text: 'Ogłoszenia',
+                icon: Icon(Icons.campaign_outlined),
+              ),
             ],
           ),
         ),
@@ -136,9 +144,96 @@ class _PayrollSubTabState extends ConsumerState<_PayrollSubTab> {
     await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
+  void _showEditHourlyRateDialog(PayrollEmployeeItem item) {
+    final controller = TextEditingController(
+      text: item.hourlyRate > 0 ? item.hourlyRate.toStringAsFixed(2) : '',
+    );
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      builder:
+          (ctx) => StatefulBuilder(
+            builder:
+                (ctx, setDialogState) => AlertDialog(
+                  title: Text('Stawka godzinowa: ${item.userName}'),
+                  content: SizedBox(
+                    width: 340,
+                    child: TextField(
+                      controller: controller,
+                      autofocus: true,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Stawka godzinowa (PLN/h)',
+                        hintText: 'np. 30.50',
+                        prefixIcon: Icon(Icons.payments_outlined),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: saving ? null : () => Navigator.pop(ctx),
+                      child: const Text('Anuluj'),
+                    ),
+                    FilledButton(
+                      onPressed:
+                          saving
+                              ? null
+                              : () async {
+                                final raw =
+                                    controller.text
+                                        .replaceAll(',', '.')
+                                        .trim();
+                                final parsed = double.tryParse(raw);
+                                setDialogState(() => saving = true);
+                                try {
+                                  await ref
+                                      .read(apiServiceProvider)
+                                      .updateUser(
+                                        item.userId,
+                                        hourlyRate: parsed,
+                                        clearHourlyRate: raw.isEmpty,
+                                      );
+                                  if (ctx.mounted) {
+                                    Navigator.pop(ctx);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Zaktualizowano stawkę dla ${item.userName}',
+                                        ),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                    _loadPayroll();
+                                  }
+                                } catch (e) {
+                                  setDialogState(() => saving = false);
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Błąd: $e'),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                      child: const Text('Zapisz'),
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final tipPoolEnabled =
+        ref.watch(tipPoolEnabledProvider).valueOrNull ?? true;
     return RefreshIndicator(
       onRefresh: _loadPayroll,
       child: SingleChildScrollView(
@@ -227,12 +322,13 @@ class _PayrollSubTabState extends ConsumerState<_PayrollSubTab> {
                     icon: Icons.badge_outlined,
                     color: colorScheme.primary,
                   ),
-                  _kpiCard(
-                    title: 'Pula napiwków (Tip Pool)',
-                    value: '${_summary!.totalTips.toStringAsFixed(2)} PLN',
-                    icon: Icons.volunteer_activism_outlined,
-                    color: Colors.teal,
-                  ),
+                  if (tipPoolEnabled)
+                    _kpiCard(
+                      title: 'Pula napiwków (Tip Pool)',
+                      value: '${_summary!.totalTips.toStringAsFixed(2)} PLN',
+                      icon: Icons.volunteer_activism_outlined,
+                      color: Colors.teal,
+                    ),
                   _kpiCard(
                     title: 'Utarg miesięczny',
                     value:
@@ -283,29 +379,76 @@ class _PayrollSubTabState extends ConsumerState<_PayrollSubTab> {
                       item.userName,
                       style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                     ),
-                    subtitle: Text(
-                      'Zatwierdzone: ${item.confirmedHours.toStringAsFixed(2)}h • Oczekujące: ${item.pendingHours.toStringAsFixed(2)}h • Stawka: ${item.hourlyRate.toStringAsFixed(2)} PLN/h',
-                      style: const TextStyle(fontSize: 12),
+                    subtitle: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        Text(
+                          'Zatwierdzone: ${item.confirmedHours.toStringAsFixed(2)}h • Oczekujące: ${item.pendingHours.toStringAsFixed(2)}h • Stawka: ${item.hourlyRate.toStringAsFixed(2)} PLN/h',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        InkWell(
+                          onTap: () => _showEditHourlyRateDialog(item),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.edit_outlined,
+                                  size: 14,
+                                  color: colorScheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  item.hourlyRate > 0
+                                      ? 'Zmień stawkę'
+                                      : 'Ustaw stawkę',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     trailing: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          '${item.totalPay.toStringAsFixed(2)} PLN',
+                          '${(tipPoolEnabled ? item.totalPay : item.basePay).toStringAsFixed(2)} PLN',
                           style: GoogleFonts.outfit(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: colorScheme.primary,
                           ),
                         ),
-                        Text(
-                          'Baza: ${item.basePay.toStringAsFixed(2)} + Tip: ${item.allocatedTips.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade600,
+                        if (tipPoolEnabled)
+                          Text(
+                            'Baza: ${item.basePay.toStringAsFixed(2)} + Tip: ${item.allocatedTips.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                          )
+                        else
+                          Text(
+                            'Wynagrodzenie bazowe',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),

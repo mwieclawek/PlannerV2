@@ -174,9 +174,230 @@ def get_schedule_summary(
 
 
 # Attendance Endpoints
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from sqlmodel import select
-from ..models import Attendance, AttendanceStatus, Schedule, ShiftDefinition
+from ..models import Attendance, AttendanceStatus, Schedule, ShiftDefinition, RestaurantConfig, JobRole, Notification
+
+def check_and_notify_overdue_attendances(
+    session: Session,
+    tenant_id: Optional[int],
+    background_tasks: Optional[BackgroundTasks] = None,
+) -> int:
+    """
+    When RestaurantConfig.require_attendance_registration is True, check published shifts
+    that ended at least 30 minutes ago (and are on/after attendance_required_from) without
+    an Attendance record. Send a one-time reminder Notification + Push to the employee.
+    """
+    if not tenant_id:
+        return 0
+    config = session.get(RestaurantConfig, tenant_id)
+    if not config or not config.require_attendance_registration:
+        return 0
+
+    try:
+        from ..services.google_calendar_service import WARSAW_TZ
+        now_local = datetime.now(WARSAW_TZ).replace(tzinfo=None)
+    except Exception:
+        now_local = datetime.now()
+
+    today = now_local.date()
+    min_date = config.attendance_required_from or (today - timedelta(days=7))
+    if min_date > today:
+        return 0
+
+    schedules = session.exec(
+        select(Schedule)
+        .join(User, Schedule.user_id == User.id)
+        .where(
+            User.tenant_id == tenant_id,
+            User.is_active == True,
+            Schedule.is_published == True,
+            Schedule.date >= min_date,
+            Schedule.date <= today,
+        )
+    ).all()
+
+    if not schedules:
+        return 0
+
+    from ..services.push_service import PushService, send_push_to_tokens
+    push_svc = PushService(session)
+    notified_count = 0
+
+    for sch in schedules:
+        existing_att = session.exec(
+            select(Attendance).where(
+                Attendance.user_id == sch.user_id,
+                Attendance.date == sch.date,
+            )
+        ).first()
+        if existing_att:
+            continue
+
+        shift = session.get(ShiftDefinition, sch.shift_def_id)
+        if not shift:
+            continue
+
+        start_dt = datetime.combine(sch.date, shift.start_time)
+        end_dt = datetime.combine(sch.date, shift.end_time)
+        if end_dt <= start_dt:
+            end_dt += timedelta(days=1)
+
+        if now_local < end_dt + timedelta(minutes=30):
+            continue
+
+        date_str = sch.date.isoformat()
+        title = "Przypomnienie o rejestracji czasu pracy"
+        # Check deduplication so we only send once per shift date
+        already_notified = session.exec(
+            select(Notification).where(
+                Notification.user_id == sch.user_id,
+                Notification.title == title,
+                Notification.body.contains(date_str),
+            )
+        ).first()
+        if already_notified:
+            continue
+
+        body = (
+            f"Minęło ponad 30 minut od zakończenia Twojej zmiany ({shift.name} w dniu {date_str}). "
+            f"Zarejestruj swoją obecność lub zgłoś nieobecność w aplikacji."
+        )
+        notif = Notification(
+            user_id=sch.user_id,
+            title=title,
+            body=body,
+        )
+        session.add(notif)
+        notified_count += 1
+
+        tokens = push_svc._get_user_tokens(sch.user_id)
+        if tokens:
+            if background_tasks is not None:
+                background_tasks.add_task(send_push_to_tokens, tokens, title, body)
+            else:
+                send_push_to_tokens(tokens, title, body)
+
+    if notified_count > 0:
+        session.commit()
+    return notified_count
+
+
+@router.get("/config")
+def get_employee_restaurant_config(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Get restaurant feature flags and configuration relevant to the employee panel."""
+    config = session.get(RestaurantConfig, current_user.tenant_id) if current_user.tenant_id else None
+    if not config:
+        config = session.exec(select(RestaurantConfig)).first()
+    if not config:
+        return {
+            "name": "Restauracja",
+            "require_attendance_registration": False,
+            "attendance_required_from": None,
+            "enable_tip_pool": True,
+            "pos_enabled": False,
+        }
+    return {
+        "id": config.id,
+        "name": config.name,
+        "require_attendance_registration": bool(config.require_attendance_registration),
+        "attendance_required_from": config.attendance_required_from.isoformat() if config.attendance_required_from else None,
+        "enable_tip_pool": bool(config.enable_tip_pool),
+        "pos_enabled": bool(config.pos_enabled),
+    }
+
+
+@router.get("/attendance/missing")
+def get_missing_attendance(
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return published shifts of current_user that have already ended (or are in the past)
+    and do not have an Attendance registration yet, respecting attendance_required_from.
+    Also triggers the 30-minute post-shift reminder notification check.
+    """
+    check_and_notify_overdue_attendances(session, current_user.tenant_id, background_tasks)
+
+    config = session.get(RestaurantConfig, current_user.tenant_id) if current_user.tenant_id else None
+    if not config:
+        config = session.exec(select(RestaurantConfig)).first()
+
+    require_reg = bool(config.require_attendance_registration) if config else False
+    req_from = config.attendance_required_from if config else None
+
+    try:
+        from ..services.google_calendar_service import WARSAW_TZ
+        now_local = datetime.now(WARSAW_TZ).replace(tzinfo=None)
+    except Exception:
+        now_local = datetime.now()
+
+    today = now_local.date()
+    min_date = req_from if req_from else (today - timedelta(days=14))
+
+    if min_date > today:
+        return {
+            "require_attendance_registration": require_reg,
+            "attendance_required_from": req_from.isoformat() if req_from else None,
+            "missing": [],
+        }
+
+    schedules = session.exec(
+        select(Schedule).where(
+            Schedule.user_id == current_user.id,
+            Schedule.is_published == True,
+            Schedule.date >= min_date,
+            Schedule.date <= today,
+        ).order_by(Schedule.date.desc())
+    ).all()
+
+    attendances = session.exec(
+        select(Attendance).where(
+            Attendance.user_id == current_user.id,
+            Attendance.date >= min_date,
+            Attendance.date <= today,
+        )
+    ).all()
+    attended_dates = {a.date for a in attendances}
+
+    missing_list = []
+    seen_dates = set()
+    for sch in schedules:
+        if sch.date in attended_dates or sch.date in seen_dates:
+            continue
+        shift = session.get(ShiftDefinition, sch.shift_def_id)
+        if not shift:
+            continue
+
+        start_dt = datetime.combine(sch.date, shift.start_time)
+        end_dt = datetime.combine(sch.date, shift.end_time)
+        if end_dt <= start_dt:
+            end_dt += timedelta(days=1)
+
+        # Include if shift is on a past date OR if today's shift has already ended
+        if sch.date < today or now_local >= end_dt:
+            role = session.get(JobRole, sch.role_id) if sch.role_id else None
+            seen_dates.add(sch.date)
+            missing_list.append({
+                "schedule_id": str(sch.id),
+                "date": sch.date.isoformat(),
+                "shift_name": shift.name,
+                "role_name": role.name if role else "Pracownik",
+                "start_time": shift.start_time.strftime("%H:%M"),
+                "end_time": shift.end_time.strftime("%H:%M"),
+                "overdue_30min": now_local >= (end_dt + timedelta(minutes=30)),
+            })
+
+    return {
+        "require_attendance_registration": require_reg,
+        "attendance_required_from": req_from.isoformat() if req_from else None,
+        "missing": missing_list,
+    }
+
 
 @router.get("/attendance/defaults/{target_date}")
 def get_attendance_defaults(
@@ -205,13 +426,15 @@ def get_attendance_defaults(
 @router.post("/attendance")
 def register_attendance(
     target_date: date,
-    check_in: str,  # HH:MM
-    check_out: str, # HH:MM
+    check_in: str = "00:00",  # HH:MM
+    check_out: str = "00:00", # HH:MM
     checklist_skip_reason: Optional[str] = None,
+    is_absent: bool = False,
+    absence_reason: Optional[str] = None,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Register employee attendance for a day"""
+    """Register employee attendance (or absence on a scheduled shift) for a day"""
     # Check if already registered
     existing = session.exec(
         select(Attendance).where(
@@ -232,17 +455,29 @@ def register_attendance(
     ).first()
     
     was_scheduled = schedule is not None
-    status = AttendanceStatus.CONFIRMED if was_scheduled else AttendanceStatus.PENDING
+    if is_absent:
+        if not absence_reason or not absence_reason.strip():
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Podaj powód nieobecności")
+        in_time = time(0, 0)
+        out_time = time(0, 0)
+        status = AttendanceStatus.CONFIRMED
+    else:
+        in_time = datetime.strptime(check_in, "%H:%M").time()
+        out_time = datetime.strptime(check_out, "%H:%M").time()
+        status = AttendanceStatus.CONFIRMED if was_scheduled else AttendanceStatus.PENDING
     
     attendance = Attendance(
         user_id=current_user.id,
         date=target_date,
-        check_in=datetime.strptime(check_in, "%H:%M").time(),
-        check_out=datetime.strptime(check_out, "%H:%M").time(),
+        check_in=in_time,
+        check_out=out_time,
         was_scheduled=was_scheduled,
         status=status,
         schedule_id=schedule.id if schedule else None,
         checklist_skip_reason=checklist_skip_reason,
+        is_absent=is_absent,
+        absence_reason=absence_reason.strip() if (is_absent and absence_reason) else None,
     )
     session.add(attendance)
     session.commit()
@@ -252,8 +487,10 @@ def register_attendance(
         "id": str(attendance.id),
         "status": status.value,
         "was_scheduled": was_scheduled,
-        "requires_approval": not was_scheduled,
+        "requires_approval": (not was_scheduled) and (not is_absent),
         "checklist_skip_reason": attendance.checklist_skip_reason,
+        "is_absent": attendance.is_absent,
+        "absence_reason": attendance.absence_reason,
     }
 
 @router.get("/attendance/my")
@@ -279,7 +516,9 @@ def get_my_attendance(
         "check_out": a.check_out.strftime("%H:%M"),
         "was_scheduled": a.was_scheduled,
         "status": a.status.value,
-        "checklist_skip_reason": a.checklist_skip_reason
+        "checklist_skip_reason": a.checklist_skip_reason,
+        "is_absent": bool(a.is_absent),
+        "absence_reason": a.absence_reason,
     } for a in attendances]
 
 

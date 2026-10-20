@@ -122,6 +122,8 @@ class GoogleCalendarService:
                 new_token = data.get("access_token")
                 if new_token:
                     user.google_access_token = new_token
+                    if data.get("refresh_token"):
+                        user.google_refresh_token = data.get("refresh_token")
                     self.session.add(user)
                     self.session.commit()
                     logger.info(f"Successfully refreshed Google access token for user {user.id}")
@@ -167,9 +169,76 @@ class GoogleCalendarService:
             "reminders": {"useDefault": True},
         }
 
+    @staticmethod
+    def _parse_iso_dt(val: Optional[str]) -> Optional[datetime]:
+        if not val or not isinstance(val, str):
+            return None
+        try:
+            return datetime.fromisoformat(val.replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    def _find_matching_events_in_window(
+        self,
+        access_token: str,
+        event_body: Dict[str, Any],
+        start_dt: datetime,
+        end_dt: datetime,
+    ) -> List[Dict[str, Any]]:
+        """
+        Look up existing events in Google Calendar within the shift's time window
+        to prevent duplicates when a schedule is re-saved with a new Schedule.id
+        or when 'Synchronizuj teraz' is clicked on an already-synced schedule.
+        """
+        headers = {"Authorization": f"Bearer {access_token}"}
+        params = {
+            "timeMin": (start_dt - timedelta(minutes=5)).isoformat(),
+            "timeMax": (end_dt + timedelta(minutes=5)).isoformat(),
+            "singleEvents": "true",
+        }
+        try:
+            res = httpx.get(f"{CALENDAR_EVENTS_URL}?{urlencode(params)}", headers=headers, timeout=10.0)
+            if res.status_code != 200:
+                return []
+            data = res.json()
+            if not isinstance(data, dict):
+                return []
+            items = data.get("items")
+            if not isinstance(items, list):
+                return []
+
+            matched = []
+            target_id = event_body.get("id")
+            target_summary = event_body.get("summary", "")
+            for ev in items:
+                if not isinstance(ev, dict) or ev.get("status") == "cancelled":
+                    continue
+                ev_id = str(ev.get("id", ""))
+                if ev_id == target_id:
+                    matched.append(ev)
+                    continue
+                ev_summary = str(ev.get("summary", ""))
+                ev_desc = str(ev.get("description", ""))
+                is_planner_event = (
+                    ev_id.startswith("plannerv2")
+                    or ev_summary == target_summary
+                    or ev_summary.startswith("Zmiana ")
+                    or "Grafik pracy:" in ev_desc
+                )
+                if not is_planner_event:
+                    continue
+                ev_start = self._parse_iso_dt((ev.get("start") or {}).get("dateTime"))
+                ev_end = self._parse_iso_dt((ev.get("end") or {}).get("dateTime"))
+                if ev_start and ev_end and ev_start == start_dt and ev_end == end_dt:
+                    matched.append(ev)
+            return matched
+        except Exception:
+            return []
+
     def sync_schedule_to_calendar(self, user: User, schedule: Schedule) -> bool:
         """
-        Upserts a single schedule entry into Google Calendar using a deterministic event ID.
+        Upserts a single schedule entry into Google Calendar using a deterministic event ID,
+        and deduplicates any existing shift events in the same time window.
         """
         if not schedule.is_published:
             return False
@@ -187,13 +256,31 @@ class GoogleCalendarService:
         event_body = self._build_event(user, schedule, shift)
         event_id = event_body["id"]
         update_url = f"{CALENDAR_EVENTS_URL}/{event_id}"
+        start_dt, end_dt = compute_event_window(schedule.date, shift.start_time, shift.end_time)
 
         def _attempt(access_token: str) -> httpx.Response:
             headers = {
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json"
             }
-            # First attempt: insert new event with custom deterministic ID
+            # Check if an event for this shift window already exists in Google Calendar
+            existing_events = self._find_matching_events_in_window(access_token, event_body, start_dt, end_dt)
+            if existing_events:
+                primary = next((e for e in existing_events if e.get("id") == event_id), existing_events[0])
+                primary_id = primary["id"]
+                body = dict(event_body, id=primary_id, status="confirmed")
+                res = httpx.put(f"{CALENDAR_EVENTS_URL}/{primary_id}", headers=headers, json=body, timeout=10.0)
+                # Clean up any extra duplicates in the exact same shift slot
+                for dup in existing_events:
+                    dup_id = dup.get("id")
+                    if dup_id and dup_id != primary_id:
+                        try:
+                            httpx.delete(f"{CALENDAR_EVENTS_URL}/{dup_id}", headers=headers, timeout=10.0)
+                        except Exception:
+                            pass
+                return res
+
+            # Insert new event with custom deterministic ID
             res = httpx.post(CALENDAR_EVENTS_URL, headers=headers, json=event_body, timeout=10.0)
             if res.status_code == 409:
                 # Event already exists (or was cancelled): update it

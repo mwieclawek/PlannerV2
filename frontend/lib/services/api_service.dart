@@ -7,34 +7,92 @@ import '../utils/api_error_handler.dart';
 class ApiService {
   final String baseUrl;
   final Dio _dio;
+  String? _memoryAccessToken;
+  String? _memoryRefreshToken;
+  bool _isRefreshing = false;
 
   ApiService(this.baseUrl) : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          // Skip auth for login/register
+          // Skip auth for login/register/refresh
           if (options.path.contains('/auth/token') ||
-              options.path.contains('/auth/register')) {
+              options.path.contains('/auth/register') ||
+              options.path.contains('/auth/refresh')) {
             return handler.next(options);
           }
 
           try {
             final prefs = await SharedPreferences.getInstance();
-            final token = prefs.getString('access_token');
+            final token = prefs.getString('access_token') ?? _memoryAccessToken;
             if (token != null) {
               options.headers['Authorization'] = 'Bearer $token';
             }
           } catch (e) {
-            // If SharedPreferences fails, just proceed without token
+            if (_memoryAccessToken != null) {
+              options.headers['Authorization'] = 'Bearer $_memoryAccessToken';
+            }
             debugPrint('Error getting token: $e');
           }
           return handler.next(options);
         },
         onError: (error, handler) async {
-          if (error.response?.statusCode == 401) {
+          final isAuthEndpoint = error.requestOptions.path.contains('/auth/token') ||
+              error.requestOptions.path.contains('/auth/refresh') ||
+              error.requestOptions.path.contains('/auth/register');
+
+          if (error.response?.statusCode == 401 &&
+              !isAuthEndpoint &&
+              error.requestOptions.extra['_retried'] != true &&
+              !_isRefreshing) {
+            _isRefreshing = true;
             try {
               final prefs = await SharedPreferences.getInstance();
+              final refreshToken =
+                  prefs.getString('refresh_token') ?? _memoryRefreshToken;
+              final rememberMe = prefs.getBool('remember_me') ?? true;
+
+              if (refreshToken != null && refreshToken.isNotEmpty) {
+                final refreshDio = Dio(BaseOptions(baseUrl: baseUrl));
+                final refreshRes = await refreshDio.post(
+                  '/auth/refresh',
+                  options: Options(
+                    headers: {'Authorization': 'Bearer $refreshToken'},
+                  ),
+                );
+                final newAccess = refreshRes.data['access_token'] as String?;
+                final newRefresh = refreshRes.data['refresh_token'] as String?;
+                if (newAccess != null && newAccess.isNotEmpty) {
+                  _memoryAccessToken = newAccess;
+                  if (newRefresh != null && newRefresh.isNotEmpty) {
+                    _memoryRefreshToken = newRefresh;
+                  }
+                  if (rememberMe) {
+                    await prefs.setString('access_token', newAccess);
+                    if (newRefresh != null && newRefresh.isNotEmpty) {
+                      await prefs.setString('refresh_token', newRefresh);
+                    }
+                  }
+                  _isRefreshing = false;
+                  final retryOpts = error.requestOptions;
+                  retryOpts.headers['Authorization'] = 'Bearer $newAccess';
+                  retryOpts.extra['_retried'] = true;
+                  final retryResponse = await _dio.fetch(retryOpts);
+                  return handler.resolve(retryResponse);
+                }
+              }
+            } catch (refreshErr) {
+              debugPrint('Token refresh failed: $refreshErr');
+            } finally {
+              _isRefreshing = false;
+            }
+
+            try {
+              _memoryAccessToken = null;
+              _memoryRefreshToken = null;
+              final prefs = await SharedPreferences.getInstance();
               await prefs.remove('access_token');
+              await prefs.remove('refresh_token');
             } catch (e) {
               debugPrint('Error removing token: $e');
             }
@@ -51,7 +109,12 @@ class ApiService {
   Dio get client => _dio;
 
   // Auth
-  Future<String> login(String email, String password, {String? tenantSlug}) async {
+  Future<String> login(
+    String email,
+    String password, {
+    String? tenantSlug,
+    bool rememberMe = true,
+  }) async {
     final response = await _dio.post(
       '/auth/token',
       data: {'username': email, 'password': password},
@@ -61,13 +124,24 @@ class ApiService {
           if (tenantSlug != null && tenantSlug.isNotEmpty)
             'X-Tenant-Slug': tenantSlug,
         },
-        // prevent throwing for 400 so we can inspect it, or just let it throw but ensure Interceptor handles it?
-        // Actually, let's keep it throwing but standard
       ),
     );
-    final token = response.data['access_token'];
+    final token = response.data['access_token'] as String;
+    final refreshToken = response.data['refresh_token'] as String?;
+    _memoryAccessToken = token;
+    _memoryRefreshToken = refreshToken;
+
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('access_token', token);
+    await prefs.setBool('remember_me', rememberMe);
+    if (rememberMe) {
+      await prefs.setString('access_token', token);
+      if (refreshToken != null) {
+        await prefs.setString('refresh_token', refreshToken);
+      }
+    } else {
+      await prefs.remove('access_token');
+      await prefs.remove('refresh_token');
+    }
     return token;
   }
 
@@ -89,6 +163,7 @@ class ApiService {
     }
     final response = await _dio.post('/auth/register', data: data);
     final token = response.data['access_token'];
+    _memoryAccessToken = token;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('access_token', token);
     return token;
@@ -99,9 +174,20 @@ class ApiService {
     return User.fromJson(response.data);
   }
 
+  Future<User> updateMyProfile({String? email, String? fullName}) async {
+    final data = <String, dynamic>{};
+    if (email != null) data['email'] = email;
+    if (fullName != null) data['full_name'] = fullName;
+    final response = await _dio.put('/auth/me', data: data);
+    return User.fromJson(response.data);
+  }
+
   Future<void> logout() async {
+    _memoryAccessToken = null;
+    _memoryRefreshToken = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
+    await prefs.remove('refresh_token');
   }
 
   Future<void> changePassword(String oldPassword, String newPassword) async {
@@ -277,9 +363,12 @@ class ApiService {
 
   // Check if user is logged in
   Future<bool> isLoggedIn() async {
+    if (_memoryAccessToken != null && _memoryAccessToken!.isNotEmpty) {
+      return true;
+    }
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
-    return token != null;
+    return token != null && token.isNotEmpty;
   }
 
   // Team Management (Manager)
@@ -312,14 +401,19 @@ class ApiService {
     int? targetShiftsPerMonth,
     double? hourlyRate,
     bool? isActive,
-    bool clearTargets = false, // New parameter to explicitly clear targets
+    bool clearTargets = false,
+    bool clearHourlyRate = false,
   }) async {
     final Map<String, dynamic> data = {};
     if (fullName != null) data['full_name'] = fullName;
     if (email != null) data['email'] = email;
     if (roleSystem != null) data['role_system'] = roleSystem;
     if (isActive != null) data['is_active'] = isActive;
-    if (hourlyRate != null) data['hourly_rate'] = hourlyRate;
+    if (clearHourlyRate) {
+      data['hourly_rate'] = null;
+    } else if (hourlyRate != null) {
+      data['hourly_rate'] = hourlyRate;
+    }
 
     if (clearTargets) {
       data['target_hours_per_month'] = null;
@@ -541,11 +635,20 @@ class ApiService {
     return response.data;
   }
 
+  Future<Map<String, dynamic>> getEmployeeRestaurantConfig() async {
+    final response = await _dio.get('/employee/config');
+    return response.data as Map<String, dynamic>;
+  }
+
   Future<void> saveConfig(
     String name,
     String openingHours,
     String? address, {
     bool? posEnabled,
+    bool? requireAttendanceRegistration,
+    String? attendanceRequiredFrom,
+    bool clearAttendanceRequiredFrom = false,
+    bool? enableTipPool,
   }) async {
     final data = <String, dynamic>{
       'name': name,
@@ -553,6 +656,17 @@ class ApiService {
       'address': address,
     };
     if (posEnabled != null) data['pos_enabled'] = posEnabled;
+    if (requireAttendanceRegistration != null) {
+      data['require_attendance_registration'] = requireAttendanceRegistration;
+    }
+    if (clearAttendanceRequiredFrom) {
+      data['attendance_required_from'] = null;
+    } else if (attendanceRequiredFrom != null) {
+      data['attendance_required_from'] = attendanceRequiredFrom;
+    }
+    if (enableTipPool != null) {
+      data['enable_tip_pool'] = enableTipPool;
+    }
     await _dio.post('/manager/config', data: data);
   }
 
@@ -574,6 +688,11 @@ class ApiService {
   }
 
   // Attendance (Employee)
+  Future<Map<String, dynamic>> getMissingAttendance() async {
+    final response = await _dio.get('/employee/attendance/missing');
+    return response.data as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> getAttendanceDefaults(DateTime date) async {
     final response = await _dio.get(
       '/employee/attendance/defaults/${date.toIso8601String().split('T')[0]}',
@@ -586,6 +705,8 @@ class ApiService {
     String checkIn,
     String checkOut, {
     String? checklistSkipReason,
+    bool isAbsent = false,
+    String? absenceReason,
   }) async {
     final response = await _dio.post(
       '/employee/attendance',
@@ -595,6 +716,9 @@ class ApiService {
         'check_out': checkOut,
         if (checklistSkipReason != null && checklistSkipReason.isNotEmpty)
           'checklist_skip_reason': checklistSkipReason,
+        'is_absent': isAbsent,
+        if (absenceReason != null && absenceReason.isNotEmpty)
+          'absence_reason': absenceReason,
       },
     );
     return response.data;

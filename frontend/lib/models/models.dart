@@ -13,7 +13,9 @@ class User {
   final String? tenantName;
   final bool isSuperadmin;
   final List<int> jobRoleIds;
+  final List<String> jobRoleNames;
   final double? hourlyRate;
+  final bool isGoogleCalendarConnected;
 
   User({
     required this.id,
@@ -30,7 +32,9 @@ class User {
     this.tenantName,
     this.isSuperadmin = false,
     this.jobRoleIds = const [],
+    this.jobRoleNames = const [],
     this.hourlyRate,
+    this.isGoogleCalendarConnected = false,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -53,7 +57,12 @@ class User {
               ?.map((e) => (e as num).toInt())
               .toList() ??
           [],
+      jobRoleNames: (json['job_role_names'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          [],
       hourlyRate: (json['hourly_rate'] as num?)?.toDouble(),
+      isGoogleCalendarConnected: json['is_google_calendar_connected'] == true,
     );
   }
 
@@ -73,7 +82,9 @@ class User {
       'tenant_name': tenantName,
       'is_superadmin': isSuperadmin,
       'job_roles': jobRoleIds,
+      'job_role_names': jobRoleNames,
       'hourly_rate': hourlyRate,
+      'is_google_calendar_connected': isGoogleCalendarConnected,
     };
   }
 

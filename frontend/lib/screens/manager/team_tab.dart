@@ -205,6 +205,8 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                                     fullName: fullName,
                                     email: email.isNotEmpty ? email : null,
                                     hourlyRate: rate,
+                                    clearHourlyRate:
+                                        hourlyRateController.text.trim().isEmpty,
                                   );
                                   if (context.mounted) {
                                     Navigator.pop(context);
@@ -334,17 +336,34 @@ class _TeamTabState extends ConsumerState<TeamTab> {
     final shiftsController = TextEditingController(
       text: user.targetShiftsPerMonth?.toString() ?? '',
     );
+    final hourlyRateController = TextEditingController(
+      text: user.hourlyRate != null ? user.hourlyRate!.toStringAsFixed(2) : '',
+    );
 
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
-            title: Text('Preferencje: ${user.fullName}'),
+            title: Text('Cele i stawka: ${user.fullName}'),
             content: SizedBox(
-              width: 300,
+              width: 320,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  TextField(
+                    controller: hourlyRateController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Stawka godzinowa (PLN/h)',
+                      prefixIcon: const Icon(Icons.payments_outlined),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                   TextField(
                     controller: hoursController,
                     keyboardType: TextInputType.number,
@@ -379,10 +398,14 @@ class _TeamTabState extends ConsumerState<TeamTab> {
               FilledButton(
                 onPressed: () async {
                   Navigator.pop(context);
+                  final rawRate =
+                      hourlyRateController.text.replaceAll(',', '.').trim();
                   await _savePreferences(
                     user.id,
                     int.tryParse(hoursController.text),
                     int.tryParse(shiftsController.text),
+                    double.tryParse(rawRate),
+                    rawRate.isEmpty,
                   );
                 },
                 child: const Text('Zapisz'),
@@ -396,6 +419,8 @@ class _TeamTabState extends ConsumerState<TeamTab> {
     String userId,
     int? targetHours,
     int? targetShifts,
+    double? hourlyRate,
+    bool clearHourlyRate,
   ) async {
     try {
       final api = ref.read(apiServiceProvider);
@@ -406,12 +431,14 @@ class _TeamTabState extends ConsumerState<TeamTab> {
         targetHoursPerMonth: targetHours,
         targetShiftsPerMonth: targetShifts,
         clearTargets: clearTargets,
+        hourlyRate: hourlyRate,
+        clearHourlyRate: clearHourlyRate,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Preferencje zapisane'),
+            content: Text('Zapisano ustawienia pracownika'),
             backgroundColor: Colors.green,
           ),
         );

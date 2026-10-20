@@ -84,6 +84,9 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
   bool _isSavingConfig = false;
   bool _isSavingAdminSettings = false;
   bool _posEnabled = false;
+  bool _requireAttendanceRegistration = false;
+  DateTime? _attendanceRequiredFrom;
+  bool _enableTipPool = true;
   bool _isLoginEnabled = true;
 
   @override
@@ -117,6 +120,15 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
           _restaurantNameController.text = config['name'] ?? '';
           _addressController.text = config['address'] ?? '';
           _posEnabled = config['pos_enabled'] == true;
+          _requireAttendanceRegistration =
+              config['require_attendance_registration'] == true;
+          final rawFrom = config['attendance_required_from'];
+          if (rawFrom is String && rawFrom.isNotEmpty) {
+            _attendanceRequiredFrom = DateTime.tryParse(rawFrom);
+          } else {
+            _attendanceRequiredFrom = null;
+          }
+          _enableTipPool = config['enable_tip_pool'] ?? true;
           final hours = config['opening_hours'] ?? '';
           if (hours.isNotEmpty && hours.contains('-')) {
             final parts = hours.split('-');
@@ -151,9 +163,17 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
             openingHours,
             _addressController.text.isNotEmpty ? _addressController.text : null,
             posEnabled: _posEnabled,
+            requireAttendanceRegistration: _requireAttendanceRegistration,
+            attendanceRequiredFrom:
+                _attendanceRequiredFrom != null
+                    ? DateFormat('yyyy-MM-dd').format(_attendanceRequiredFrom!)
+                    : null,
+            clearAttendanceRequiredFrom: _attendanceRequiredFrom == null,
+            enableTipPool: _enableTipPool,
           );
-      // Refresh posEnabledProvider so header buttons update immediately
+      // Refresh providers so UI updates immediately
       ref.invalidate(posEnabledProvider);
+      ref.invalidate(tipPoolEnabledProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -277,6 +297,123 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
                             ],
                           ),
                           const SizedBox(height: 24),
+                          Card(
+                            color: _requireAttendanceRegistration
+                                ? Colors.blue.shade50
+                                : null,
+                            child: Column(
+                              children: [
+                                SwitchListTile(
+                                  title: const Text(
+                                    'Wymagana rejestracja czasu pracy',
+                                  ),
+                                  subtitle: Text(
+                                    _requireAttendanceRegistration
+                                        ? 'Włączona — powiadomienie wysyłane 30 min po zakończeniu zmiany w razie braku wpisu'
+                                        : 'Wyłączona — brak automatycznych przypomnień o rejestracji obecności',
+                                  ),
+                                  secondary: Icon(
+                                    Icons.fact_check_outlined,
+                                    color: _requireAttendanceRegistration
+                                        ? Colors.blue.shade700
+                                        : Colors.grey,
+                                  ),
+                                  value: _requireAttendanceRegistration,
+                                  onChanged:
+                                      (val) => setState(() {
+                                        _requireAttendanceRegistration = val;
+                                        if (val &&
+                                            _attendanceRequiredFrom == null) {
+                                          _attendanceRequiredFrom =
+                                              DateTime.now();
+                                        }
+                                      }),
+                                ),
+                                const Divider(height: 1),
+                                ListTile(
+                                  leading: Icon(
+                                    Icons.event_available,
+                                    color: Colors.blue.shade700,
+                                  ),
+                                  title: const Text(
+                                    'Od kiedy obowiązkowa rejestracja obecności',
+                                  ),
+                                  subtitle: Text(
+                                    _attendanceRequiredFrom != null
+                                        ? 'Obowiązuje od: ${DateFormat('dd.MM.yyyy (EEEE)', 'pl_PL').format(_attendanceRequiredFrom!)}'
+                                        : 'Nie ustawiono daty początkowej (obejmuje ostatnie 30 dni)',
+                                  ),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (_attendanceRequiredFrom != null)
+                                        IconButton(
+                                          tooltip: 'Wyczyść datę',
+                                          icon: const Icon(Icons.clear),
+                                          onPressed:
+                                              () => setState(
+                                                () =>
+                                                    _attendanceRequiredFrom =
+                                                        null,
+                                              ),
+                                        ),
+                                      OutlinedButton.icon(
+                                        icon: const Icon(
+                                          Icons.calendar_today,
+                                          size: 16,
+                                        ),
+                                        label: const Text('Wybierz datę'),
+                                        onPressed: () async {
+                                          final picked = await showDatePicker(
+                                            context: context,
+                                            locale: const Locale('pl', 'PL'),
+                                            initialDate:
+                                                _attendanceRequiredFrom ??
+                                                DateTime.now(),
+                                            firstDate: DateTime(2024),
+                                            lastDate: DateTime.now().add(
+                                              const Duration(days: 365),
+                                            ),
+                                          );
+                                          if (picked != null) {
+                                            setState(
+                                              () =>
+                                                  _attendanceRequiredFrom =
+                                                      picked,
+                                            );
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Card(
+                            color: _enableTipPool
+                                ? Colors.teal.shade50
+                                : null,
+                            child: SwitchListTile(
+                              title: const Text('Pula napiwków (Tip Pool)'),
+                              subtitle: Text(
+                                _enableTipPool
+                                    ? 'Włączona — rozliczanie napiwków widoczne w Operacjach i Obecności'
+                                    : 'Wyłączona — moduł napiwków ukryty w całej aplikacji',
+                              ),
+                              secondary: Icon(
+                                Icons.volunteer_activism_outlined,
+                                color: _enableTipPool
+                                    ? Colors.teal.shade700
+                                    : Colors.grey,
+                              ),
+                              value: _enableTipPool,
+                              onChanged:
+                                  (val) => setState(() => _enableTipPool = val),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                           Card(
                             color: _posEnabled
                                 ? Colors.green.shade50

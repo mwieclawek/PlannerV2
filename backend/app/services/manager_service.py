@@ -531,6 +531,7 @@ class ManagerService:
             select(func.count(Attendance.id))
             .where(Attendance.user_id == user_id)
             .where(Attendance.status == AttendanceStatus.CONFIRMED)
+            .where(Attendance.is_absent == False)
         ).one()
         
         # 2. Total hours (approximate from Attendance check in/out)
@@ -541,6 +542,7 @@ class ManagerService:
             select(Attendance)
             .where(Attendance.user_id == user_id)
             .where(Attendance.status == AttendanceStatus.CONFIRMED)
+            .where(Attendance.is_absent == False)
         ).all()
         
         total_hours = 0.0
@@ -580,6 +582,7 @@ class ManagerService:
                  select(func.count(Attendance.id))
                 .where(Attendance.user_id == user_id)
                 .where(Attendance.status == AttendanceStatus.CONFIRMED)
+                .where(Attendance.is_absent == False)
                 .where(Attendance.date >= start_of_month)
                 .where(Attendance.date <= end_of_month)
             ).one()
@@ -598,6 +601,12 @@ class ManagerService:
     def get_dashboard_home(self, target_date: Optional[date] = None) -> dict:
         today = target_date if target_date else date.today()
         yesterday = today - timedelta(days=1)
+
+        try:
+            from ..routers.employee import check_and_notify_overdue_attendances
+            check_and_notify_overdue_attendances(self.session, self.tenant_id)
+        except Exception:
+            pass
         
         # 1. Working today
         # Get schedules for today
