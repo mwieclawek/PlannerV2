@@ -297,6 +297,7 @@ def get_employee_restaurant_config(
             "name": "Restauracja",
             "require_attendance_registration": False,
             "attendance_required_from": None,
+            "require_checklists": False,
             "enable_tip_pool": True,
             "pos_enabled": False,
         }
@@ -305,6 +306,7 @@ def get_employee_restaurant_config(
         "name": config.name,
         "require_attendance_registration": bool(config.require_attendance_registration),
         "attendance_required_from": config.attendance_required_from.isoformat() if config.attendance_required_from else None,
+        "require_checklists": bool(getattr(config, "require_checklists", False)),
         "enable_tip_pool": bool(config.enable_tip_pool),
         "pos_enabled": bool(config.pos_enabled),
     }
@@ -685,16 +687,21 @@ def offer_shift_giveaway(
     )
     session.add(giveaway)
     
-    # Notify all managers
+    # 1. Notify Managers
     from ..models import Notification, RoleSystem
     from ..services.push_service import PushService, send_push_to_tokens
     push_svc = PushService(session)
     managers = session.exec(select(User).where(User.role_system == RoleSystem.MANAGER, User.tenant_id == current_user.tenant_id)).all()
     
-    # 1. Notify Managers
     for m in managers:
-        title = "Nowa zmiana na Giełdzie"
-        body = f"Pracownik {current_user.full_name} oddał zmianę w dniu {schedule.date} na giełdę."
+        if target_schedule:
+            m_target_user = session.get(User, target_schedule.user_id)
+            target_name = m_target_user.full_name if m_target_user else "innym pracownikiem"
+            title = "Propozycja wymiany zmiany"
+            body = f"Pracownik {current_user.full_name} zaproponował wymianę zmiany ze zmianą pracownika {target_name} ({schedule.date} ↔ {target_schedule.date})."
+        else:
+            title = "Nowa zmiana na Giełdzie"
+            body = f"Pracownik {current_user.full_name} oddał zmianę w dniu {schedule.date} na giełdę."
         notif = Notification(
             user_id=m.id,
             title=title,
@@ -706,35 +713,49 @@ def offer_shift_giveaway(
         if tokens:
             background_tasks.add_task(send_push_to_tokens, tokens, title, body)
             
-    # 2. Notify Eligible Employees (users with the required role, excluding the offerer)
-    eligible_employees = session.exec(
-        select(User).where(
-            User.role_system == RoleSystem.EMPLOYEE,
-            User.is_active == True,
-            User.id != current_user.id,
-            User.tenant_id == current_user.tenant_id
-        )
-    ).all()
-    
-    # Filter users who have the role required for this shift
-    for emp in eligible_employees:
-        emp_role_ids = [r.id for r in emp.job_roles] if hasattr(emp, 'job_roles') else []
-        if schedule.role_id in emp_role_ids:
-            emp_title = "Nowa zmiana do wzięcia!"
-            emp_body = f"Pracownik {current_user.full_name} wystawił swoją zmianę na giełdę ({schedule.date})."
-            
-            # Create in-app notification
+    # 2. Notify Employee(s)
+    if target_schedule:
+        # Direct swap: notify only the target employee
+        t_user = session.get(User, target_schedule.user_id)
+        if t_user:
+            emp_title = "Propozycja wymiany zmiany!"
+            emp_body = f"Pracownik {current_user.full_name} proponuje wymianę swojej zmiany na Twoją ({schedule.date} ↔ {target_schedule.date})."
             emp_notif = Notification(
-                user_id=emp.id,
+                user_id=t_user.id,
                 title=emp_title,
                 body=emp_body,
             )
             session.add(emp_notif)
-            
-            # Create push notification
-            emp_tokens = push_svc._get_user_tokens(emp.id)
+            emp_tokens = push_svc._get_user_tokens(t_user.id)
             if emp_tokens:
                 background_tasks.add_task(send_push_to_tokens, emp_tokens, emp_title, emp_body)
+    else:
+        # Open giveaway: notify all eligible employees with required role
+        eligible_employees = session.exec(
+            select(User).where(
+                User.role_system == RoleSystem.EMPLOYEE,
+                User.is_active == True,
+                User.id != current_user.id,
+                User.tenant_id == current_user.tenant_id
+            )
+        ).all()
+        
+        for emp in eligible_employees:
+            emp_role_ids = [r.id for r in emp.job_roles] if hasattr(emp, 'job_roles') else []
+            if schedule.role_id in emp_role_ids:
+                emp_title = "Nowa zmiana do wzięcia!"
+                emp_body = f"Pracownik {current_user.full_name} wystawił swoją zmianę na giełdę ({schedule.date})."
+                
+                emp_notif = Notification(
+                    user_id=emp.id,
+                    title=emp_title,
+                    body=emp_body,
+                )
+                session.add(emp_notif)
+                
+                emp_tokens = push_svc._get_user_tokens(emp.id)
+                if emp_tokens:
+                    background_tasks.add_task(send_push_to_tokens, emp_tokens, emp_title, emp_body)
         
     session.commit()
     session.refresh(giveaway)
@@ -744,10 +765,11 @@ def offer_shift_giveaway(
 @router.delete("/giveaway/{giveaway_id}")
 def cancel_giveaway(
     giveaway_id: UUID,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    """Cancel a giveaway offer"""
+    """Cancel a giveaway offer or reject a direct swap proposal"""
     giveaway = session.exec(
         select(ShiftGiveaway)
         .join(User, ShiftGiveaway.offered_by == User.id)
@@ -756,17 +778,46 @@ def cancel_giveaway(
     
     if not giveaway:
         raise HTTPException(status_code=404, detail="Giveaway not found")
-    
-    if giveaway.offered_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Not your giveaway")
+
+    target_schedule = None
+    if giveaway.target_shift_id:
+        try:
+            target_schedule = session.get(Schedule, UUID(str(giveaway.target_shift_id)))
+        except ValueError:
+            target_schedule = None
+
+    is_offerer = giveaway.offered_by == current_user.id
+    is_target_user = target_schedule and target_schedule.user_id == current_user.id
+
+    if not is_offerer and not is_target_user:
+        raise HTTPException(status_code=403, detail="Brak uprawnień do anulowania lub odrzucenia tej oferty")
     
     if giveaway.status != GiveawayStatus.OPEN:
         raise HTTPException(status_code=400, detail="Cannot cancel, giveaway already processed")
     
     giveaway.status = GiveawayStatus.CANCELLED
     session.add(giveaway)
+
+    # If rejected by the target employee, notify the offerer
+    if is_target_user and not is_offerer:
+        offerer = session.get(User, giveaway.offered_by)
+        if offerer:
+            from ..models import Notification
+            from ..services.push_service import PushService, send_push_to_tokens
+            push_svc = PushService(session)
+            title = "Propozycja wymiany odrzucona"
+            body = f"Pracownik {current_user.full_name} odrzucił(a) Twoją propozycję wymiany zmiany."
+            notif = Notification(
+                user_id=offerer.id,
+                title=title,
+                body=body,
+            )
+            session.add(notif)
+            tokens = push_svc._get_user_tokens(offerer.id)
+            if tokens:
+                background_tasks.add_task(send_push_to_tokens, tokens, title, body)
+
     session.commit()
-    
     return {"status": "cancelled"}
 
 @router.get("/giveaways/my")
@@ -835,6 +886,24 @@ def get_open_giveaways_for_employee(
         if schedule.date < date.today():
             continue
 
+        # Direct swap check (A <-> B)
+        target_schedule = None
+        target_user = None
+        target_shift = None
+        if g.target_shift_id:
+            try:
+                target_uuid = UUID(str(g.target_shift_id))
+                target_schedule = session.get(Schedule, target_uuid)
+                if target_schedule:
+                    target_user = session.get(User, target_schedule.user_id)
+                    target_shift = session.get(ShiftDefinition, target_schedule.shift_def_id)
+            except ValueError:
+                target_schedule = None
+
+            # Direct swap: only visible to the target employee!
+            if target_schedule and target_schedule.user_id != current_user.id:
+                continue
+
         # Conflict detection: does current user already have a shift on this date?
         my_shifts_on_day = session.exec(
             select(Schedule).where(
@@ -849,6 +918,9 @@ def get_open_giveaways_for_employee(
             g_start = shift.start_time
             g_end = shift.end_time
             for ms in my_shifts_on_day:
+                if target_schedule and ms.id == target_schedule.id:
+                    # Exclude the shift being exchanged in direct swap
+                    continue
                 my_shift = session.get(ShiftDefinition, ms.shift_def_id)
                 if not my_shift:
                     continue
@@ -888,6 +960,12 @@ def get_open_giveaways_for_employee(
             "conflict_type": conflict_type,
             "availability_hint": availability_hint,
             "target_shift_id": str(g.target_shift_id) if g.target_shift_id else None,
+            "is_direct_swap": bool(g.target_shift_id),
+            "target_user_name": target_user.full_name if target_user else None,
+            "target_date": target_schedule.date.isoformat() if target_schedule else None,
+            "target_shift_name": target_shift.name if target_shift else None,
+            "target_start_time": target_shift.start_time.strftime("%H:%M") if target_shift else None,
+            "target_end_time": target_shift.end_time.strftime("%H:%M") if target_shift else None,
             "created_at": g.created_at.isoformat(),
         })
 

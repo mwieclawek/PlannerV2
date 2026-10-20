@@ -688,6 +688,21 @@ class ManagerService:
              shift = self.session.get(ShiftDefinition, s.shift_def_id)
              role = self.session.get(JobRole, s.role_id)
              offerer = self.session.get(User, g.offered_by)
+
+             target_user_name = None
+             target_date = None
+             target_shift_name = None
+             if g.target_shift_id:
+                 try:
+                     t_sch = self.session.get(Schedule, UUID(str(g.target_shift_id)))
+                     if t_sch:
+                         t_u = self.session.get(User, t_sch.user_id)
+                         target_user_name = t_u.full_name if t_u else None
+                         target_date = t_sch.date
+                         t_shift = self.session.get(ShiftDefinition, t_sch.shift_def_id)
+                         target_shift_name = t_shift.name if t_shift else None
+                 except (ValueError, TypeError):
+                     pass
              
              open_giveaways.append({
                 "id": g.id,
@@ -703,6 +718,11 @@ class ManagerService:
                 "role_name": role.name if role else None,
                 "start_time": shift.start_time.strftime("%H:%M") if shift else None,
                 "end_time": shift.end_time.strftime("%H:%M") if shift else None,
+                "target_shift_id": g.target_shift_id,
+                "is_direct_swap": bool(g.target_shift_id),
+                "target_user_name": target_user_name,
+                "target_date": target_date.isoformat() if target_date else None,
+                "target_shift_name": target_shift_name,
              })
 
         # 4. Pending Leave Requests
@@ -842,6 +862,21 @@ class ManagerService:
             priority = {"AVAILABLE": 0, "PREFERRED": 1, "UNKNOWN": 2, "UNAVAILABLE": 3, "ALREADY_SCHEDULED": 4}
             suggestions.sort(key=lambda s: priority.get(s["availability_status"], 5))
             
+            target_user_name = None
+            target_date = None
+            target_shift_name = None
+            if g.target_shift_id:
+                try:
+                    t_sch = self.session.get(Schedule, UUID(str(g.target_shift_id)))
+                    if t_sch:
+                        t_u = self.session.get(User, t_sch.user_id)
+                        target_user_name = t_u.full_name if t_u else None
+                        target_date = t_sch.date
+                        t_shift = self.session.get(ShiftDefinition, t_sch.shift_def_id)
+                        target_shift_name = t_shift.name if t_shift else None
+                except (ValueError, TypeError):
+                    pass
+
             result.append({
                 "id": g.id,
                 "schedule_id": g.schedule_id,
@@ -856,6 +891,10 @@ class ManagerService:
                 "start_time": shift.start_time.strftime("%H:%M") if shift else None,
                 "end_time": shift.end_time.strftime("%H:%M") if shift else None,
                 "target_shift_id": g.target_shift_id,
+                "is_direct_swap": bool(g.target_shift_id),
+                "target_user_name": target_user_name,
+                "target_date": target_date.isoformat() if target_date else None,
+                "target_shift_name": target_shift_name,
                 "suggestions": suggestions
             })
         

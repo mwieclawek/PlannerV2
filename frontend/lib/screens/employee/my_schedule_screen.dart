@@ -24,6 +24,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
   bool _teamGridView = true;
   List<AnnouncementModel> _unreadAnnouncements = [];
   List<Map<String, dynamic>> _missingAttendances = [];
+  List<Map<String, dynamic>> _directSwapProposals = [];
 
   static DateTime _getMonday(DateTime date) {
     return date.subtract(Duration(days: date.weekday - 1));
@@ -61,6 +62,17 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
               rawList
                   .map((e) => Map<String, dynamic>.from(e as Map))
                   .toList();
+        });
+      }
+    } catch (_) {}
+
+    try {
+      final giveaways = await api.getEmployeeGiveaways();
+      final directSwaps =
+          giveaways.where((g) => g['is_direct_swap'] == true).toList();
+      if (mounted) {
+        setState(() {
+          _directSwapProposals = directSwaps;
         });
       }
     } catch (_) {}
@@ -138,6 +150,358 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     } catch (_) {
       if (mounted) setState(() => _teamLoading = false);
     }
+  }
+
+  Widget _buildDirectSwapProposalsSection() {
+    if (_directSwapProposals.isEmpty) return const SizedBox.shrink();
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.swap_horiz, color: colorScheme.primary, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'Prośby o wymianę zmian (${_directSwapProposals.length})',
+                style: GoogleFonts.outfit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ..._directSwapProposals.map((item) {
+            final id = item['id'].toString();
+            final offeredByName =
+                item['offered_by_name']?.toString() ?? 'Pracownik';
+
+            final offeredDateRaw = item['date']?.toString() ?? '';
+            final offeredDate = DateTime.tryParse(offeredDateRaw);
+            final offeredDateLabel =
+                offeredDate != null
+                    ? DateFormat('EEE, d MMM yyyy', 'pl_PL').format(offeredDate)
+                    : offeredDateRaw;
+            final offeredShift = item['shift_name']?.toString() ?? '';
+            final offeredStart = _formatTimeWithoutSeconds(
+              item['start_time']?.toString() ?? '',
+            );
+            final offeredEnd = _formatTimeWithoutSeconds(
+              item['end_time']?.toString() ?? '',
+            );
+            final roleName = item['role_name']?.toString();
+
+            final targetDateRaw = item['target_date']?.toString() ?? '';
+            final targetDate = DateTime.tryParse(targetDateRaw);
+            final targetDateLabel =
+                targetDate != null
+                    ? DateFormat('EEE, d MMM yyyy', 'pl_PL').format(targetDate)
+                    : targetDateRaw;
+            final targetShift = item['target_shift_name']?.toString() ?? '';
+            final targetStart = _formatTimeWithoutSeconds(
+              item['target_start_time']?.toString() ?? '',
+            );
+            final targetEnd = _formatTimeWithoutSeconds(
+              item['target_end_time']?.toString() ?? '',
+            );
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              color: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: colorScheme.primary.withValues(alpha: 0.4),
+                  width: 1.5,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'PROPOZYCJA WYMIANY',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '$offeredByName proponuje wymianę',
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF0F172A),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isMobile = constraints.maxWidth < 600;
+
+                        Widget buildShiftCard({
+                          required String title,
+                          required String dateLabel,
+                          required String shiftName,
+                          required String timeRange,
+                          String? role,
+                          required bool isOffered,
+                        }) {
+                          return Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color:
+                                  isOffered
+                                      ? const Color(0xFFF1F5F9)
+                                      : colorScheme.primaryContainer.withValues(
+                                        alpha: 0.25,
+                                      ),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color:
+                                    isOffered
+                                        ? const Color(0xFFE2E8F0)
+                                        : colorScheme.primary.withValues(
+                                          alpha: 0.3,
+                                        ),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color:
+                                        isOffered
+                                            ? const Color(0xFF64748B)
+                                            : colorScheme.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  dateLabel,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF0F172A),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '$shiftName • $timeRange${role != null ? ' ($role)' : ''}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: const Color(0xFF475569),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        final offeredCard = buildShiftCard(
+                          title: 'OTRZYMASZ (od: $offeredByName)',
+                          dateLabel: offeredDateLabel,
+                          shiftName: offeredShift,
+                          timeRange: '$offeredStart – $offeredEnd',
+                          role: roleName,
+                          isOffered: true,
+                        );
+
+                        final targetCard = buildShiftCard(
+                          title: 'ODDASZ (Twoja zmiana)',
+                          dateLabel: targetDateLabel,
+                          shiftName: targetShift,
+                          timeRange: '$targetStart – $targetEnd',
+                          isOffered: false,
+                        );
+
+                        if (isMobile) {
+                          return Column(
+                            children: [
+                              offeredCard,
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 6),
+                                child: Icon(
+                                  Icons.arrow_downward,
+                                  size: 20,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                              ),
+                              targetCard,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(child: offeredCard),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10),
+                              child: Icon(
+                                Icons.swap_horiz,
+                                size: 24,
+                                color: Color(0xFF94A3B8),
+                              ),
+                            ),
+                            Expanded(child: targetCard),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder:
+                                  (ctx) => AlertDialog(
+                                    title: const Text('Odrzucenie propozycji'),
+                                    content: Text(
+                                      'Czy na pewno chcesz odrzucić propozycję wymiany od użytkownika $offeredByName?',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Wróć'),
+                                      ),
+                                      FilledButton(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: Colors.red.shade700,
+                                        ),
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Odrzuć'),
+                                      ),
+                                    ],
+                                  ),
+                            );
+                            if (confirm == true) {
+                              try {
+                                await ref
+                                    .read(apiServiceProvider)
+                                    .cancelEmployeeGiveaway(id);
+                                if (mounted) {
+                                  setState(() {
+                                    _directSwapProposals.removeWhere(
+                                      (g) => g['id'].toString() == id,
+                                    );
+                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Odrzucono propozycję wymiany'),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Błąd: $e')),
+                                  );
+                                }
+                              }
+                            }
+                          },
+                          icon: const Icon(Icons.close, size: 16),
+                          label: const Text('Odrzuć'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red.shade700,
+                            side: BorderSide(color: Colors.red.shade200),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        FilledButton.icon(
+                          onPressed: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder:
+                                  (ctx) => AlertDialog(
+                                    title: const Text('Akceptacja wymiany zmian'),
+                                    content: Text(
+                                      'Czy na pewno chcesz zaakceptować wymianę zmian z użytkownikiem $offeredByName? Twoja zmiana zostanie z nim zamieniona natychmiast.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Anuluj'),
+                                      ),
+                                      FilledButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Zaakceptuj'),
+                                      ),
+                                    ],
+                                  ),
+                            );
+                            if (confirm == true) {
+                              try {
+                                await ref
+                                    .read(apiServiceProvider)
+                                    .claimGiveaway(id);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        '✓ Wymiana zmian została pomyślnie zrealizowana!',
+                                      ),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                  _loadSchedule();
+                                  _loadSummary();
+                                  _loadHomeExtras();
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Błąd: $e')),
+                                  );
+                                }
+                              }
+                            }
+                          },
+                          icon: const Icon(Icons.check, size: 16),
+                          label: const Text('Zaakceptuj wymianę'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
   }
 
   Widget _buildUnreadAnnouncementsSection() {
@@ -1148,6 +1512,7 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildDirectSwapProposalsSection(),
                   _buildUnreadAnnouncementsSection(),
                   _buildMissingAttendanceBanner(),
                   if (!isWideScreen) ...[

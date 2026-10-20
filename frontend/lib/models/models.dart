@@ -693,6 +693,13 @@ class ShiftGiveaway {
   final String? roleName;
   final String? startTime;
   final String? endTime;
+  final String? targetShiftId;
+  final bool isDirectSwap;
+  final String? targetUserName;
+  final String? targetDate;
+  final String? targetShiftName;
+  final String? targetStartTime;
+  final String? targetEndTime;
   final List<GiveawaySuggestion> suggestions;
 
   ShiftGiveaway({
@@ -709,6 +716,13 @@ class ShiftGiveaway {
     this.roleName,
     this.startTime,
     this.endTime,
+    this.targetShiftId,
+    this.isDirectSwap = false,
+    this.targetUserName,
+    this.targetDate,
+    this.targetShiftName,
+    this.targetStartTime,
+    this.targetEndTime,
     this.suggestions = const [],
   });
 
@@ -727,6 +741,13 @@ class ShiftGiveaway {
       roleName: json['role_name'] as String?,
       startTime: json['start_time'] as String?,
       endTime: json['end_time'] as String?,
+      targetShiftId: json['target_shift_id'] as String?,
+      isDirectSwap: json['is_direct_swap'] == true || json['target_shift_id'] != null,
+      targetUserName: json['target_user_name'] as String?,
+      targetDate: json['target_date'] as String?,
+      targetShiftName: json['target_shift_name'] as String?,
+      targetStartTime: json['target_start_time'] as String?,
+      targetEndTime: json['target_end_time'] as String?,
       suggestions:
           (json['suggestions'] as List? ?? [])
               .map(

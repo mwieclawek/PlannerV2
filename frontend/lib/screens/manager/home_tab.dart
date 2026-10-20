@@ -1109,6 +1109,32 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                   ],
                 ),
                 const SizedBox(height: 8),
+                if (giveaway.isDirectSwap) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.purple.shade200),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.swap_horiz, size: 14, color: Colors.purple.shade700),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Bezpośrednia wymiana A ↔ B (z ${giveaway.targetUserName ?? 'pracownikiem'})',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.purple.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(8),
@@ -1116,12 +1142,28 @@ class _HomeTabState extends ConsumerState<HomeTab> {
                     color: colorScheme.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    shiftInfo,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: colorScheme.onSurface,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        giveaway.isDirectSwap ? 'Oferowana zmiana: $shiftInfo' : shiftInfo,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                      if (giveaway.isDirectSwap && giveaway.targetDate != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'W zamian za: ${giveaway.targetDate} • ${giveaway.targetShiftName ?? 'Zmiana'} (${giveaway.targetStartTime ?? ''} - ${giveaway.targetEndTime ?? ''})',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.purple.shade900,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),

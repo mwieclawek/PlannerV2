@@ -891,6 +891,16 @@ class OperationsService:
 
     def validate_clockout_checklists(self, user: User, target_date: date) -> dict:
         self._verify_user_tenant(user)
+        from ..models import RestaurantConfig
+        config = self.session.get(RestaurantConfig, self.tenant_id)
+        if not config or not getattr(config, "require_checklists", False):
+            return {
+                "date": target_date,
+                "all_mandatory_completed": True,
+                "missing_mandatory_count": 0,
+                "missing_items": [],
+            }
+
         checklists = self.get_employee_checklists(user, target_date)
         missing_items = []
         for cl in checklists:

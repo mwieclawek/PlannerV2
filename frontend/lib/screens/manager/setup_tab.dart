@@ -86,6 +86,7 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
   bool _requireAttendanceRegistration = false;
   DateTime? _attendanceRequiredFrom;
   bool _enableTipPool = true;
+  bool _requireChecklists = false;
   bool _isLoginEnabled = true;
 
   @override
@@ -121,6 +122,7 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
           _posEnabled = config['pos_enabled'] == true;
           _requireAttendanceRegistration =
               config['require_attendance_registration'] == true;
+          _requireChecklists = config['require_checklists'] == true;
           final rawFrom = config['attendance_required_from'];
           if (rawFrom is String && rawFrom.isNotEmpty) {
             _attendanceRequiredFrom = DateTime.tryParse(rawFrom);
@@ -169,6 +171,7 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
                     : null,
             clearAttendanceRequiredFrom: _attendanceRequiredFrom == null,
             enableTipPool: _enableTipPool,
+            requireChecklists: _requireChecklists,
           );
       // Refresh providers so UI updates immediately
       ref.invalidate(posEnabledProvider);
@@ -410,6 +413,29 @@ class _RestaurantConfigTabState extends ConsumerState<_RestaurantConfigTab> {
                               value: _enableTipPool,
                               onChanged:
                                   (val) => setState(() => _enableTipPool = val),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Card(
+                            color: _requireChecklists
+                                ? Colors.amber.shade50
+                                : null,
+                            child: SwitchListTile(
+                              title: const Text('Wymagaj wykonania checklisty'),
+                              subtitle: Text(
+                                _requireChecklists
+                                    ? 'Włączona — pracownik musi uzupełnić lub uzasadnić pominięcie checklisty przy rejestracji wyjścia'
+                                    : 'Wyłączona — rejestracja wyjścia bez wymogu checklisty',
+                              ),
+                              secondary: Icon(
+                                Icons.checklist_rtl_outlined,
+                                color: _requireChecklists
+                                    ? Colors.amber.shade800
+                                    : Colors.grey,
+                              ),
+                              value: _requireChecklists,
+                              onChanged:
+                                  (val) => setState(() => _requireChecklists = val),
                             ),
                           ),
                           const SizedBox(height: 12),

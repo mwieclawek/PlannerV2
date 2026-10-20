@@ -709,6 +709,7 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
     String? attendanceRequiredFrom,
     bool? clearAttendanceRequiredFrom = false,
     bool? enableTipPool,
+    bool? requireChecklists,
   }) =>
       (super.noSuchMethod(
             Invocation.method(
@@ -720,6 +721,7 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
                 #attendanceRequiredFrom: attendanceRequiredFrom,
                 #clearAttendanceRequiredFrom: clearAttendanceRequiredFrom,
                 #enableTipPool: enableTipPool,
+                #requireChecklists: requireChecklists,
               },
             ),
             returnValue: _i6.Future<void>.value(),
@@ -1199,6 +1201,15 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
   _i6.Future<void> claimGiveaway(String? giveawayId) =>
       (super.noSuchMethod(
             Invocation.method(#claimGiveaway, [giveawayId]),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
+          )
+          as _i6.Future<void>);
+
+  @override
+  _i6.Future<void> cancelEmployeeGiveaway(String? giveawayId) =>
+      (super.noSuchMethod(
+            Invocation.method(#cancelEmployeeGiveaway, [giveawayId]),
             returnValue: _i6.Future<void>.value(),
             returnValueForMissingStub: _i6.Future<void>.value(),
           )

@@ -341,7 +341,7 @@ async def test_backend_attendance_config_and_tip_pool_enforcement(
     )
     assert bad_time.status_code == 400
 
-    # 4. Mandatory checklist enforcement on clock-out
+    # 4. Mandatory checklist enforcement on clock-out (configurable via require_checklists)
     tpl_resp = await client.post(
         "/manager/checklists",
         json={
@@ -354,13 +354,35 @@ async def test_backend_attendance_config_and_tip_pool_enforcement(
     )
     assert tpl_resp.status_code == 201
 
-    # Without checklist_skip_reason -> 400
+    # By default require_checklists is True, so clock-out without skip reason returns 400
     no_skip_resp = await client.post(
         "/employee/attendance",
         params={"target_date": three_days_ago.isoformat(), "check_in": "08:00", "check_out": "16:00"},
         headers=employee_headers,
     )
     assert no_skip_resp.status_code == 400
+
+    # If manager disables require_checklists in manager config ("Jeżeli ktoś nie chce")
+    await client.post(
+        "/manager/config",
+        json={"name": test_tenant.name, "require_checklists": False},
+        headers=auth_headers,
+    )
+
+    # When require_checklists is False, clock-out is allowed without checklist
+    disabled_chk_resp = await client.post(
+        "/employee/attendance",
+        params={"target_date": (three_days_ago - timedelta(days=1)).isoformat(), "check_in": "08:00", "check_out": "16:00"},
+        headers=employee_headers,
+    )
+    assert disabled_chk_resp.status_code == 200
+
+    # Re-enable require_checklists for subsequent tests
+    await client.post(
+        "/manager/config",
+        json={"name": test_tenant.name, "require_checklists": True},
+        headers=auth_headers,
+    )
 
     # With checklist_skip_reason -> 200
     with_skip_resp = await client.post(

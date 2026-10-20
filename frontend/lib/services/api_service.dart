@@ -649,6 +649,7 @@ class ApiService {
     String? attendanceRequiredFrom,
     bool clearAttendanceRequiredFrom = false,
     bool? enableTipPool,
+    bool? requireChecklists,
   }) async {
     final data = <String, dynamic>{
       'name': name,
@@ -666,6 +667,9 @@ class ApiService {
     }
     if (enableTipPool != null) {
       data['enable_tip_pool'] = enableTipPool;
+    }
+    if (requireChecklists != null) {
+      data['require_checklists'] = requireChecklists;
     }
     await _dio.post('/manager/config', data: data);
   }
@@ -1035,6 +1039,10 @@ class ApiService {
 
   Future<void> claimGiveaway(String giveawayId) async {
     await _dio.post('/employee/giveaways/$giveawayId/claim');
+  }
+
+  Future<void> cancelEmployeeGiveaway(String giveawayId) async {
+    await _dio.delete('/employee/giveaway/$giveawayId');
   }
 
   // ── POS & Kitchen ────────────────────────────────────────────────────────

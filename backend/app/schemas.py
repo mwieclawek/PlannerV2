@@ -367,6 +367,7 @@ class ConfigUpdate(BaseModel):
     pos_enabled: Optional[bool] = None
     require_attendance_registration: Optional[bool] = None
     attendance_required_from: Optional[date_type] = None
+    require_checklists: Optional[bool] = None
     enable_tip_pool: Optional[bool] = None
 
 class ConfigResponse(ConfigBase):
@@ -374,6 +375,7 @@ class ConfigResponse(ConfigBase):
     pos_enabled: bool = False
     require_attendance_registration: bool = False
     attendance_required_from: Optional[date_type] = None
+    require_checklists: bool = False
     enable_tip_pool: bool = True
     tenant_id: Optional[int] = None
 
@@ -397,6 +399,7 @@ class ConfigResponse(ConfigBase):
                     "pos_enabled": getattr(data, "pos_enabled", False),
                     "require_attendance_registration": getattr(data, "require_attendance_registration", False),
                     "attendance_required_from": getattr(data, "attendance_required_from", None),
+                    "require_checklists": getattr(data, "require_checklists", False),
                     "enable_tip_pool": getattr(data, "enable_tip_pool", True),
                     "tenant_id": getattr(data, "tenant_id", getattr(data, "id", None)),
                 }
