@@ -92,7 +92,7 @@ class MyApp extends ConsumerWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFF6F8F8), // Soft sage light background
         textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: Colors.white,
           surfaceTintColor: Colors.transparent,
           elevation: 0,

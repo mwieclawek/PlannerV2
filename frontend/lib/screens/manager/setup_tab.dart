@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../providers/providers.dart';
 import '../../models/models.dart';
-import '../../services/api_service.dart';
 
 class SetupTab extends StatefulWidget {
   const SetupTab({super.key});
@@ -1257,6 +1256,10 @@ class _RequirementsTabState extends ConsumerState<_RequirementsTab> {
       (i) => _selectedWeekStart.add(Duration(days: i)),
     );
 
+    if (_isRequirementsLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return rolesAsync.when(
       data:
           (roles) => shiftsAsync.when(
@@ -1481,7 +1484,7 @@ class _RequirementsTabState extends ConsumerState<_RequirementsTab> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: _saveRequirements,
+                          onPressed: _isSaving ? null : _saveRequirements,
                           icon: const Icon(Icons.save),
                           label: const Text('Zapisz wymagania'),
                         ),
