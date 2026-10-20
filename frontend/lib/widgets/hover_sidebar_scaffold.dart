@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class HoverSidebarDestination {
   final Widget icon;
@@ -37,6 +38,74 @@ class HoverSidebarScaffold extends StatefulWidget {
 class _HoverSidebarScaffoldState extends State<HoverSidebarScaffold> {
   bool _isHovered = false;
 
+  Widget _buildDesktopHeader(BuildContext context) {
+    if (widget.appBar == null) return const SizedBox.shrink();
+
+    Widget? titleWidget;
+    List<Widget>? actions;
+
+    if (widget.appBar is AppBar) {
+      final bar = widget.appBar as AppBar;
+      if (bar.title is Text) {
+        final text = (bar.title as Text).data ?? '';
+        titleWidget = Text(
+          text,
+          style: GoogleFonts.inter(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF0F172A),
+            letterSpacing: -0.3,
+          ),
+        );
+      } else {
+        titleWidget = DefaultTextStyle.merge(
+          style: GoogleFonts.inter(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF0F172A),
+          ),
+          child: bar.title ?? const SizedBox.shrink(),
+        );
+      }
+      actions = bar.actions;
+    } else {
+      titleWidget = widget.appBar;
+    }
+
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF6F8F8),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (titleWidget != null) titleWidget,
+          const Spacer(),
+          if (actions != null)
+            IconTheme(
+              data: const IconThemeData(
+                color: Color(0xFF334155),
+                size: 22,
+              ),
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  iconTheme: const IconThemeData(color: Color(0xFF334155)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: actions,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -62,11 +131,10 @@ class _HoverSidebarScaffoldState extends State<HoverSidebarScaffold> {
       );
     }
 
-    final colorScheme = Theme.of(context).colorScheme;
     final double sidebarWidth = _isHovered ? 220.0 : 68.0;
 
     return Scaffold(
-      appBar: widget.appBar,
+      backgroundColor: const Color(0xFFF6F8F8),
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -78,19 +146,19 @@ class _HoverSidebarScaffoldState extends State<HoverSidebarScaffold> {
               curve: Curves.easeOutCubic,
               width: sidebarWidth,
               decoration: BoxDecoration(
-                color: colorScheme.surface,
-                border: Border(
+                color: Colors.white,
+                border: const Border(
                   right: BorderSide(
-                    color: colorScheme.outlineVariant.withValues(alpha: 0.6),
+                    color: Color(0xFFE2E8F0),
                     width: 1,
                   ),
                 ),
                 boxShadow: _isHovered
                     ? [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 12,
-                          offset: const Offset(2, 0),
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 16,
+                          offset: const Offset(3, 0),
                         ),
                       ]
                     : [],
@@ -98,7 +166,7 @@ class _HoverSidebarScaffoldState extends State<HoverSidebarScaffold> {
               child: SafeArea(
                 right: false,
                 child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
                   itemCount: widget.destinations.length,
                   itemBuilder: (context, index) {
                     final dest = widget.destinations[index];
@@ -107,14 +175,14 @@ class _HoverSidebarScaffoldState extends State<HoverSidebarScaffold> {
                       padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Material(
                         color: isSelected
-                            ? colorScheme.primaryContainer
+                            ? const Color(0xFF0F5247).withValues(alpha: 0.1)
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                           onTap: () => widget.onDestinationSelected(index),
                           child: Container(
-                            height: 48,
+                            height: 46,
                             padding: const EdgeInsets.symmetric(horizontal: 14),
                             alignment: Alignment.centerLeft,
                             child: SingleChildScrollView(
@@ -126,9 +194,9 @@ class _HoverSidebarScaffoldState extends State<HoverSidebarScaffold> {
                                   IconTheme(
                                     data: IconThemeData(
                                       color: isSelected
-                                          ? colorScheme.onPrimaryContainer
-                                          : colorScheme.onSurfaceVariant,
-                                      size: 24,
+                                          ? const Color(0xFF0F5247)
+                                          : const Color(0xFF64748B),
+                                      size: 22,
                                     ),
                                     child: isSelected
                                         ? dest.selectedIcon
@@ -143,14 +211,14 @@ class _HoverSidebarScaffoldState extends State<HoverSidebarScaffold> {
                                         dest.label,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
+                                        style: GoogleFonts.inter(
                                           fontSize: 14,
                                           fontWeight: isSelected
                                               ? FontWeight.w600
                                               : FontWeight.w500,
                                           color: isSelected
-                                              ? colorScheme.onPrimaryContainer
-                                              : colorScheme.onSurfaceVariant,
+                                              ? const Color(0xFF0F5247)
+                                              : const Color(0xFF334155),
                                         ),
                                       ),
                                     ),
@@ -167,7 +235,14 @@ class _HoverSidebarScaffoldState extends State<HoverSidebarScaffold> {
               ),
             ),
           ),
-          Expanded(child: widget.body),
+          Expanded(
+            child: Column(
+              children: [
+                if (widget.appBar != null) _buildDesktopHeader(context),
+                Expanded(child: widget.body),
+              ],
+            ),
+          ),
         ],
       ),
     );

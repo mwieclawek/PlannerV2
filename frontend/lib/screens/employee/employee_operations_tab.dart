@@ -34,19 +34,33 @@ class _EmployeeOperationsTabState extends State<EmployeeOperationsTab>
     return Column(
       children: [
         Container(
-          color: Colors.white,
-          child: TabBar(
-            controller: _tabController,
-            labelColor: colorScheme.primary,
-            unselectedLabelColor: colorScheme.onSurfaceVariant,
-            indicatorColor: colorScheme.primary,
-            tabs: const [
-              Tab(
-                text: 'Checklisty i HACCP',
-                icon: Icon(Icons.assignment_turned_in_outlined),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+            ),
+          ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: TabBar(
+                controller: _tabController,
+                labelColor: colorScheme.primary,
+                unselectedLabelColor: const Color(0xFF64748B),
+                indicatorColor: colorScheme.primary,
+                indicatorWeight: 3,
+                tabs: const [
+                  Tab(
+                    text: 'Checklisty i HACCP',
+                    icon: Icon(Icons.assignment_turned_in_outlined),
+                  ),
+                  Tab(
+                    text: 'Tablica Ogłoszeń',
+                    icon: Icon(Icons.campaign_outlined),
+                  ),
+                ],
               ),
-              Tab(text: 'Tablica Ogłoszeń', icon: Icon(Icons.campaign_outlined)),
-            ],
+            ),
           ),
         ),
         Expanded(
@@ -328,76 +342,193 @@ class _EmployeeChecklistsHaccpSubTabState
     );
   }
 
+  Widget _buildHaccpCard(HaccpLogModel log) {
+    final violated = !log.isWithinNorm;
+    return Card(
+      margin: EdgeInsets.zero,
+      color: violated ? const Color(0xFFFEF2F2) : Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(
+          color: violated ? const Color(0xFFFCA5A5) : const Color(0xFFE2E8F0),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: violated
+                    ? const Color(0xFFFEE2E2)
+                    : const Color(0xFFECFDF5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                violated
+                    ? Icons.warning_amber_rounded
+                    : Icons.verified_user_outlined,
+                color: violated
+                    ? const Color(0xFFDC2626)
+                    : const Color(0xFF059669),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    log.logType == 'TEMPERATURE'
+                        ? '${log.deviceName}: ${log.measuredTemp?.toStringAsFixed(1) ?? '-'} °C'
+                        : 'Higiena: ${log.deviceName}',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: violated
+                          ? const Color(0xFF991B1B)
+                          : const Color(0xFF0F172A),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Podpis: ${log.userName} • ${DateFormat('dd.MM HH:mm').format(log.createdAt.toLocal())}',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: const Color(0xFF64748B),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'Checklisty zmiany (Dzisiaj)',
-            style: GoogleFonts.outfit(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (_checklists.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Brak aktywnych checklist na dzisiaj.'),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1200),
+        child: RefreshIndicator(
+          onRefresh: _loadData,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            children: [
+              Text(
+                'Checklisty zmiany (Dzisiaj)',
+                style: GoogleFonts.outfit(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF0F172A),
+                ),
               ),
-            )
-          else
-            ..._checklists.map(
-              (tpl) => Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ExpansionTile(
-                  initiallyExpanded: true,
-                  title: Text(
-                    '${tpl.title} (${tpl.shiftPeriod == 'OPENING' ? 'Otwarcie zmiany' : 'Zamknięcie zmiany'})',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+              const SizedBox(height: 12),
+              if (_checklists.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('Brak aktywnych checklist na dzisiaj.'),
                   ),
-                  subtitle: Text(
-                    'Ukończono: ${tpl.items.where((i) => i.isCompleted).length} / ${tpl.items.length}',
-                  ),
-                  children:
-                      tpl.items
+                )
+              else
+                ..._checklists.map((tpl) {
+                  final periodTag = tpl.shiftPeriod == 'OPENING'
+                      ? 'Otwarcie'
+                      : (tpl.shiftPeriod == 'CLOSING'
+                          ? 'Zamknięcie'
+                          : 'W trakcie');
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ExpansionTile(
+                      initiallyExpanded: true,
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              tpl.title,
+                              style: GoogleFonts.inter(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F5247)
+                                  .withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: const Color(0xFF0F5247)
+                                    .withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: Text(
+                              periodTag,
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF0F5247),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      subtitle: Text(
+                        'Ukończono: ${tpl.items.where((i) => i.isCompleted).length} / ${tpl.items.length}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      children: tpl.items
                           .map(
                             (item) => CheckboxListTile(
                               value: item.isCompleted,
                               title: Text(
                                 item.title,
                                 style: TextStyle(
-                                  decoration:
-                                      item.isCompleted
-                                          ? TextDecoration.lineThrough
-                                          : null,
+                                  decoration: item.isCompleted
+                                      ? TextDecoration.lineThrough
+                                      : null,
                                 ),
                               ),
-                              subtitle:
-                                  item.isCompleted
-                                      ? Text(
-                                        'Wykonał(a): ${item.completedByUserName ?? ''}',
-                                        style: const TextStyle(
-                                          color: Colors.green,
-                                          fontSize: 11,
-                                        ),
-                                      )
-                                      : (item.isMandatory
-                                          ? const Text(
-                                            'Wymagane przed wyjściem (Clock-out)',
-                                            style: TextStyle(
-                                              color: Colors.orange,
-                                              fontSize: 11,
-                                            ),
-                                          )
-                                          : null),
+                              subtitle: item.isCompleted
+                                  ? Text(
+                                      'Wykonał(a): ${item.completedByUserName ?? ''}',
+                                      style: const TextStyle(
+                                        color: Colors.green,
+                                        fontSize: 11,
+                                      ),
+                                    )
+                                  : (item.isMandatory
+                                      ? const Text(
+                                          'Wymagane przed wyjściem (Clock-out)',
+                                          style: TextStyle(
+                                            color: Colors.orange,
+                                            fontSize: 11,
+                                          ),
+                                        )
+                                      : null),
                               onChanged: (val) async {
                                 await ref
                                     .read(apiServiceProvider)
@@ -411,76 +542,88 @@ class _EmployeeChecklistsHaccpSubTabState
                             ),
                           )
                           .toList(),
-                ),
-              ),
-            ),
-
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
-                'Karty Kontroli HACCP',
-                style: GoogleFonts.outfit(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+                    ),
+                  );
+                }),
+              const SizedBox(height: 24),
               Wrap(
-                spacing: 8,
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  FilledButton.tonalIcon(
-                    onPressed: _showAddTemperatureDialog,
-                    icon: const Icon(Icons.thermostat, size: 18),
-                    label: const Text('+ Temperatura'),
+                  Text(
+                    'Karty Kontroli HACCP',
+                    style: GoogleFonts.outfit(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF0F172A),
+                    ),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: _showAddSanitationDialog,
-                    icon: const Icon(Icons.cleaning_services, size: 18),
-                    label: const Text('+ Higiena'),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      FilledButton.tonalIcon(
+                        onPressed: _showAddTemperatureDialog,
+                        icon: const Icon(Icons.thermostat, size: 18),
+                        label: const Text('+ Temperatura'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _showAddSanitationDialog,
+                        icon: const Icon(Icons.cleaning_services, size: 18),
+                        label: const Text('+ Higiena'),
+                      ),
+                    ],
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              if (_logs.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('Brak ostatnich wpisów HACCP.'),
+                  ),
+                )
+              else
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isWide = constraints.maxWidth >= 640;
+                    final logsToShow = _logs.take(16).toList();
+
+                    if (!isWide) {
+                      return Column(
+                        children: logsToShow
+                            .map(
+                              (log) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: _buildHaccpCard(log),
+                              ),
+                            )
+                            .toList(),
+                      );
+                    }
+
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: logsToShow.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        mainAxisExtent: 74,
+                      ),
+                      itemBuilder: (context, index) {
+                        return _buildHaccpCard(logsToShow[index]);
+                      },
+                    );
+                  },
+                ),
             ],
           ),
-          const SizedBox(height: 12),
-          if (_logs.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('Brak ostatnich wpisów HACCP.'),
-              ),
-            )
-          else
-            ..._logs.take(15).map((log) {
-              final violated = !log.isWithinNorm;
-              return Card(
-                color: violated ? Colors.red.shade50 : null,
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: Icon(
-                    violated
-                        ? Icons.warning_amber_rounded
-                        : Icons.verified_user_outlined,
-                    color: violated ? Colors.red.shade800 : Colors.green,
-                  ),
-                  title: Text(
-                    log.logType == 'TEMPERATURE'
-                        ? '${log.deviceName}: ${log.measuredTemp?.toStringAsFixed(1) ?? '-'} °C'
-                        : 'Higiena: ${log.deviceName}',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    'Podpis: ${log.userName} • ${DateFormat('dd.MM HH:mm').format(log.createdAt.toLocal())}',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-              );
-            }),
-        ],
+        ),
       ),
     );
   }
@@ -540,121 +683,127 @@ class _EmployeeAnnouncementsSubTabState
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    return RefreshIndicator(
-      onRefresh: _loadAnnouncements,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'Komunikaty i Ogłoszenia',
-            style: GoogleFonts.outfit(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (_announcements.isEmpty)
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(child: Text('Brak ogłoszeń na tablicy.')),
-              ),
-            )
-          else
-            ..._announcements.map((ann) {
-              final unread = !ann.isRead;
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side:
-                      unread
-                          ? BorderSide(color: colorScheme.primary, width: 1.8)
-                          : BorderSide.none,
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1200),
+        child: RefreshIndicator(
+          onRefresh: _loadAnnouncements,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            children: [
+              Text(
+                'Komunikaty i Ogłoszenia',
+                style: GoogleFonts.outfit(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF0F172A),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+              ),
+              const SizedBox(height: 12),
+              if (_announcements.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Center(child: Text('Brak ogłoszeń na tablicy.')),
+                  ),
+                )
+              else
+                ..._announcements.map((ann) {
+                  final unread = !ann.isRead;
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side:
+                          unread
+                              ? BorderSide(color: colorScheme.primary, width: 1.8)
+                              : BorderSide.none,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (unread)
-                            Container(
-                              margin: const EdgeInsets.only(right: 8),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: colorScheme.primary,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text(
-                                'NOWE',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                          Row(
+                            children: [
+                              if (unread)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primary,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Text(
+                                    'NOWE',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              Expanded(
+                                child: Text(
+                                  ann.title,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
-                            ),
-                          Expanded(
-                            child: Text(
-                              ann.title,
-                              style: GoogleFonts.outfit(
-                                fontSize: 17,
-                                fontWeight: FontWeight.bold,
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(ann.content),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '${ann.authorName} • ${DateFormat('dd.MM.yyyy HH:mm').format(ann.createdAt.toLocal())}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade600,
+                                ),
                               ),
-                            ),
+                              if (unread)
+                                FilledButton.icon(
+                                  onPressed: () async {
+                                    await ref
+                                        .read(apiServiceProvider)
+                                        .markAnnouncementRead(ann.id);
+                                    _loadAnnouncements();
+                                  },
+                                  icon: const Icon(Icons.done_all, size: 16),
+                                  label: const Text('Zapoznałem się'),
+                                )
+                              else
+                                Chip(
+                                  visualDensity: VisualDensity.compact,
+                                  avatar: const Icon(
+                                    Icons.check_circle,
+                                    color: Colors.green,
+                                    size: 16,
+                                  ),
+                                  label: const Text(
+                                    'Zapoznano się',
+                                    style: TextStyle(fontSize: 11),
+                                  ),
+                                ),
+                            ],
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(ann.content),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '${ann.authorName} • ${DateFormat('dd.MM.yyyy HH:mm').format(ann.createdAt.toLocal())}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          if (unread)
-                            FilledButton.icon(
-                              onPressed: () async {
-                                await ref
-                                    .read(apiServiceProvider)
-                                    .markAnnouncementRead(ann.id);
-                                _loadAnnouncements();
-                              },
-                              icon: const Icon(Icons.done_all, size: 16),
-                              label: const Text('Zapoznałem się'),
-                            )
-                          else
-                            Chip(
-                              visualDensity: VisualDensity.compact,
-                              avatar: const Icon(
-                                Icons.check_circle,
-                                color: Colors.green,
-                                size: 16,
-                              ),
-                              label: const Text(
-                                'Zapoznano się',
-                                style: TextStyle(fontSize: 11),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-        ],
+                    ),
+                  );
+                }),
+            ],
+          ),
+        ),
       ),
     );
   }

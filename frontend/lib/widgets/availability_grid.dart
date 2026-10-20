@@ -221,6 +221,18 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
     }
   }
 
+  String _formatTimeWithoutSeconds(String time) {
+    final parts = time.split(':');
+    if (parts.length >= 2) {
+      return '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
+    }
+    return time;
+  }
+
+  String _formatShiftInterval(String start, String end) {
+    return '${_formatTimeWithoutSeconds(start)} - ${_formatTimeWithoutSeconds(end)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
@@ -265,29 +277,53 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
               // "Set all to Want" button
               if (_isEditing)
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _setAllPreferred,
-                    icon: const Icon(Icons.check_circle_outline, size: 18),
-                    label: const Text('Ustaw wszystkie na Chcę'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.green.shade700,
-                      side: BorderSide(color: Colors.green.shade400),
-                    ),
-                  ),
-                ),
+                isMobile
+                    ? Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _setAllPreferred,
+                          icon: const Icon(Icons.check_circle_outline, size: 18),
+                          label: const Text('Ustaw wszystkie na Chcę'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.green.shade700,
+                            side: BorderSide(color: Colors.green.shade400),
+                          ),
+                        ),
+                      )
+                    : SizedBox(
+                        width: 240,
+                        child: OutlinedButton.icon(
+                          onPressed: _setAllPreferred,
+                          icon: const Icon(Icons.check_circle_outline, size: 18),
+                          label: const Text('Ustaw wszystkie na Chcę'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.green.shade700,
+                            side: BorderSide(color: Colors.green.shade400),
+                          ),
+                        ),
+                      ),
               // Edit / Read-only toggle
               if (_hasExistingData && !_isEditing) ...[
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => setState(() => _isEditing = true),
-                    icon: const Icon(Icons.edit, size: 18),
-                    label: const Text('Edytuj dyspozycyjność'),
+                if (isMobile)
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => setState(() => _isEditing = true),
+                      icon: const Icon(Icons.edit, size: 18),
+                      label: const Text('Edytuj dyspozycyjność'),
+                    ),
+                  )
+                else
+                  SizedBox(
+                    width: 240,
+                    child: FilledButton.icon(
+                      onPressed: () => setState(() => _isEditing = true),
+                      icon: const Icon(Icons.edit, size: 18),
+                      label: const Text('Edytuj dyspozycyjność'),
+                    ),
                   ),
-                ),
               ],
             ],
           ),
@@ -335,7 +371,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, -2),
                 ),
@@ -464,9 +500,9 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
                                     ),
                                   ),
                                   Text(
-                                    '${shift.startTime} - ${shift.endTime}',
+                                    _formatShiftInterval(shift.startTime, shift.endTime),
                                     style: GoogleFonts.inter(
-                                      color: Colors.white.withOpacity(0.8),
+                                      color: Colors.white.withValues(alpha: 0.8),
                                       fontSize: 11,
                                     ),
                                   ),
@@ -509,7 +545,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
                 decoration: BoxDecoration(
                   color: Theme.of(
                     context,
-                  ).colorScheme.primaryContainer.withOpacity(0.3),
+                  ).colorScheme.primaryContainer.withValues(alpha: 0.3),
                 ),
                 children: [
                   _buildHeaderCell('Zmiana'),
@@ -566,7 +602,7 @@ class _AvailabilityGridState extends ConsumerState<AvailabilityGrid> {
           ),
           const SizedBox(height: 4),
           Text(
-            '(${shift.startTime} - ${shift.endTime})',
+            _formatShiftInterval(shift.startTime, shift.endTime),
             style: GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade600),
           ),
         ],

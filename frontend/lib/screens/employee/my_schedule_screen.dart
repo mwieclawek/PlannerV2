@@ -406,7 +406,92 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     );
   }
 
-  Widget _buildSummaryCard() {
+  String _formatTimeWithoutSeconds(String time) {
+    final parts = time.split(':');
+    if (parts.length >= 2) {
+      return '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
+    }
+    return time;
+  }
+
+  String _formatHours(double hours) {
+    if (hours % 1 == 0) {
+      return '${hours.toInt()} godz.';
+    }
+    return '${hours.toStringAsFixed(1)} godz.';
+  }
+
+  Widget _buildKpiCard({
+    required String title,
+    required String value,
+    String? subtitle,
+    required IconData icon,
+  }) {
+    return Card(
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F5247).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 18,
+                    color: const Color(0xFF0F5247),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              value,
+              style: GoogleFonts.inter(
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF0F172A),
+                letterSpacing: -0.5,
+              ),
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: const Color(0xFF94A3B8),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKpiCardsHorizontal() {
     if (_summary == null) return const SizedBox.shrink();
 
     final weekHours = (_summary!['week_hours'] as num?)?.toDouble() ?? 0.0;
@@ -414,80 +499,112 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     final lastScheduledDate = _summary!['last_scheduled_date'] as String?;
     final now = DateTime.now();
 
-    String monthLabel;
+    String? monthSubtitle;
     if (lastScheduledDate != null) {
       final lastDate = DateTime.parse(lastScheduledDate);
       final lastDayOfMonth = DateTime(now.year, now.month + 1, 0);
       if (lastDate.day < lastDayOfMonth.day) {
-        monthLabel =
-            'godz. (grafik do ${DateFormat('d MMM', 'pl_PL').format(lastDate)})';
-      } else {
-        monthLabel = 'godz. w tym miesiącu';
+        monthSubtitle = 'Grafik do ${DateFormat('d MMM', 'pl_PL').format(lastDate)}';
       }
-    } else {
-      monthLabel = 'godz. w tym miesiącu';
     }
 
-    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Expanded(
+          child: _buildKpiCard(
+            title: 'Ten tydzień',
+            value: _formatHours(weekHours),
+            icon: Icons.calendar_view_week,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildKpiCard(
+            title: 'Ten miesiąc',
+            value: _formatHours(monthHours),
+            subtitle: monthSubtitle,
+            icon: Icons.calendar_month,
+          ),
+        ),
+      ],
+    );
+  }
 
+  Widget _buildKpiCardsVertical() {
+    if (_summary == null) return const SizedBox.shrink();
+
+    final weekHours = (_summary!['week_hours'] as num?)?.toDouble() ?? 0.0;
+    final monthHours = (_summary!['month_hours'] as num?)?.toDouble() ?? 0.0;
+    final lastScheduledDate = _summary!['last_scheduled_date'] as String?;
+    final now = DateTime.now();
+
+    String? monthSubtitle;
+    if (lastScheduledDate != null) {
+      final lastDate = DateTime.parse(lastScheduledDate);
+      final lastDayOfMonth = DateTime(now.year, now.month + 1, 0);
+      if (lastDate.day < lastDayOfMonth.day) {
+        monthSubtitle = 'Grafik do ${DateFormat('d MMM', 'pl_PL').format(lastDate)}';
+      }
+    }
+
+    return Column(
+      children: [
+        _buildKpiCard(
+          title: 'Ten tydzień',
+          value: _formatHours(weekHours),
+          icon: Icons.calendar_view_week,
+        ),
+        const SizedBox(height: 12),
+        _buildKpiCard(
+          title: 'Ten miesiąc',
+          value: _formatHours(monthHours),
+          subtitle: monthSubtitle,
+          icon: Icons.calendar_month,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSidebarAuxiliaryCard() {
     return Card(
-      color: colorScheme.primaryContainer.withValues(alpha: 0.4),
+      color: Colors.white,
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+      ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.calendar_today,
-                    size: 20,
-                    color: colorScheme.primary,
+            Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Wskazówki',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF0F172A),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Ten tydzień',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  Text(
-                    '${weekHours.toStringAsFixed(1)} godz.',
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Container(width: 1, height: 40, color: colorScheme.outlineVariant),
-            Expanded(
-              child: Column(
-                children: [
-                  Icon(Icons.date_range, size: 20, color: colorScheme.primary),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Ten miesiąc',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  Text(
-                    '${monthHours.toStringAsFixed(1)} $monthLabel',
-                    style: GoogleFonts.inter(
-                      fontSize: lastScheduledDate != null ? 12 : 15,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.onPrimaryContainer,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+            const SizedBox(height: 10),
+            Text(
+              '• Pamiętaj o rejestracji obecności w dniu zmiany.\n'
+              '• Zmianę możesz oddać na giełdę przed jej rozpoczęciem.\n'
+              '• Zakładka "Cała załoga" pozwala sprawdzić obsadę zespołu.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: const Color(0xFF64748B),
+                height: 1.5,
               ),
             ),
           ],
@@ -496,610 +613,591 @@ class _MyScheduleScreenState extends ConsumerState<MyScheduleScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // NOTE: No Scaffold here - this is embedded inside EmployeeDashboard which has AppBar
-    return _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1100),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+  Widget _buildShiftActionButtons(
+    EmployeeScheduleEntry shift,
+    bool isToday,
+    bool isPast,
+  ) {
+    final buttons = <Widget>[];
+
+    if (!isPast) {
+      if (shift.isOnGiveaway) {
+        buttons.add(
+          OutlinedButton.icon(
+            onPressed: null,
+            icon: const Icon(
+              Icons.check_circle_outline,
+              size: 16,
+              color: Colors.purple,
+            ),
+            label: const Text(
+              'Wystawiono na giełdę',
+              style: TextStyle(color: Colors.purple, fontSize: 13),
+            ),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(110, 36),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              side: BorderSide(color: Colors.purple.shade200),
+            ),
+          ),
+        );
+      } else {
+        buttons.add(
+          OutlinedButton.icon(
+            onPressed: () => _showGiveawayConfirmation(shift),
+            icon: Icon(Icons.swap_horiz, size: 16, color: Colors.grey.shade700),
+            label: Text(
+              'Oddaj zmianę',
+              style: GoogleFonts.inter(
+                color: Colors.grey.shade700,
+                fontSize: 13,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(110, 36),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              side: const BorderSide(color: Color(0xFFCBD5E1)),
+            ),
+          ),
+        );
+      }
+    }
+
+    if (isToday) {
+      buttons.add(
+        FilledButton.icon(
+          onPressed: () => _showRegisterPresenceDialog(shift),
+          icon: const Icon(Icons.how_to_reg, size: 16),
+          label: const Text('Zarejestruj obecność', style: TextStyle(fontSize: 13)),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(130, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          ),
+        ),
+      );
+    }
+
+    if (buttons.isEmpty) return const SizedBox.shrink();
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: buttons,
+    );
+  }
+
+  Widget _buildShiftItem(
+    EmployeeScheduleEntry shift,
+    DateTime date,
+    bool isToday,
+    bool isPast,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 540;
+
+        final shiftDetails = Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isToday
+                    ? const Color(0xFF0F5247).withValues(alpha: 0.12)
+                    : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.access_time_filled,
+                color: isToday
+                    ? const Color(0xFF0F5247)
+                    : const Color(0xFF64748B),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Unread Announcements (disappear once marked read)
-                  _buildUnreadAnnouncementsSection(),
-
-                  // Missing Attendance Registrations Banner above the schedule
-                  _buildMissingAttendanceBanner(),
-
-                  // Week Selector
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.chevron_left),
-                            onPressed: _previousWeek,
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          shift.shiftName,
+                          style: GoogleFonts.inter(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF0F172A),
                           ),
-                          Text(
-                            '${DateFormat('d MMM', 'pl_PL').format(_selectedWeekStart)} - ${DateFormat('d MMM yyyy', 'pl_PL').format(_selectedWeekEnd)}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (shift.isOnGiveaway) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.shade50,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.purple.shade200),
+                          ),
+                          child: Text(
+                            'GIEŁDA',
                             style: GoogleFonts.inter(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 10,
+                              color: Colors.purple.shade800,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.chevron_right),
-                            onPressed: _nextWeek,
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 12,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.schedule,
+                            size: 14,
+                            color: Color(0xFF64748B),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${_formatTimeWithoutSeconds(shift.startTime)} - ${_formatTimeWithoutSeconds(shift.endTime)}',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: const Color(0xFF64748B),
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Hours Summary Card
-                  if (_summary != null) _buildSummaryCard(),
-
-                  const SizedBox(height: 12),
-
-                  // Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _showCoworkers ? 'Cała załoga' : 'Twoje zmiany',
-                        style: GoogleFonts.outfit(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () {
-                          _loadSchedule();
-                          _loadHomeExtras();
-                          if (_showCoworkers) _loadTeamSchedule();
-                        },
-                        icon: const Icon(Icons.refresh, size: 18),
-                        label: const Text('Odśwież'),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.badge_outlined,
+                            size: 14,
+                            color: Color(0xFF64748B),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            shift.roleName,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: const Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ],
+        );
 
-                  // View mode toggle
-                  Center(
-                    child: SegmentedButton<bool>(
-                      segments: const [
-                        ButtonSegment(
-                          value: false,
-                          label: Text('Moje zmiany'),
-                          icon: Icon(Icons.person),
+        final actions = _buildShiftActionButtons(shift, isToday, isPast);
+
+        if (isWide) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Expanded(child: shiftDetails),
+                const SizedBox(width: 16),
+                actions,
+              ],
+            ),
+          );
+        } else {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                shiftDetails,
+                if (!isPast || isToday) ...[
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: actions,
+                  ),
+                ],
+              ],
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWideScreen = constraints.maxWidth > 960;
+
+        final weekSelector = Card(
+          elevation: 0,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: _previousWeek,
+                  tooltip: 'Poprzedni tydzień',
+                ),
+                Text(
+                  '${DateFormat('d MMM', 'pl_PL').format(_selectedWeekStart)} - ${DateFormat('d MMM yyyy', 'pl_PL').format(_selectedWeekEnd)}',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF0F172A),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: _nextWeek,
+                  tooltip: 'Następny tydzień',
+                ),
+              ],
+            ),
+          ),
+        );
+
+        final shiftsHeader = Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              _showCoworkers ? 'Cała załoga' : 'Twoje zmiany',
+              style: GoogleFonts.outfit(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF0F172A),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () {
+                _loadSchedule();
+                _loadHomeExtras();
+                if (_showCoworkers) _loadTeamSchedule();
+              },
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Odśwież'),
+            ),
+          ],
+        );
+
+        final modeToggle = Center(
+          child: SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                value: false,
+                label: Text('Moje zmiany'),
+                icon: Icon(Icons.person),
+              ),
+              ButtonSegment(
+                value: true,
+                label: Text('Cała załoga'),
+                icon: Icon(Icons.people),
+              ),
+            ],
+            selected: {_showCoworkers},
+            onSelectionChanged: (v) {
+              final newVal = v.first;
+              setState(() => _showCoworkers = newVal);
+              if (newVal) _loadTeamSchedule();
+            },
+            style: SegmentedButton.styleFrom(
+              selectedBackgroundColor:
+                  const Color(0xFF0F5247).withValues(alpha: 0.12),
+              selectedForegroundColor: const Color(0xFF0F5247),
+            ),
+          ),
+        );
+
+        Widget shiftsOrTeamContent;
+        if (_showCoworkers) {
+          shiftsOrTeamContent = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _viewModeButton(
+                          Icons.view_list_rounded,
+                          !_teamGridView,
+                          () => setState(() => _teamGridView = false),
                         ),
-                        ButtonSegment(
-                          value: true,
-                          label: Text('Cała załoga'),
-                          icon: Icon(Icons.people),
+                        _viewModeButton(
+                          Icons.grid_view_rounded,
+                          _teamGridView,
+                          () => setState(() => _teamGridView = true),
                         ),
                       ],
-                      selected: {_showCoworkers},
-                      onSelectionChanged: (v) {
-                        final newVal = v.first;
-                        setState(() => _showCoworkers = newVal);
-                        if (newVal) _loadTeamSchedule();
-                      },
-                      style: SegmentedButton.styleFrom(
-                        selectedBackgroundColor:
-                            Theme.of(context).colorScheme.primaryContainer,
-                        selectedForegroundColor:
-                            Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-
-                  if (_showCoworkers) ...[
-                    // Sub-toggle: list vs grid
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (_teamLoading)
+                const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_teamEntries.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(48),
+                    child: Column(
                       children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(8),
+                        Icon(
+                          Icons.people_outline,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Brak zaplanowanych zmian zespołu',
+                          style: GoogleFonts.outfit(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade600,
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _viewModeButton(Icons.view_list_rounded, !_teamGridView, () => setState(() => _teamGridView = false)),
-                              _viewModeButton(Icons.grid_view_rounded, _teamGridView, () => setState(() => _teamGridView = true)),
-                            ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'W tym tygodniu żaden pracownik nie ma jeszcze opublikowanego grafiku.',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: Colors.grey.shade500,
                           ),
+                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    if (_teamLoading)
-                      const Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (_teamEntries.isEmpty)
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(48),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.people_outline,
-                                size: 64,
-                                color: Colors.grey.shade400,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Brak zaplanowanych zmian zespołu',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'W tym tygodniu żaden pracownik nie ma jeszcze opublikowanego grafiku.',
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  color: Colors.grey.shade500,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    else if (_teamGridView)
-                      _buildTeamGridView()
-                    else
-                      _buildTeamWeekView(),
-                  ] else ...[
-                    if (_scheduleEntries.isEmpty) ...[
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(48),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.event_busy,
-                                size: 64,
-                                color: Colors.grey.shade400,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Brak przypisanych zmian',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Grafik nie został jeszcze opublikowany lub nie masz zmian w tym tygodniu. Przełącz na "Cała załoga", aby sprawdzić grafik współpracowników.',
-                                style: GoogleFonts.inter(
-                                  fontSize: 14,
-                                  color: Colors.grey.shade500,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
+                  ),
+                )
+              else if (_teamGridView)
+                _buildTeamGridView()
+              else
+                _buildTeamWeekView(),
+            ],
+          );
+        } else {
+          if (_scheduleEntries.isEmpty) {
+            shiftsOrTeamContent = Center(
+              child: Padding(
+                padding: const EdgeInsets.all(48),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.event_busy,
+                      size: 64,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Brak przypisanych zmian',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
                       ),
-                    ] else ...[
-                      // Group by date (original "Moje zmiany" view)
-                      ...(_groupByDate(_scheduleEntries).entries.map((entry) {
-                        final date = entry.key;
-                        final shifts = entry.value;
-                        final isToday = _isToday(date);
-                        final isPast = _isPast(date);
-
-                        return Opacity(
-                          opacity: isPast ? 0.6 : 1.0,
-                          child: Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            elevation: isToday ? 4 : 1,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side:
-                                  isToday
-                                      ? BorderSide(
-                                        color:
-                                            Theme.of(
-                                              context,
-                                            ).colorScheme.primary,
-                                        width: 2,
-                                      )
-                                      : BorderSide.none,
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color:
-                                              isToday
-                                                  ? Theme.of(
-                                                    context,
-                                                  ).colorScheme.secondary
-                                                  : Theme.of(
-                                                    context,
-                                                  ).colorScheme.primary,
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          isToday
-                                              ? 'DZISIAJ'
-                                              : DateFormat(
-                                                'EEE',
-                                                'pl_PL',
-                                              ).format(date),
-                                          style: GoogleFonts.inter(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                      if (isToday) const SizedBox(width: 8),
-                                      if (isToday)
-                                        Icon(
-                                          Icons.star,
-                                          size: 16,
-                                          color:
-                                              Theme.of(
-                                                context,
-                                              ).colorScheme.secondary,
-                                        ),
-                                      const SizedBox(width: 12),
-                                      Text(
-                                        DateFormat(
-                                          'd MMMM yyyy',
-                                          'pl_PL',
-                                        ).format(date),
-                                        style: GoogleFonts.inter(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color:
-                                              isPast
-                                                  ? Colors.grey.shade700
-                                                  : null,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const Divider(height: 24),
-
-                                  // Shifts for this day
-                                  ...shifts.map(
-                                    (shift) => Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 12,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Container(
-                                                padding: const EdgeInsets.all(
-                                                  12,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color:
-                                                      isToday
-                                                          ? Theme.of(context)
-                                                              .colorScheme
-                                                              .secondaryContainer
-                                                          : Theme.of(context)
-                                                              .colorScheme
-                                                              .primaryContainer,
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                ),
-                                                child: Icon(
-                                                  Icons.access_time,
-                                                  color:
-                                                      isToday
-                                                          ? Theme.of(context)
-                                                              .colorScheme
-                                                              .onSecondaryContainer
-                                                          : Theme.of(context)
-                                                              .colorScheme
-                                                              .onPrimaryContainer,
-                                                  size: 24,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 16),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Row(
-                                                      children: [
-                                                        Text(
-                                                          shift.shiftName,
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                                fontSize: 16,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                              ),
-                                                        ),
-                                                        if (shift
-                                                            .isOnGiveaway) ...[
-                                                          const SizedBox(
-                                                            width: 8,
-                                                          ),
-                                                          Container(
-                                                            padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal: 6,
-                                                                  vertical: 2,
-                                                                ),
-                                                            decoration: BoxDecoration(
-                                                              color:
-                                                                  Colors
-                                                                      .purple
-                                                                      .shade100,
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    4,
-                                                                  ),
-                                                              border: Border.all(
-                                                                color:
-                                                                    Colors
-                                                                        .purple
-                                                                        .shade300,
-                                                              ),
-                                                            ),
-                                                            child: Text(
-                                                              'GIEŁDA',
-                                                              style: GoogleFonts.inter(
-                                                                fontSize: 10,
-                                                                color:
-                                                                    Colors
-                                                                        .purple
-                                                                        .shade800,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .bold,
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Row(
-                                                      children: [
-                                                        Icon(
-                                                          Icons.schedule,
-                                                          size: 14,
-                                                          color:
-                                                              Colors
-                                                                  .grey
-                                                                  .shade600,
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 4,
-                                                        ),
-                                                        Text(
-                                                          '${shift.startTime} - ${shift.endTime}',
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                                fontSize: 14,
-                                                                color:
-                                                                    Colors
-                                                                        .grey
-                                                                        .shade600,
-                                                              ),
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 16,
-                                                        ),
-                                                        Icon(
-                                                          Icons.badge,
-                                                          size: 14,
-                                                          color:
-                                                              Colors
-                                                                  .grey
-                                                                  .shade600,
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 4,
-                                                        ),
-                                                        Text(
-                                                          shift.roleName,
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                                fontSize: 14,
-                                                                color:
-                                                                    Colors
-                                                                        .grey
-                                                                        .shade600,
-                                                              ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          if (!isPast) ...[
-                                            const SizedBox(height: 8),
-                                            SizedBox(
-                                              width: double.infinity,
-                                              child:
-                                                  shift.isOnGiveaway
-                                                      ? OutlinedButton.icon(
-                                                        onPressed:
-                                                            null, // Disabled
-                                                        icon: const Icon(
-                                                          Icons
-                                                              .check_circle_outline,
-                                                          color: Colors.purple,
-                                                        ),
-                                                        label: const Text(
-                                                          'Wystawiono na giełdę',
-                                                          style: TextStyle(
-                                                            color:
-                                                                Colors.purple,
-                                                          ),
-                                                        ),
-                                                        style:
-                                                            OutlinedButton.styleFrom(
-                                                              side: BorderSide(
-                                                                color:
-                                                                    Colors
-                                                                        .purple
-                                                                        .shade200,
-                                                              ),
-                                                            ),
-                                                      )
-                                                      : TextButton.icon(
-                                                        onPressed:
-                                                            () =>
-                                                                _showGiveawayConfirmation(
-                                                                  shift,
-                                                                ),
-                                                        icon: Icon(
-                                                          Icons.swap_horiz,
-                                                          color:
-                                                              Colors
-                                                                  .grey
-                                                                  .shade700,
-                                                        ),
-                                                        label: Text(
-                                                          'Oddaj zmianę',
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                                color:
-                                                                    Colors
-                                                                        .grey
-                                                                        .shade700,
-                                                              ),
-                                                        ),
-                                                      ),
-                                            ),
-                                          ],
-                                          if (isToday) ...[
-                                            const SizedBox(height: 12),
-                                            SizedBox(
-                                              width: double.infinity,
-                                              child: OutlinedButton.icon(
-                                                onPressed:
-                                                    () =>
-                                                        _showRegisterPresenceDialog(
-                                                          shift,
-                                                        ),
-                                                icon: const Icon(
-                                                  Icons.how_to_reg,
-                                                ),
-                                                label: const Text(
-                                                  'Zarejestruj obecność',
-                                                ),
-                                                style: OutlinedButton.styleFrom(
-                                                  foregroundColor:
-                                                      Theme.of(
-                                                        context,
-                                                      ).colorScheme.primary,
-                                                  side: BorderSide(
-                                                    color:
-                                                        Theme.of(
-                                                          context,
-                                                        ).colorScheme.primary,
-                                                  ),
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        vertical: 12,
-                                                      ),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      })),
-                    ], // end else (Moje zmiany)
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Grafik nie został jeszcze opublikowany lub nie masz zmian w tym tygodniu. Przełącz na "Cała załoga", aby sprawdzić grafik współpracowników.',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: Colors.grey.shade500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
                   ],
+                ),
+              ),
+            );
+          } else {
+            final grouped = _groupByDate(_scheduleEntries);
+            shiftsOrTeamContent = Column(
+              children: grouped.entries.map((entry) {
+                final date = entry.key;
+                final shifts = entry.value;
+                final isToday = _isToday(date);
+                final isPast = _isPast(date);
 
-                  const SizedBox(height: 16),
-
-                  // Info Card
-                  Card(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.secondaryContainer.withOpacity(0.5),
+                return Opacity(
+                  opacity: isPast ? 0.65 : 1.0,
+                  child: Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: isToday
+                            ? const Color(0xFF0F5247)
+                            : const Color(0xFFE2E8F0),
+                        width: isToday ? 1.8 : 1,
+                      ),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(
-                            Icons.info_outline,
-                            color:
-                                Theme.of(
-                                  context,
-                                ).colorScheme.onSecondaryContainer,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Wyświetlane są tylko opublikowane grafiki. Jeśli nie widzisz zmian, skontaktuj się z managerem.',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color:
-                                    Theme.of(
-                                      context,
-                                    ).colorScheme.onSecondaryContainer,
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isToday
+                                      ? const Color(0xFF0F5247)
+                                      : const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  isToday
+                                      ? 'DZISIAJ'
+                                      : DateFormat(
+                                          'EEE',
+                                          'pl_PL',
+                                        ).format(date).toUpperCase(),
+                                  style: GoogleFonts.inter(
+                                    color: isToday
+                                        ? Colors.white
+                                        : const Color(0xFF475569),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                  ),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 10),
+                              Text(
+                                DateFormat('d MMMM yyyy', 'pl_PL').format(date),
+                                style: GoogleFonts.inter(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: isPast
+                                      ? const Color(0xFF64748B)
+                                      : const Color(0xFF0F172A),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                          const SizedBox(height: 4),
+                          ...shifts.map(
+                            (shift) =>
+                                _buildShiftItem(shift, date, isToday, isPast),
                           ),
                         ],
                       ),
                     ),
                   ),
+                );
+              }).toList(),
+            );
+          }
+        }
+
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1280),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildUnreadAnnouncementsSection(),
+                  _buildMissingAttendanceBanner(),
+                  if (!isWideScreen) ...[
+                    // Mobile / Single column flow
+                    weekSelector,
+                    const SizedBox(height: 12),
+                    if (_summary != null) ...[
+                      _buildKpiCardsHorizontal(),
+                      const SizedBox(height: 12),
+                    ],
+                    shiftsHeader,
+                    const SizedBox(height: 8),
+                    modeToggle,
+                    const SizedBox(height: 12),
+                    shiftsOrTeamContent,
+                  ] else ...[
+                    // Desktop / Two-column layout (> 960px)
+                    // Left column (~68%), Right column (~32%)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 68,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              weekSelector,
+                              const SizedBox(height: 14),
+                              shiftsHeader,
+                              const SizedBox(height: 8),
+                              modeToggle,
+                              const SizedBox(height: 14),
+                              shiftsOrTeamContent,
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          flex: 32,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (_summary != null) ...[
+                                _buildKpiCardsVertical(),
+                                const SizedBox(height: 16),
+                              ],
+                              _buildSidebarAuxiliaryCard(),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
         );
+      },
+    );
   }
   Widget _viewModeButton(IconData icon, bool isActive, VoidCallback onTap) {
     final colorScheme = Theme.of(context).colorScheme;

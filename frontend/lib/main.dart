@@ -67,12 +67,9 @@ class MyApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
 
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF006A6A), // Deep Teal
-      primary: const Color(0xFF006A6A),
-      primaryContainer: const Color(0xFF9CF4F4), // Light Mint
-      secondary: const Color(0xFF4A6363), // Muted Grey-Green
-      surface: const Color(0xFFF2FBFB), // Surface
-      error: const Color(0xFFBA1A1A),
+      seedColor: const Color(0xFF0F5247), // Deep Teal / Forest Green
+      primary: const Color(0xFF0F5247),
+      surface: Colors.white,
       brightness: Brightness.light,
     );
 
@@ -93,28 +90,49 @@ class MyApp extends ConsumerWidget {
       theme: ThemeData(
         colorScheme: colorScheme,
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(
-          0xFFFAFDFC,
-        ), // Ice White background
+        scaffoldBackgroundColor: const Color(0xFFF6F8F8), // Soft sage light background
         textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme),
-        // cardTheme removed to fix build error and rely on M3 defaults
+        cardTheme: CardTheme(
+          color: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: Color(0xFFE2E8F0), width: 1),
+          ),
+        ),
+        expansionTileTheme: const ExpansionTileThemeData(
+          shape: Border(),
+          collapsedShape: Border(),
+        ),
         appBarTheme: AppBarTheme(
           centerTitle: false,
           elevation: 0,
-          scrolledUnderElevation: 2,
-          backgroundColor: colorScheme.surface,
+          scrolledUnderElevation: 0,
+          backgroundColor: const Color(0xFFF6F8F8),
+          foregroundColor: const Color(0xFF0F172A),
           titleTextStyle: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
-            color: colorScheme.onSurface,
+            color: const Color(0xFF0F172A),
           ),
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
+            minimumSize: const Size(110, 42),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(110, 42),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
@@ -126,7 +144,7 @@ class MyApp extends ConsumerWidget {
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: colorScheme.outline.withOpacity(0.3)),
+            borderSide: BorderSide(color: colorScheme.outline.withValues(alpha: 0.3)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
