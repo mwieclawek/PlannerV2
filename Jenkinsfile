@@ -143,8 +143,9 @@ pipeline {
                     sh '''
                         mkdir -p db_backups_dev
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-db-dev 2>/dev/null)" == "true" ]; then
+                            docker exec plannerv2-db-dev psql -U planner_user -d planner_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'planner_db' AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';" >/dev/null 2>&1 || true
                             BACKUP_FILE="db_backups_dev/backup_dev_$(date +%Y%m%d_%H%M%S).sql"
-                            docker exec plannerv2-db-dev pg_dump -U planner_user planner_db > "$BACKUP_FILE" || echo "⚠️ Błąd podczas zrzutu bazy DEV"
+                            timeout 60s docker exec plannerv2-db-dev pg_dump --lock-wait-timeout=15000 -U planner_user planner_db > "$BACKUP_FILE" || echo "⚠️ Błąd podczas zrzutu bazy DEV"
                             echo "✅ Kopia zapisana: $BACKUP_FILE"
                         else
                             echo "⚠️ Kontener bazy DEV nie działa, pomijam zrzut."
@@ -334,8 +335,9 @@ pipeline {
                     sh '''
                         mkdir -p db_backups_prod
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-db 2>/dev/null)" == "true" ]; then
+                            docker exec plannerv2-db psql -U planner_user -d planner_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'planner_db' AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';" >/dev/null 2>&1 || true
                             BACKUP_FILE="db_backups_prod/backup_prod_$(date +%Y%m%d_%H%M%S).sql"
-                            docker exec plannerv2-db pg_dump -U planner_user planner_db > "$BACKUP_FILE" || echo "⚠️ Błąd podczas zrzutu bazy PROD"
+                            timeout 60s docker exec plannerv2-db pg_dump --lock-wait-timeout=15000 -U planner_user planner_db > "$BACKUP_FILE" || echo "⚠️ Błąd podczas zrzutu bazy PROD"
                             echo "✅ Kopia zapisana: $BACKUP_FILE"
                         else
                             echo "⚠️ Kontener bazy PROD nie działa, pomijam zrzut."
@@ -405,7 +407,7 @@ pipeline {
                                 if [ "$i" -eq 5 ]; then
                                     echo "⚠️ Migracje PROD trwają dłużej niż 25s, zwalniam blokady tabel starego backendu..."
                                     docker stop plannerv2-backend || true
-                                    docker exec plannerv2-db psql -U planner_user -d planner_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'planner_db' AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';" >/dev/null 2>&1 || true
+                                    docker exec plannerv2-db psql -U planner_user -d planner_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'planner_db' AND pid <> pg_backend_pid() AND query NOT LIKE '%alembic%' AND query NOT LIKE '%pg_stat_activity%';" >/dev/null 2>&1 || true
                                 fi
                                 sleep 5
                             fi
