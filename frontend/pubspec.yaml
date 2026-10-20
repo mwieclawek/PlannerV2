@@ -51,7 +51,7 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   
   # Date/Time utilities
-  intl: ^0.19.0
+  intl: ">=0.19.0 <1.0.0"
   
   # UI Components
   google_fonts: ^6.1.0
