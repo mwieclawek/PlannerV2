@@ -7,14 +7,15 @@ Backend systemu PlannerV2 — FastAPI + SQLModel + PostgreSQL / SQLite.
 ```
 backend/
 ├── app/
-│   ├── main.py                 # FastAPI app, CORS, lifespan (auto-init DB)
-│   ├── models.py               # SQLModel entities (30+ modeli, relacje Multi-Tenant)
-│   ├── schemas.py              # Pydantic v2 schemas (walidacja haseł, KDS sync)
+│   ├── main.py                 # FastAPI app, CORS, lifespan, log_requests_middleware
+│   ├── models.py               # SQLModel entities (modele Multi-Tenant, opcje lokalu, WFM)
+│   ├── schemas.py              # Pydantic v2 schemas (walidacja haseł, logi, KDS sync)
 │   ├── database.py             # Konfiguracja bazy danych (SQLite / PostgreSQL)
-│   ├── auth_utils.py           # JWT creation/verification, password hashing (pbkdf2_sha256)
+│   ├── auth_utils.py           # JWT creation/verification, password hashing, tenant context
+│   ├── tenant_context.py       # ContextVar z aktualnym tenant_id dla loggera
 │   ├── routers/
 │   │   ├── auth.py             # Login (Dual-login), /me, change-password
-│   │   ├── superadmin.py       # Global panel API dla tenantów i managerów
+│   │   ├── superadmin.py       # Global panel API: tenanci, managerowie, logi systemowe
 │   │   ├── manager.py          # CRUD: role, zmiany, pracownicy, obecności, giveaway
 │   │   ├── employee.py         # Grafik, dostępność, obecność, giveaway, Google Calendar
 │   │   ├── scheduler.py        # Generowanie, batch save, publish, assignment
@@ -25,6 +26,7 @@ backend/
 │   │   └── bug_report.py       # Proxy do GitHub Issues API
 │   └── services/
 │       ├── solver.py           # OR-Tools CP-SAT constraint solver
+│       ├── log_service.py      # Agregacja, filtrowanie i inspekcja logów systemowych
 │       ├── pos_service.py      # POS v2 logika biznesowa
 │       ├── kds_service.py      # KDS: monotonic sync + pacing engine
 │       ├── manager_service.py  # Logika biznesowa managera

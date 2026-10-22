@@ -19,6 +19,7 @@ python -m pytest tests/ -v --junitxml=test-results/backend.xml
 ```
 backend/tests/
 ├── conftest.py                    # Fixtures: client, session, auth_headers, employee_headers
+├── test_alembic_migrations.py     # Integralność bazy: długość ID rewizji (<=32), spójność grafu migracji
 ├── test_api.py                    # Podstawowe testy API (rejestracja, login, CRUD)
 ├── test_auth_unit.py              # Testy jednostkowe: hash, verify, JWT, multi-tenant auth, walidacja haseł
 ├── test_employee.py               # Endpointy employee: dostępność, grafik, autoryzacja
@@ -26,7 +27,9 @@ backend/tests/
 ├── test_manager_attendance.py     # Obecności: CRUD, filtrowanie, zatwierdzanie
 ├── test_manager_dashboard.py      # Dashboard: dashboard-home, statystyki
 ├── test_manager_users.py          # Zarządzanie użytkownikami: email, tworzenie, update
-├── test_superadmin.py             # Testy panelu Superadmina i izolacji danych Tenantów
+├── test_superadmin.py             # Testy panelu Superadmina, izolacji Tenantów, logów systemowych i RBAC
+├── test_security_hardening.py     # Utwardzenie bezpieczeństwa: brak tokenów w odpowiedziach, ochrona eskalacji ról
+├── test_sprint_2026_10_20.py      # Moduł zamknięcia dnia, wymóg checklisty, ukrywanie tip poolingu
 ├── test_user_update.py            # Aktualizacja użytkownika: dane, cele, is_active
 ├── test_scheduler_unit.py         # Scheduler: generowanie, batch save, publish
 ├── test_solver_unit.py            # Solver CP-SAT: constraints, preferencje, warnings
@@ -43,6 +46,7 @@ backend/tests/
 
 | Moduł | Plik testowy | Zakres |
 |-------|-------------|--------|
+| Migracje | `test_alembic_migrations.py` | Integralność grafu Alembic, weryfikacja długości nazw rewizji (<= 32 znaki), ciągłość down_revision |
 | Auth | `test_auth_unit.py` | Hashowanie haseł, weryfikacja, tworzenie/walidacja JWT, dual-login (email vs username+slug), walidacja siły haseł |
 | API (podstawy) | `test_api.py` | Rejestracja, login, CRUD ról/zmian, generowanie grafiku |
 | Employee | `test_employee.py` | Dostępność, grafik, autoryzacja |
@@ -50,7 +54,9 @@ backend/tests/
 | Manager (Attendance) | `test_manager_attendance.py` | Obecności CRUD, filtry, zatwierdzanie/odrzucanie |
 | Manager (Dashboard) | `test_manager_dashboard.py` | Dashboard home, statystyki |
 | Manager (Users) | `test_manager_users.py` | Tworzenie użytkowników, dodawanie/edycja adresu email |
-| Superadmin & Tenant | `test_superadmin.py` | Rola SUPERADMIN, tworzenie Tenantów (slug), globalny dashboard, izolacja po tenant_id, reset haseł managerów |
+| Superadmin & Logi | `test_superadmin.py` | Rola SUPERADMIN, tworzenie Tenantów (slug), globalny dashboard, reset haseł managerów, ochrona 401/403 endpointów logów, filtrowanie per tenant/poziom logowania, czyszczenie pliku |
+| Bezpieczeństwo | `test_security_hardening.py` | Blokada eskalacji ról przy aktualizacji, czyszczenie tokenów FCM przy dezaktywacji |
+| Opcje Lokalu | `test_sprint_2026_10_20.py` | Przełącznik zamknięcia dnia (`enable_daily_closeout`), wymóg checklisty (`require_checklists_for_attendance`), tip pooling |
 | User Update | `test_user_update.py` | Edycja użytkownika, cele godzinowe, is_active |
 | Scheduler | `test_scheduler_unit.py` | Generowanie, batch save, publikacja, ręczne przypisania |
 | Solver | `test_solver_unit.py` | CP-SAT: puste dane, brak wymagań, niedostępność, preferencje, dopasowanie ról, ostrzeżenia |

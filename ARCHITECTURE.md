@@ -17,6 +17,7 @@ System działa w modelu wielodostępowym, pozwalającym na obsługę wielu resta
   - Wgląd w listę wszystkich użytkowników w całym systemie (Cross-Tenant).
   - Dodawanie pierwszych kont typu Manager do nowo powstałych restauracji.
   - Resetowanie haseł menedżerów.
+  - Podgląd i filtrowanie logów serwerowych w czasie rzeczywistym per restauracja (tenant) oraz per poziom logowania, wraz z wyszukiwarką fraz i analizą tracebacków błędów.
 
 ## Zarządzanie pracownikami i Role-Based Shifts
 - **Role-Based Shifts (Zmiany przypisane do ról)**: Zmiany w grafiku (model `ShiftDefinition`) są teraz powiązane z konkretnymi stanowiskami (model `JobRole`). Dzięki temu pracownicy widzą i mogą zgłaszać dostępność wyłącznie na te zmiany, które są adekwatne do ich umiejętności i przypisanych im ról.
@@ -190,6 +191,9 @@ erDiagram
         int tenant_id FK
         string name
         string address
+        bool enable_daily_closeout
+        bool require_checklists_for_attendance
+        bool enable_tip_pool
     }
 
     RestaurantOpeningHour {
@@ -493,6 +497,20 @@ services:
 
 Pipeline CI/CD (Jenkins):
 1. Backend tests (`pytest`)
-2. Frontend analyze (`flutter analyze`)
-3. Docker build & push
-4. Blue-Green deployment (DEV: auto z `main`, PROD: auto z tagów)
+2. Frontend analyze & test (`flutter analyze`, `flutter test`)
+3. Docker build & backup bazy danych (`pg_dump` z limitem czasowym i zwalnianiem blokad)
+4. Blue-Green deployment (DEV: auto z `main`, PROD: auto z tagów `v*`)
+
+## System Logów i Monitoringu (TenantLogFilter)
+System posiada moduł agregacji i inspekcji logów serwerowych w czasie rzeczywistym:
+- **`TenantLogFilter`**: Filtr wstrzykiwany do handlera `RotatingFileHandler` oraz `StreamHandler` biblioteki standardowej `logging`. Pobiera wartość `tenant_id` z kontekstu asynchronicznego (`ContextVar` w `backend/app/tenant_context.py`), który jest automatycznie ustawiany w trakcie weryfikacji tokenu JWT przez `get_current_user`.
+- **Format logu**: `%(asctime)s [%(levelname)s] [%(tenant_str)s] %(name)s: %(message)s` — np. `[tenant:1]` dla zapytań powiązanych z lokalem lub `[tenant:system]` dla zadań asynchronicznych i zdarzeń globalnych.
+- **Middleware zapytań**: `log_requests_middleware` w `main.py` rejestruje każde przychodzące żądanie HTTP wraz z metodą, ścieżką, adresem klienta, statusem odpowiedzi oraz czasem wykonania w milisekundach.
+- **Parser wieloliniowy**: `LogService` scala tracebacki wyjątków Python (stack trace) z rekordem źródłowym, co pozwala na przejrzysty podgląd pełnych błędów 500 w panelu Superadmina bez rozrywania kontekstu.
+- **Bezpieczeństwo**: Endpointy `/sysadmin/logs` chronione są funkcją `require_superadmin`. Superadmin może filtrować wpisy po identyfikatorze lokalu, poziomie logowania (`INFO`, `WARNING`, `ERROR`, `CRITICAL`, `DEBUG`), frazie tekstowej oraz zarządzać czyszczeniem/rotacją pliku.
+
+## Zgodność z Pamięcią 16 KB (Android 15+)
+System Android 15 wprowadza opcję oraz wymóg obsługi stron pamięci o wielkości 16 KB (zamiast dotychczasowych 4 KB) w architekturze ARM64:
+- Zaktualizowano biblioteki Google CameraX do wersji `1.4.1`, które są natywnie skompilowane z wyrównaniem stron 16 KB.
+- Przełączono skaner kodów QR `mobile_scanner` na wersję unbundled opartą o dynamiczne usługi Google Play Services (`dev.steenbakker.mobile_scanner.useUnbundled=true`), eliminując przestarzałe biblioteki natywne ML Kit z pakietu APK/AAB i zapewniając zgodność z wytycznymi sklepu Google Play.
+

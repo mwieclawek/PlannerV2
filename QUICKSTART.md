@@ -80,6 +80,7 @@ Możliwości Superadmina:
 - Przegląd wszystkich użytkowników w systemie (niezależnie od restauracji).
 - Dodawanie pierwszych managerów do nowo utworzonych restauracji.
 - Resetowanie haseł managerów.
+- Podgląd i filtrowanie logów serwerowych w czasie rzeczywistym z podziałem na restauracje i poziomy logowania.
 
 ### 2. Panel Managera i Zarządzanie Pracownikami
 Manager danej restauracji zarządza swoim lokalem:

@@ -124,6 +124,11 @@ Definiują liczbę pracowników na danej zmianie dla konkretnej roli.
 - **Tryb tygodniowy**: Domyślny szablon stałego zapotrzebowania na każdy dzień tygodnia.
 - **Tryb per data**: Zapotrzebowanie na konkretne dni kalendarzowe (nadpisuje szablon tygodniowy przy wydarzeniach specjalnych).
 
+#### Podsekcja 4: Opcje i Moduły Operacyjne
+- **Wymóg checklisty przy rejestracji obecności**: Przełącznik decydujący, czy pracownicy muszą potwierdzić wykonanie checklisty stanowiskowej podczas rejestracji wyjścia (check-out). Wyłączenie opcji sprawia, że okno checklisty nie jest wyświetlane.
+- **Moduł Zamknięcia Dnia (`enable_daily_closeout`)**: Aktywuje procedurę dziennego rozliczenia i zamykania dnia w lokalu.
+- **Pula Napiwków (Tip Pooling)**: Włączenie modułu rozliczania napiwków. W przypadku wyłączenia kafelek Tip Poolingu jest automatycznie ukrywany na pulpicie managera.
+
 ---
 
 ### 2.3 Grafik
@@ -191,7 +196,7 @@ Dolny pasek nawigacyjny pracownika zawiera zakładki:
 - **Widok tygodniowy**: Prezentuje Twoje godziny pracy, stanowisko oraz współpracowników na danej zmianie.
 - **Przełącznik „Cała załoga"**: Umożliwia wgląd w grafik wszystkich pracowników lokalu.
 - **Oddanie zmiany na giełdę**: Kliknij swoją zmianę -> „Oddaj zmianę”. Zmiana trafi na giełdę, gdzie inny uprawniony pracownik może ją przejąć.
-- **Bezpośrednia wymiana zmian (Direct Swap)**: W widoku grafiku zespołu możesz zaproponować bezpośrednią wymianę zmiany współpracownikowi o tym samym stanowisku.
+- **Bezpośrednia wymiana zmian (Direct Swap)**: W widoku grafiku zespołu możesz zaproponować bezpośrednią wymianę zmiany współpracownikowi o tym samym stanowisku. Informacja o chęci wymiany pojawia się priorytetowo na ekranie głównym (Home) u Ciebie, u wskazanego pracownika oraz u Managera lokalu.
 - **Google Calendar**: W menu profilu możesz połączyć konto z Kalendarzem Google. Zmiany będą synchronizowane automatycznie w trybie offline.
 
 ---
@@ -220,7 +225,8 @@ Dolny pasek nawigacyjny pracownika zawiera zakładki:
 1. Wybierz datę (domyślnie bieżąca).
 2. Wprowadź godzinę wejścia i wyjścia (jeśli zmiana była zaplanowana, godziny uzupełnią się automatycznie).
 3. Kliknij **„Zapisz"**.
-4. Wpisy zgodne z grafikiem zatwierdzane są automatycznie. Wpisy poza grafikiem oczekują na potwierdzenie Managera.
+4. W przypadku włączenia w lokalu wymogu checklisty, przed zapisem wyświetli się okno weryfikacji zadań stanowiskowych. Jeśli opcja jest wyłączona, rejestracja nie wymaga potwierdzania checklisty.
+5. Wpisy zgodne z grafikiem zatwierdzane są automatycznie. Wpisy poza grafikiem oczekują na potwierdzenie Managera.
 
 ---
 
@@ -326,3 +332,11 @@ Panel nadrzędny dostępny pod adresem `/#/superadmin` dla kont z uprawnieniem `
    - Tworzenie pierwszego konta Managera dla nowo utworzonej restauracji.
    - Wgląd w bazę użytkowników ze wszystkich restauracji.
    - Awaryjny reset haseł dla wybranych kont menedżerskich.
+3. **Podgląd i Zarządzanie Logami Systemowymi**:
+   - Dedykowana zakładka **„Logi systemowe”** w górnym pasku nawigacyjnym.
+   - **Filtrowanie per lokal**: możliwość wyboru konkretnej restauracji z listy lub wglądu w logi globalne / wszystkie lokale.
+   - **Filtrowanie po poziomie**: przełączniki poziomów `Wszystkie`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`, `DEBUG` z kodowaniem kolorystycznym.
+   - **Wyszukiwarka fraz**: natychmiastowe filtrowanie logów po treści, nazwie loggera lub ścieżce HTTP.
+   - **Tracebacki błędów**: automatyczne grupowanie i możliwość rozwijania/zwijania pełnego stack trace'a błędu 500 oraz kopiowanie do schowka.
+   - **Skrót z listy lokali**: na karcie każdej restauracji w zakładce pierwszej dostępny jest przycisk **„Logi”**, który automatycznie otwiera widok logów z wybranym filtrem dla tego lokalu.
+   - **Czyszczenie pliku logów**: przycisk z ikoną kosza umożliwia wyczyszczenie bieżącego pliku logów serwera.

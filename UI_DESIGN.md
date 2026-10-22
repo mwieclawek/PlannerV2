@@ -77,12 +77,22 @@
 
 ### Superadmin Dashboard (`/#/superadmin`)
 - Dostępne dla użytkowników o globalnej roli `SUPERADMIN`.
-- Lista wszystkich restauracji (Tenantów) prezentowana w formie kart:
-  - Przełącznik aktywności lokalu
-  - Przycisk edycji nazwy i identyfikatora slug
-  - Przycisk Użytkownicy — dialog listy kont powiązanych z lokalem wraz z funkcją resetu hasła managera
-  - Przycisk Dodaj managera
-- Floating Action Button (+) do rejestracji nowego lokalu
+- Układ z dwiema głównymi zakładkami w AppBarze (`TabBar`):
+  1. **Restauracje**:
+     - Lista wszystkich restauracji (Tenantów) prezentowana w formie kart:
+       - Przełącznik aktywności lokalu
+       - Przycisk edycji nazwy i identyfikatora slug
+       - Przycisk Użytkownicy — dialog listy kont powiązanych z lokalem wraz z funkcją resetu hasła managera
+       - Przycisk Dodaj managera
+       - Przycisk **Logi** — bezpośrednie przejście do zakładki logów z automatycznie ustawionym filtrem na dany lokal
+     - Floating Action Button (+) do rejestracji nowej restauracji
+  2. **Logi systemowe**:
+     - Pasek wyboru restauracji (`DropdownButtonFormField`) z opcją „Wszystkie lokale”
+     - Przełączniki poziomu logowania (`ChoiceChip`: Wszystkie, INFO, WARNING, ERROR, CRITICAL, DEBUG) z kodowaniem kolorystycznym
+     - Pole wyszukiwania tekstowego w treści logów i ścieżkach
+     - Karty logów z datą, poziomem, modułem, kontekstem lokalu oraz treścią
+     - Obsługa rozwijania i zwijania wieloliniowych tracebacków błędów (stack trace) oraz kopiowania treści do schowka
+     - Akcje w nagłówku: odświeżanie logów oraz czyszczenie pliku logów z dialogiem potwierdzenia
 
 ---
 

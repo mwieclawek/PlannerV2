@@ -42,19 +42,21 @@ flutter run -d web-server --web-hostname=127.0.0.1 --web-port=5000 --dart-define
 - Zarządzanie lokalami w systemie (tworzenie, edycja parametrów i slug, zmiana statusu).
 - Podgląd użytkowników ze wszystkich restauracji.
 - Tworzenie pierwszych managerów lokali i awaryjny reset haseł.
+- Podgląd i filtrowanie logów systemowych (per lokal, poziom logowania, wyszukiwanie fraz, analiza tracebacków, czyszczenie pliku).
+- Bezpośredni skrót „Logi” na karcie każdej restauracji przełączający filtr na dany lokal.
 
 ### Manager Dashboard (zakładki)
-- **Home (`home_tab.dart`)**: Kalendarz dzienny z podglądem obsady.
+- **Home (`home_tab.dart`)**: Kalendarz dzienny z podglądem obsady, bezpośrednie prośby o wymianę zmian.
 - **Grafik (`scheduler_tab.dart`)**: Generator CP-SAT, tryb szkicu (Draft), batch save, publikacja z powiadomieniami push.
 - **Zespół (`team_tab.dart`)**: Zarządzanie personelem, edycja e-maili, przypisywanie ról, cele godzinowe/zmianowe, reset haseł.
-- **Ustawienia (`setup_tab.dart`)**: Konfiguracja stanowisk (ról), definicji zmian powiązanych z rolami, dane lokalu, strefy i stoliki POS.
+- **Ustawienia (`setup_tab.dart`)**: Konfiguracja stanowisk (ról), definicji zmian powiązanych z rolami, dane lokalu, strefy i stoliki POS, włączniki modułów (zamknięcie dnia, wymóg checklisty, ukrywanie tip poolingu).
 - **Obecności (`attendance_approval_tab.dart`)**: Zatwierdzanie ewidencji czasu pracy, eksport raportu PDF.
 - **Giełda (`giveaway_tab.dart`)**: Zarządzanie oddawanymi zmianami i sugerowane zastępstwa.
 
 ### Employee Dashboard (zakładki pracownicze)
-- **Mój Grafik (`my_schedule_screen.dart`)**: Opublikowane zmiany, przełącznik widoku całego zespołu, bezpośrednia wymiana zmian z uprawnionym współpracownikiem.
+- **Mój Grafik (`my_schedule_screen.dart`)**: Opublikowane zmiany, przełącznik widoku całego zespołu, bezpośrednia wymiana zmian z uprawnionym współpracownikiem (A <-> B) z priorytetowym banerem na ekranie głównym.
 - **Dostępność (`AvailabilityViewTab`)**: Tygodniowy grid dyspozycji na zmiany zgodne ze stanowiskiem, wnioski urlopowe.
-- **Obecność (`attendance_tab.dart`)**: Rejestracja check-in / check-out z domyślnymi godzinami z grafiku.
+- **Obecność (`attendance_tab.dart`)**: Rejestracja check-in / check-out z domyślnymi godzinami z grafiku oraz opcjonalną weryfikacją checklisty lokalu.
 - **Giełda (`GiveawaysScreen`)**: Przegląd otwartych ofert i bezpieczne przejmowanie zmian bez konfliktów czasowych.
 
 ### Ekosystem Gastronomiczny (POS i KDS)

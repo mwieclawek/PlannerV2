@@ -10,6 +10,9 @@
 - **Permissions**: `INTERNET` permission is already added to `AndroidManifest.xml`.
 - **Queries**: `http` and `https` schemes are added for `url_launcher`.
 - **Min SDK**: The app targets a minimum SDK version compatible with the plugins used.
+- **16 KB Memory Page Size Support (Android 15+)**:
+  - CameraX dependencies are forced to version `1.4.1` in `android/app/build.gradle.kts`.
+  - ML Kit Barcode Scanning uses the Google Play Services unbundled model (`dev.steenbakker.mobile_scanner.useUnbundled=true` in `android/gradle.properties`) and specifies `com.google.mlkit.vision.DEPENDENCIES=barcode` in `AndroidManifest.xml` to avoid 4 KB alignment native binaries.
 
 ## Building the App
 

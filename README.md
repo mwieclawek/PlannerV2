@@ -32,6 +32,7 @@ System wspiera wiele restauracji na pojedynczej instancji (model Tenant):
 | **Globalny Dashboard** | Dostęp pod `/#/superadmin` dla globalnych administratorów systemu. |
 | **Zarządzanie Restauracjami** | Tworzenie, edycja i podgląd wszystkich lokali (Tenants) w systemie. |
 | **Konta Globalne** | Wgląd w bazę wszystkich użytkowników, tworzenie pierwszych kont managerów dla nowych restauracji, możliwość resetu hasła managera. |
+| **Logi Systemowe** | Podgląd i filtrowanie logów aplikacji w czasie rzeczywistym per restauracja (tenant) oraz poziom logowania (INFO, WARNING, ERROR, CRITICAL, DEBUG), wyszukiwarka tekstowa, rozwijanie tracebacków błędów i czyszczenie logów. |
 
 ### Panel Managera
 
@@ -41,8 +42,9 @@ System wspiera wiele restauracji na pojedynczej instancji (model Tenant):
 | **Auto-Grafik** | Inteligentny generator OR-Tools CP-SAT z trybem szkicu (Draft -> Save -> Publish), ostrzeżenia kadrowe i kodeksowe (11h odpoczynku). |
 | **Edycja grafiku** | Ręczne przypisanie/usunięcie pracowników, batch save, widok wymagań kadrowych. |
 | **Zarządzanie zespołem** | Tworzenie kont, dodawanie i edycja adresów e-mail pracowników, przypisywanie ról, aktywacja/dezaktywacja, reset hasła, cele godzinowe/zmianowe. |
-| **Konfiguracja** | Role (stanowiska), definicje zmian z przypisaniem do konkretnych ról (Role-Based Shifts), wymagania kadrowe (globalne i per-datę), dane lokalu, godziny otwarcia. |
+| **Konfiguracja** | Role (stanowiska), definicje zmian z przypisaniem do konkretnych ról (Role-Based Shifts), wymagania kadrowe (globalne i per-datę), dane lokalu, godziny otwarcia, włączniki modułów (zamknięcie dnia, wymóg checklisty, ukrywanie kafelka tip poolingu). |
 | **Obecności** | Ewidencja czasu pracy, zatwierdzanie/odrzucanie, ręczne dodawanie, eksport PDF. |
+| **Operacje WFM** | Moduły operacyjne: checklisty otwarcia/zamknięcia, rejestr pomiarów HACCP i alerty korygujące, ewidencja płacowa (payroll) z maskowaniem danych wrażliwych, ogłoszenia pracownicze. |
 | **Giełda Zmian** | Zarządzanie prośbami o oddanie zmiany, sugerowane zastępstwa, przydzielanie/anulowanie. |
 | **Urlopy** | Przeglądanie wniosków urlopowych, zatwierdzanie/odrzucanie, widok kalendarza urlopów. |
 | **Podsumowania** | Miesięczne godziny i zmiany per pracownik, status dostępności. |
@@ -55,8 +57,8 @@ System wspiera wiele restauracji na pojedynczej instancji (model Tenant):
 |-------|------|
 | **Mój Grafik** | Kalendarz z opublikowanymi zmianami, lista współpracowników na zmianę, przełącznik widoku całego zespołu. |
 | **Dostępność** | Preferowany / Dostępny / Niedostępny — tygodniowy grid. Pracownicy widzą tylko zmiany relewantne dla przypisanych im ról. |
-| **Obecność** | Rejestracja check-in / check-out z domyślnymi godzinami z grafiku. |
-| **Wymiana i oddawanie zmian** | Zgłoszenie oddania na giełdę, bezpośrednia wymiana zmian z uprawnionym współpracownikiem. |
+| **Obecność** | Rejestracja check-in / check-out z domyślnymi godzinami z grafiku oraz opcjonalną weryfikacją checklisty lokalu. |
+| **Wymiana i oddawanie zmian** | Zgłoszenie oddania na giełdę, bezpośrednia wymiana zmian z uprawnionym współpracownikiem (A <-> B) z priorytetowym powiadomieniem na ekranie głównym. |
 | **Urlopy** | Składanie wniosków urlopowych, śledzenie statusu. |
 | **Powiadomienia** | In-app + Push (FCM Android/iOS/Web) o publikacji grafiku, zmianach na giełdzie, urlopach. |
 | **Google Calendar** | Bezpieczna integracja z Google Calendar (OAuth 2.0 z trwałym tokenem odświeżającym offline). |
@@ -80,17 +82,19 @@ System wspiera wiele restauracji na pojedynczej instancji (model Tenant):
 | Warstwa | Technologia |
 |---------|-------------|
 | Frontend | Flutter Web / Android / iOS, PWA (Progressive Web App) |
+| Android Compatibility | 16 KB page size support (CameraX 1.4.1 + unbundled Google Play Services ML Kit) |
 | Backend | FastAPI + SQLModel + Pydantic v2 |
 | Solver | Google OR-Tools (CP-SAT) |
 | Database | SQLite (dev) / PostgreSQL (prod) |
-| Migracje | Alembic |
+| Migracje | Alembic (z testami integralności grafu rewizji) |
 | Auth | JWT (PyJWT) + pbkdf2_sha256 + Dual-Login |
 | Error Handling | ApiErrorHandler (ujednolicona obsługa Dio + reguły haseł) |
+| Logging | RotatingFileHandler + TenantLogFilter (kontekst lokalu per zapytanie) |
 | KDS Sync | Monotonic weight state machine (offline-first batch) |
 | Push Notifications | Firebase Cloud Messaging (Android/iOS) + Web Push (Service Worker + VAPID) |
 | Encryption | cryptography (Fernet) — tokeny Google Calendar |
 | PDF | ReportLab |
-| CI/CD | Jenkins + Docker |
+| CI/CD | Jenkins + Docker (Blue-Green deployment + automated backups) |
 | Proxy | Nginx (reverse proxy + static files + nagłówki cache PWA) |
 
 ---
@@ -179,6 +183,19 @@ PlannerV2/
 ---
 
 ## API — Główne Endpointy
+
+### Sysadmin (`/sysadmin`)
+
+| Metoda | Endpoint | Opis |
+|--------|----------|------|
+| `GET` | `/sysadmin/restaurants` | Lista restauracji z liczbą pracowników i managerów |
+| `POST` | `/sysadmin/restaurants` | Rejestracja nowej restauracji (nazwa, unikalny slug) |
+| `PUT` | `/sysadmin/restaurants/{id}` | Edycja restauracji lub zmiana statusu aktywności |
+| `GET` | `/sysadmin/users` | Globalny przegląd wszystkich użytkowników w systemie |
+| `POST` | `/sysadmin/restaurants/{id}/managers` | Dodanie pierwszego managera do lokalu |
+| `PUT` | `/sysadmin/users/{id}/password` | Awaryjny reset hasła managera/użytkownika |
+| `GET` | `/sysadmin/logs` | Podgląd i filtrowanie logów (filtry: tenant, poziom, fraza, paginacja) |
+| `DELETE` | `/sysadmin/logs` | Czyszczenie / rotacja aktywnego pliku logów |
 
 ### Auth (`/auth`)
 
@@ -300,7 +317,7 @@ Dla frontendu Web dopuszczalna jest flaga kompilacji:
 Aplikacja wykorzystuje Jenkins do automatycznych wdrożeń:
 
 - **DEV**: Wdrażany automatycznie z gałęzi `main`.
-- **PROD**: Wdrażany automatycznie po utworzeniu taga wersji (np. `v2.2.0`).
+- **PROD**: Wdrażany automatycznie po utworzeniu taga wersji (np. `v2.2.1`).
 
 ```yaml
 services:
