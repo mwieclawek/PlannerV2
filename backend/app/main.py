@@ -8,19 +8,29 @@ from slowapi.errors import RateLimitExceeded
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+import time
+import jwt
 from dotenv import load_dotenv
 
 load_dotenv()
 
+from .services.log_service import TenantLogFilter
+from .tenant_context import set_current_tenant_id
+from .auth_utils import SECRET_KEY, ALGORITHM
+
 os.makedirs("logs", exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[
-        RotatingFileHandler("logs/planner.log", maxBytes=5*1024*1024, backupCount=3),
-        logging.StreamHandler()
-    ]
-)
+tenant_filter = TenantLogFilter()
+
+file_handler = RotatingFileHandler("logs/planner.log", maxBytes=5*1024*1024, backupCount=3, encoding="utf-8")
+file_handler.addFilter(tenant_filter)
+file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(tenant_str)s] %(name)s: %(message)s"))
+
+stream_handler = logging.StreamHandler()
+stream_handler.addFilter(tenant_filter)
+stream_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(tenant_str)s] %(name)s: %(message)s"))
+
+logging.root.handlers = [file_handler, stream_handler]
+logging.root.setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ── Rate Limiter ───────────────────────────────────────────────────────────────
@@ -57,6 +67,40 @@ app = FastAPI(title="Planner V2", lifespan=lifespan)
 # ── Rate Limiting ──────────────────────────────────────────────────────────────
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+@app.middleware("http")
+async def log_requests_middleware(request: Request, call_next):
+    start_time = time.time()
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        try:
+            token = auth_header.split(" ", 1)[1]
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
+            tid = payload.get("tenant_id")
+            if tid is not None:
+                set_current_tenant_id(int(tid))
+        except Exception:
+            pass
+
+    try:
+        response = await call_next(request)
+        duration_ms = int((time.time() - start_time) * 1000)
+        path = request.url.path
+        if not path.startswith("/health") and path != "/":
+            status_code = response.status_code
+            msg = f"{request.method} {path} -> {status_code} ({duration_ms}ms)"
+            if status_code >= 500:
+                logger.error(msg)
+            elif status_code >= 400:
+                logger.warning(msg)
+            else:
+                logger.info(msg)
+        return response
+    except Exception as exc:
+        duration_ms = int((time.time() - start_time) * 1000)
+        logger.error(f"{request.method} {request.url.path} -> EXCEPTION: {exc} ({duration_ms}ms)", exc_info=True)
+        raise exc
+
 
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5000,http://127.0.0.1:5000,http://localhost:8080,http://127.0.0.1:8080")
 allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]

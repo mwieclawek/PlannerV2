@@ -1424,6 +1424,22 @@ class SysAdminManagerResponse(BaseModel):
     message: str
 
 
+class SysAdminLogEntry(BaseModel):
+    timestamp: str
+    level: str
+    logger: str
+    message: str
+    tenant_id: Optional[int] = None
+    restaurant_name: Optional[str] = None
+    restaurant_slug: Optional[str] = None
+
+
+class SysAdminLogsResponse(BaseModel):
+    total: int
+    items: List[SysAdminLogEntry]
+    available_levels: List[str]
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  Module A: Payroll, Settlements & Labor Cost Lite
 # ═══════════════════════════════════════════════════════════════════════════════

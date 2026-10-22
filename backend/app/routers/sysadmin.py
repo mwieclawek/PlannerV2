@@ -7,9 +7,9 @@ Every endpoint here is protected by `get_current_superadmin`, which requires
 """
 import logging
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlmodel import Session, select
 
@@ -25,7 +25,10 @@ from ..schemas import (
     SysAdminRestaurantUpdate,
     SysAdminUserResponse,
     SysAdminPasswordReset,
+    SysAdminLogEntry,
+    SysAdminLogsResponse,
 )
+from ..services import log_service
 
 router = APIRouter(
     prefix="/sysadmin",
@@ -318,3 +321,45 @@ def reset_user_password(
         superadmin.email or superadmin.username, user.id,
     )
     return {"message": "Hasło zostało zmienione"}
+
+
+@router.get("/logs", response_model=SysAdminLogsResponse)
+def get_system_logs(
+    restaurant_id: Optional[int] = Query(None, description="Filtruj po ID restauracji (0 = tylko logi systemowe bez tenanta)"),
+    level: Optional[str] = Query(None, description="Filtruj po poziomie: ALL, DEBUG, INFO, WARNING, ERROR, CRITICAL"),
+    search: Optional[str] = Query(None, description="Szukana fraza w logach"),
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    session: Session = Depends(get_session),
+    superadmin: User = Depends(get_current_superadmin),
+):
+    """
+    Pobiera i filtruje logi systemowe dla SuperAdmina.
+    Opcjonalnie filtruje po restauracji (restaurant_id) oraz poziomie logowania (level).
+    """
+    return log_service.get_logs(
+        session=session,
+        restaurant_id=restaurant_id,
+        level=level,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.delete("/logs")
+def clear_system_logs(
+    superadmin: User = Depends(get_current_superadmin),
+):
+    """Wyczyść aktualny plik logów systemowych."""
+    success = log_service.clear_logs()
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Nie udało się wyczyścić pliku logów",
+        )
+    logger.info(
+        "SYSADMIN %s wyczyścił plik logów systemowych",
+        superadmin.email or superadmin.username,
+    )
+    return {"message": "Plik logów został wyczyszczony"}

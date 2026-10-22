@@ -143,7 +143,11 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     session: Session = Depends(get_session),
 ) -> User:
-    return await verify_user_token(token, session)
+    user = await verify_user_token(token, session)
+    if user and user.tenant_id:
+        from .tenant_context import set_current_tenant_id
+        set_current_tenant_id(user.tenant_id)
+    return user
 
 
 async def get_current_superadmin(

@@ -257,3 +257,80 @@ async def test_add_manager_validation(client: AsyncClient, superadmin_headers, t
     resp = await client.post("/sysadmin/restaurants/99999/managers", json=base, headers=superadmin_headers)
     assert resp.status_code == 404
 
+
+# ── logs endpoints ────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_sysadmin_logs_security(client: AsyncClient, auth_headers):
+    # Unauthenticated -> 401
+    resp = await client.get("/sysadmin/logs")
+    assert resp.status_code == 401
+
+    # Regular manager -> 403
+    resp = await client.get("/sysadmin/logs", headers=auth_headers)
+    assert resp.status_code == 403
+
+    resp = await client.delete("/sysadmin/logs", headers=auth_headers)
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_sysadmin_logs_filtering_and_retrieval(
+    client: AsyncClient, superadmin_headers, test_tenant, tmp_path, monkeypatch
+):
+    from pathlib import Path
+    import app.services.log_service as log_srv
+
+    # Mock log file with sample multi-tenant entries
+    test_log_file = tmp_path / "planner.log"
+    sample_content = (
+        f"2026-10-22 10:00:00,100 [INFO] [tenant:{test_tenant.id}] app.services.auth: User logged in\n"
+        f"2026-10-22 10:01:00,200 [WARNING] [tenant:{test_tenant.id}] app.routers.manager: Low inventory detected\n"
+        f"2026-10-22 10:02:00,300 [ERROR] [tenant:{test_tenant.id}] app.routers.pos: Payment gateway timeout\n"
+        f"  Traceback (most recent call last):\n"
+        f"    File 'gateway.py', line 10\n"
+        f"  TimeoutError: Connection failed\n"
+        f"2026-10-22 10:03:00,400 [INFO] [tenant:999] app.other: Other restaurant log\n"
+        f"2026-10-22 10:04:00,500 [INFO] [tenant:-] app.main: System background maintenance\n"
+    )
+    test_log_file.write_text(sample_content, encoding="utf-8")
+
+    monkeypatch.setattr(log_srv, "LOG_DIR", tmp_path)
+    monkeypatch.setattr(log_srv, "LOG_FILE", test_log_file)
+
+    # 1. Fetch all logs
+    resp = await client.get("/sysadmin/logs", headers=superadmin_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 5
+    assert len(data["items"]) == 5
+
+    # 2. Filter by restaurant_id
+    resp = await client.get(f"/sysadmin/logs?restaurant_id={test_tenant.id}", headers=superadmin_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 3
+    for item in data["items"]:
+        assert item["tenant_id"] == test_tenant.id
+        assert item["restaurant_name"] == test_tenant.name
+
+    # 3. Filter by level
+    resp = await client.get(f"/sysadmin/logs?restaurant_id={test_tenant.id}&level=ERROR", headers=superadmin_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["items"][0]["level"] == "ERROR"
+    assert "TimeoutError" in data["items"][0]["message"]  # Multi-line traceback preserved
+
+    # 4. Search by keyword
+    resp = await client.get("/sysadmin/logs?search=inventory", headers=superadmin_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["items"][0]["level"] == "WARNING"
+
+    # 5. Clear logs
+    resp = await client.delete("/sysadmin/logs", headers=superadmin_headers)
+    assert resp.status_code == 200
+    assert "wyczyszczony" in resp.json()["message"]
+

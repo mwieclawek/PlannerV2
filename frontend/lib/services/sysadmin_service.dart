@@ -70,4 +70,34 @@ class SysAdminService {
       data: {'new_password': newPassword},
     );
   }
+
+  Future<Map<String, dynamic>> getLogs({
+    int? restaurantId,
+    String? level,
+    String? search,
+    int limit = 200,
+    int offset = 0,
+  }) async {
+    final queryParams = <String, dynamic>{
+      'limit': limit,
+      'offset': offset,
+    };
+    if (restaurantId != null) queryParams['restaurant_id'] = restaurantId;
+    if (level != null && level.toUpperCase() != 'ALL') {
+      queryParams['level'] = level.toUpperCase();
+    }
+    if (search != null && search.trim().isNotEmpty) {
+      queryParams['search'] = search.trim();
+    }
+
+    final response = await _dio.get(
+      '/sysadmin/logs',
+      queryParameters: queryParams,
+    );
+    return Map<String, dynamic>.from(response.data);
+  }
+
+  Future<void> clearLogs() async {
+    await _dio.delete('/sysadmin/logs');
+  }
 }
