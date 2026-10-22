@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.2.1] - 2026-10-22
+
+### Added
+- **Podgląd i filtrowanie logów systemowych w panelu Superadmina**:
+  - Dedykowana zakładka „Logi systemowe” w panelu Superadmina z możliwością filtrowania logów per restauracja (tenant) oraz po poziomie logowania (`INFO`, `WARNING`, `ERROR`, `CRITICAL`, `DEBUG`).
+  - Wyszukiwarka tekstowa, rozwijanie wieloliniowych tracebacków z możliwością kopiowania do schowka oraz przycisk czyszczenia logów.
+  - Skrót „Logi” bezpośrednio na liście restauracji umożliwiający natychmiastowe przejście do logów danego lokalu.
+  - Backendowy serwis `LogService` z mechanizmem `TenantLogFilter` wstrzykującym identyfikator restauracji `[tenant:X]` do każdego rekordu logów oraz rejestracją zapytań HTTP middleware.
+  - Bezpieczne endpointy API `GET /sysadmin/logs` oraz `DELETE /sysadmin/logs` dostępne wyłącznie dla superadministratorów.
+
+### Fixed
+- **Zgodność z trybem stron pamięci 16 KB (Android 15+)**:
+  - Aktualizacja CameraX do wersji `1.4.1` oraz wdrożenie Google Play Services unbundled ML Kit Barcode Scanning (`dev.steenbakker.mobile_scanner.useUnbundled=true`) eliminujące biblioteki natywne skompilowane z rozmiarem stron 4 KB.
+- **Optymalizacje pipeline'u CI/CD i bazy danych**:
+  - Zabezpieczenie `pg_dump` limitem czasowym oraz automatyczne zwalnianie transakcji `idle in transaction` blokujących migracje Alembic.
+  - Zapewnienie buforowania logów w trybie unbuffered dla kontenerów backendowych.
+
 ## [v2.2.0] - 2026-10-15
 
 ### Added
