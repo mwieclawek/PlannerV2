@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.2.2] - 2026-10-23
+
+### Added
+- **Strukturalne logowanie kluczowych zdarzeń biznesowych i audyt anomalii**:
+  - Wyciszenie rutynowych, bezstanowych zapytań `GET 200` (polling powiadomień, pobieranie braków obecności) do poziomu `DEBUG`, aby na domyślnym poziomie `INFO` w panelu Superadmina eksponować wyłącznie istotne operacje biznesowe.
+  - Dedykowane tagi zdarzeń i anomalii w logach backendu:
+    - `[AUTH]` oraz `[AUTH ANOMALY]`: logowanie sukcesów autoryzacji, prób użycia błędnego hasła, wylogowań, prób logowania na zablokowane/dezaktywowane konta oraz do lokali w trybie serwisowym.
+    - `[ATTENDANCE]` oraz `[ATTENDANCE ANOMALY]`: rejestracja wejść/wyjść, zgłoszenia nieobecności z powodem, zatwierdzanie/odrzucanie obecności przez managera, wykrywanie prób rejestracji w przyszłości, duplikatów oraz blokad z powodu niewykonanych checklist zamknięcia.
+    - `[SWAP]` oraz `[SWAP ANOMALY]`: wystawianie zmian na giełdę, bezpośrednie wymiany A <-> B, przejmowanie ofert, anulowania oraz wykrywanie kolizji grafiku (>30 min) i braków ról.
+    - `[LEAVE]` oraz `[LEAVE ANOMALY]`: składanie wniosków urlopowych, anulowania, rozpatrywanie przez managera oraz wykrywanie nakładających się terminów.
+    - `[SCHEDULE]`: zapis partii grafików, publikacja harmonogramu z liczbą powiadomień oraz ręczne zmiany przypisań.
+    - `[USER]` oraz `[USER ANOMALY]`: tworzenie pracowników, modyfikacja danych, zmiany ról i alerty o dezaktywacji kont.
+- **Szczegółowa telemetria Solver Workera (OR-Tools CP-SAT)**:
+  - Tagi `[SOLVER WORKER]`, `[SOLVER WORKER DEFICIT]`, `[SOLVER WORKER REST VIOLATION]` oraz `[SOLVER WORKER ANOMALY]`.
+  - Rejestrowanie parametrów wejściowych (liczba pracowników, zdefiniowanych zmian, ról, dni i łączna liczba wymaganych slotów).
+  - Precyzyjny pomiar czasu obliczeń w sekundach (`solve_duration`), liczba zmiennych i składników funkcji celu oraz status solvera (`OPTIMAL`, `FEASIBLE`, `INFEASIBLE`).
+  - Szczegółowe logowanie każdego deficytu kadrowego (data, zmiana, rola, brakująca liczba pracowników) oraz naruszeń 11-godzinnego dobowego odpoczynku (clopening).
+- **Wizualne badge i szybkie filtry w panelu Superadmina**:
+  - Dedykowane filtry szybkiego wyboru w nagłówku logów: `Wszystkie zdarzenia`, `ANOMALIE`, `SOLVER WORKER`, `LOGOWANIA (AUTH)`, `OBECNOŚĆ`, `WYMIANA ZMIAN`, `URLOPY`, `GRAFIK`.
+  - Wizualne kolorystyczne badge w kafelkach logów (`ANOMALIA`, `BRAKI KADROWE`, `11H ODPOCZYNEK`, `SOLVER`, `AUTH`, `OBECNOŚĆ`, `WYMIANA`, `URLOP`, `GRAFIK`, `UŻYTKOWNIK`).
+  - Specjalne akcentowanie (czerwone obramowanie i delikatne tło) dla wpisów reprezentujących wykryte anomalie i naruszenia prawa pracy.
+
 ## [v2.2.1] - 2026-10-22
 
 ### Added

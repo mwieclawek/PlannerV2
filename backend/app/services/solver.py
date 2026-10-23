@@ -31,7 +31,10 @@ class SolverService:
         delta = end_date - start_date
         days = [start_date + timedelta(days=i) for i in range(delta.days + 1)]
         
-        logger.info(f"Starting schedule generation for {start_date} to {end_date}")
+        logger.info(
+            f"[SOLVER WORKER] Rozpoczęcie generowania grafiku: {start_date} do {end_date} "
+            f"(dni: {len(days)}, pracownicy: {len(employees)}, zdefiniowane zmiany: {len(shifts)}, role: {len(roles)}) [tenant:{tid}]."
+        )
 
         # Fetch operational data
         availabilities = self.session.exec(select(Availability).where(
@@ -129,10 +132,6 @@ class SolverService:
                             # If employee doesn't have role, they can't work
                             pass
         
-        # Constraints
-        
-        # Constraints
-        
         # Helper: Calculate shift durations and overlaps
         shift_durations = {}
         shift_overlaps = [] # List of tuples (s1_id, s2_id)
@@ -210,7 +209,6 @@ class SolverService:
             
             # Forbid scheduling if they didn't explicitly say they are available
             if status not in ["AVAILABLE", "PREFERRED"]:
-                # logger.debug(f"Forcing w_var=0 for {e_id} on {d} due to {status}")
                 model.Add(w_var == 0)
 
         # C3. Staffing Requirements
@@ -223,43 +221,12 @@ class SolverService:
                         if (e.id, d, s.id, r.id) in work:
                             relevant_workers.append(work[(e.id, d, s.id, r.id)])
                     if relevant_workers:
-                        # Allow slightly less if infeasible? No, hard constraint for now.
-                        # But to prevent "infeasible" due to lack of staff, usually we might use soft constraint.
-                        # For now, keep as hard constraint <= min_req ??? 
-                        # Wait, original code was sum <= min_req? That sounds wrong. 
-                        # Usually min_req means "at least".
-                        # Original: "model.Add(sum(relevant_workers) <= min_req)" 
-                        # The user feedback implied they rely on this. 
-                        # Actually, looking at previous code, it was trying to fill UP TO requirement.
-                        # "constraint: sum ... <= min_req". This acts as a CAP.
-                        # Typically "Requirement" = "We NEED this many".
-                        # If I change it to >= it might break if not enough staff.
-                        # Let's keep it as CAP for now (matches "Target"), 
-                        # BUT usually a "Requirement" is a lower bound. 
-                        # Let's switch to >= but maybe with a slack variable if we wanted to be fancy.
-                        # Given the prompt doesn't explicitly ask to fix "requirements logic", 
-                        # I will assume the previous "Max Cap" logic was intended or I should stick to it unless asked.
-                        # Wait, "min_count" implies minimum. 
-                        # Let's look at the UI/Usage context. "Requirements" usually means "I need 2 waiters".
-                        # If I only have 1, I want 1. If I have 3, I want 2.
-                        # So `sum == min_req` is ideal. `sum <= min_req` allows 0. `sum >= min_req` forces it.
-                        # The previous code had `sum <= min_req`. This forces under-staffing or exact staffing.
-                        # Let's keep it `sum <= min_req` to avoid breaking "feasible" status, 
-                        # effectively treating it as "Slots Available".
                         model.Add(sum(relevant_workers) <= min_req)
 
         # Objective: Maximize preferences & Penalize Overworking
         objective_terms = []
 
         # C4. Monthly Targets (Hours / Shifts)
-        # We are solving for a range [start_date, end_date]. 
-        # If this range is shorter than a month, we only enforce proportional or absolute?
-        # User asked: "Assuming if not defined, no limit".
-        # We will enforce limit for the *generated period* based on the monthly target.
-        # Ideally we'd know usage so far in month, but we don't.
-        # We will assume the target applies to this generation if it covers the whole month (simplification).
-        # Or better: Just apply the limit as a Hard Cap for the period.
-        
         for e in employees:
             employee_vars = []
             employee_hours_coeffs = []
@@ -284,11 +251,10 @@ class SolverService:
                 already_scheduled = mtd_hours.get(e.id, 0.0)
                 remaining = max(0, e.target_hours_per_month - already_scheduled)
                 target_scaled = int(remaining * 10)
-                assigned_scaled = cp_model.LinearExpr.WeightedSum(employee_vars, employee_hours_coeffs)
                 
                 # Soft penalty for exceeding
                 excess_var = model.NewIntVar(0, sum(employee_hours_coeffs) + 1000, f"excess_hours_{e.id}")
-                model.Add(assigned_scaled - target_scaled <= excess_var)
+                model.Add(cp_model.LinearExpr.WeightedSum(employee_vars, employee_hours_coeffs) - target_scaled <= excess_var)
                 
                 # Penalty 6000 per scaled hour (meaning 60,000 per full hour to outweigh slot reward)
                 objective_terms.append(excess_var * -6000)
@@ -309,8 +275,6 @@ class SolverService:
                 objective_terms.append(w_var * 500)
         
         # 2. Penalty for split shifts (working > 1 shift per day)
-        # We subtract Penalty * Excess from objective
-        # Let Penalty = 50. It's less than 100, so filling a slot is prioritized over avoiding split shifts.
         for e in employees:
             for d in days:
                 daily_vars = []
@@ -358,15 +322,18 @@ class SolverService:
 
         # 3. Solve
         solver = cp_model.CpSolver()
-        # Set a time limit in case of complexity
         solver.parameters.max_time_in_seconds = 10.0
-        logger.info("Solving CP model...")
+        logger.info(f"[SOLVER WORKER] Rozpoczynanie obliczeń CP-SAT: utworzono {len(work)} zmiennych, {len(objective_terms)} składników celu (limit: 10s) [tenant:{tid}].")
+        
+        import time
+        solver_start_ts = time.perf_counter()
         status = solver.Solve(model)
+        solve_duration = time.perf_counter() - solver_start_ts
+        status_name = solver.StatusName(status)
 
         generated_schedules = []
 
         if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
-            generated_schedules = []
             for key, w_var in work.items():
                 if solver.Value(w_var) == 1:
                     e_id, d, s_id, r_id = key
@@ -379,49 +346,72 @@ class SolverService:
                     )
                     generated_schedules.append(sc)
 
-            # 4. Calculate staffing warnings
-            # Count assigned workers per (date, shift, role)
+            logger.info(f"[SOLVER WORKER] Obliczenia zakończone sukcesem w {solve_duration:.2f}s (status={status_name}). Wygenerowano {len(generated_schedules)} przypisań [tenant:{tid}].")
+
+            # 4. Calculate staffing warnings and log deficits
             assigned_count = {}
             for sc in generated_schedules:
                 key = (sc.date, sc.shift_def_id, sc.role_id)
                 assigned_count[key] = assigned_count.get(key, 0) + 1
             
-            # Compare with requirements and generate warnings
             warnings = []
             shift_map = {s.id: s.name for s in shifts}
             role_map = {r.id: r.name for r in roles}
+            user_map_obj = {u.id: u for u in employees}
             
             for (d, s_id, r_id), required in req_map.items():
                 if required > 0:
                     assigned = assigned_count.get((d, s_id, r_id), 0)
                     if assigned < required:
+                        missing = required - assigned
+                        s_name = shift_map.get(s_id, f"ID:{s_id}")
+                        r_name = role_map.get(r_id, f"ID:{r_id}")
                         warnings.append({
                             "date": d.isoformat(),
                             "shift_def_id": s_id,
                             "role_id": r_id,
-                            "role_name": role_map.get(r_id, "Unknown"),
-                            "shift_name": shift_map.get(s_id, "Unknown"),
+                            "role_name": r_name,
+                            "shift_name": s_name,
                             "required": required,
                             "assigned": assigned,
-                            "missing": required - assigned
+                            "missing": missing
                         })
+                        logger.warning(
+                            f"[SOLVER WORKER DEFICIT] Braki kadrowe: data {d.isoformat()}, zmiana '{s_name}', rola '{r_name}' "
+                            f"- wymagano {required}, obsadzono {assigned} (deficyt: {missing}) [tenant:{tid}]."
+                        )
+
+            # Check 11h rest violations (clopening) in final schedule
+            sched_by_user_day = {}
+            for sc in generated_schedules:
+                sched_by_user_day.setdefault((sc.user_id, sc.date), []).append(sc.shift_def_id)
+            
+            for (u_id, d_c), s1_list in sched_by_user_day.items():
+                d_n = d_c + timedelta(days=1)
+                s2_list = sched_by_user_day.get((u_id, d_n), [])
+                for s1_i in s1_list:
+                    for s2_i in s2_list:
+                        if (s1_i, s2_i) in clopening_pairs:
+                            u_obj = user_map_obj.get(u_id)
+                            u_name = u_obj.full_name if u_obj else str(u_id)
+                            logger.warning(
+                                f"[SOLVER WORKER REST VIOLATION] Naruszenie odpoczynku 11h (clopening) dla pracownika '{u_name}' "
+                                f"między {d_c.isoformat()} ({shift_map.get(s1_i, '?')}) a {d_n.isoformat()} ({shift_map.get(s2_i, '?')}) [tenant:{tid}]."
+                            )
 
             if save:
-                # Clear old schedules for this period first to clean up
                 statements = select(Schedule).where(Schedule.date >= start_date, Schedule.date <= end_date)
                 results = self.session.exec(statements).all()
                 for res in results:
                     self.session.delete(res)
                 
-                # Save to DB
                 for item in generated_schedules:
                     self.session.add(item)
                 self.session.commit()
+                logger.info(f"[SOLVER WORKER] Zapisano do bazy {len(generated_schedules)} wpisów grafiku dla zakresu {start_date} - {end_date} [tenant:{tid}].")
             
-            # Create maps for lookup
             shift_map_obj = {s.id: s for s in shifts}
             role_map_obj = {r.id: r for r in roles}
-            user_map_obj = {u.id: u for u in employees}
 
             enriched_schedules = []
             for sc in generated_schedules:
@@ -443,8 +433,6 @@ class SolverService:
                     "end_time": sh.end_time if sh else None,
                 })
 
-            logger.info(f"Solver found a valid schedule (status={status}), generating {len(generated_schedules)} assignments.")
-
             return {
                 "status": "success", 
                 "count": len(generated_schedules), 
@@ -452,5 +440,5 @@ class SolverService:
                 "warnings": warnings
             }
         else:
-            logger.warning(f"Solver failed to find a feasible schedule. Status: {status}")
+            logger.error(f"[SOLVER WORKER ANOMALY] Solver nie znalazł dopuszczalnego grafiku (status={status_name}) w {solve_duration:.2f}s dla okresu {start_date} - {end_date} [tenant:{tid}].")
             return {"status": "infeasible", "count": 0, "warnings": []}

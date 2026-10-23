@@ -103,7 +103,10 @@ class SchedulerService:
             if pub:
                 enqueue(background_tasks, sync_schedule_task, sched_id, user_id, self.tenant_id)
 
-        logger.info(f"Saved batch schedule from {batch.start_date} to {batch.end_date}. Created {count} records (is_published={is_published}).")
+        logger.info(
+            f"[SCHEDULE] Zapisano partię grafiku od {batch.start_date} do {batch.end_date}. "
+            f"Utworzono {count} pozycji (publikacja: {is_published}) [tenant:{self.tenant_id}]."
+        )
         return count
 
     def get_schedule_list(self, start_date: date, end_date: date) -> List[Dict[str, Any]]:
@@ -201,7 +204,10 @@ class SchedulerService:
         for u_id in all_published_user_ids:
             enqueue(background_tasks, sync_user_range_task, u_id, self.tenant_id, start_date, end_date)
 
-        logger.info(f"Published schedules from {start_date} to {end_date}. Newly published: {len(published_user_ids)}, synced calendars: {len(all_published_user_ids)}")
+        logger.info(
+            f"[SCHEDULE] Opublikowano grafik na okres {start_date} - {end_date}. "
+            f"Nowo opublikowanych zmian: {count}, powiadomiono pracowników: {len(published_user_ids)}, synchronizacja kalendarzy: {len(all_published_user_ids)} [tenant:{self.tenant_id}]."
+        )
         return count
 
     # --- Single assignment (manager) ---
@@ -233,6 +239,10 @@ class SchedulerService:
             self.session.commit()
             if existing_daily.is_published:
                 enqueue(background_tasks, sync_schedule_task, existing_daily.id, existing_daily.user_id, self.tenant_id)
+            logger.info(
+                f"[SCHEDULE] Zmiana przypisania dla pracownika (user_id={assign.user_id}) na datę {assign.date}: "
+                f"zmiana={assign.shift_def_id}, rola={assign.role_id} (id={existing_daily.id}) [tenant:{self.tenant_id}]."
+            )
             return {"status": "updated", "id": str(existing_daily.id)}
 
         new_entry = Schedule(
@@ -254,8 +264,10 @@ class SchedulerService:
         ))
         self.session.commit()
         self.session.refresh(new_entry)
-        # Draft entries are not pushed to calendars; sync_schedule_task is a no-op until published,
-        # and publish_schedule() syncs them.
+        logger.info(
+            f"[SCHEDULE] Nowe przypisanie dla pracownika (user_id={assign.user_id}) na datę {assign.date}: "
+            f"zmiana={assign.shift_def_id}, rola={assign.role_id} (id={new_entry.id}) [tenant:{self.tenant_id}]."
+        )
         return {"status": "created", "id": str(new_entry.id)}
 
     def remove_assignment(self, schedule_id: UUID, background_tasks=None, changed_by_user_id: Optional[UUID] = None) -> Dict[str, Any]:
@@ -266,9 +278,10 @@ class SchedulerService:
             )
         ).first()
         if not entry:
+            logger.warning(f"[SCHEDULE ANOMALY] Próba usunięcia nieistniejącego lub obcego przypisania {schedule_id} [tenant:{self.tenant_id}].")
             return {"status": "not_found"}
 
-        was_published, user_id, sched_id = entry.is_published, entry.user_id, entry.id
+        was_published, user_id, sched_id, s_date = entry.is_published, entry.user_id, entry.id, entry.date
 
         from ..models import Attendance, ShiftAuditLog
         self.session.add(ShiftAuditLog(
@@ -288,4 +301,5 @@ class SchedulerService:
         if was_published:
             from .google_calendar_service import enqueue, delete_event_task
             enqueue(background_tasks, delete_event_task, sched_id, user_id, self.tenant_id)
+        logger.info(f"[SCHEDULE] Usunięto przypisanie {sched_id} (user_id={user_id}, data={s_date}) [tenant:{self.tenant_id}].")
         return {"status": "deleted"}

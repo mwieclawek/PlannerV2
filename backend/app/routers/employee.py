@@ -608,9 +608,11 @@ def offer_shift_giveaway(
     ).first()
     
     if not schedule:
+        logger.warning(f"[SWAP ANOMALY] Nie znaleziono wpisu grafiku {schedule_id} do oddania przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=404, detail="Schedule entry not found")
     
     if schedule.date < date.today():
+        logger.warning(f"[SWAP ANOMALY] Próba oddania przeszłej zmiany {schedule_id} ({schedule.date}) przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=400, detail="Cannot give away past shifts")
     
     # Check if already offered
@@ -622,6 +624,7 @@ def offer_shift_giveaway(
     ).first()
     
     if existing:
+        logger.warning(f"[SWAP ANOMALY] Zmiana {schedule_id} jest już wystawiona na giełdę przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=400, detail="This shift is already offered for giveaway")
 
     resolved_target_id = None
@@ -652,9 +655,8 @@ def offer_shift_giveaway(
         user_a_role_ids = {r.id for r in current_user.job_roles}
         user_b_role_ids = {r.id for r in target_user.job_roles}
 
-        if target_schedule.role_id not in user_a_role_ids:
-            raise HTTPException(status_code=400, detail="Employees do not have matching roles for shift swap")
-        if schedule.role_id not in user_b_role_ids:
+        if target_schedule.role_id not in user_a_role_ids or schedule.role_id not in user_b_role_ids:
+            logger.warning(f"[SWAP ANOMALY] Brak zgodnych ról do wymiany ({schedule_id} <-> {resolved_target_id}) przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
             raise HTTPException(status_code=400, detail="Employees do not have matching roles for shift swap")
 
         allowed_a = set(session.exec(select(ShiftRoleLink.role_id).where(ShiftRoleLink.shift_def_id == schedule.shift_def_id)).all())
@@ -669,6 +671,7 @@ def offer_shift_giveaway(
         conflict_b = find_shift_conflict(session, target_user.id, schedule.date, schedule.shift_def_id, exclude_schedule_id=target_schedule.id)
         if conflict_b:
             _, c_def = conflict_b
+            logger.warning(f"[SWAP ANOMALY] Kolizja w grafiku pracownika docelowego {target_user.username} przy propozycji wymiany [tenant:{current_user.tenant_id}].")
             raise HTTPException(
                 status_code=400,
                 detail=f"Pracownik {target_user.full_name} ma już zaplanowaną inną zmianę w tym czasie ({c_def.name} {c_def.start_time.strftime('%H:%M')}-{c_def.end_time.strftime('%H:%M')})"
@@ -677,6 +680,7 @@ def offer_shift_giveaway(
         conflict_a = find_shift_conflict(session, current_user.id, target_schedule.date, target_schedule.shift_def_id, exclude_schedule_id=schedule.id)
         if conflict_a:
             _, c_def = conflict_a
+            logger.warning(f"[SWAP ANOMALY] Kolizja w grafiku wnioskującego {current_user.username} przy propozycji wymiany [tenant:{current_user.tenant_id}].")
             raise HTTPException(
                 status_code=400,
                 detail=f"Masz już zaplanowaną inną zmianę w tym czasie ({c_def.name} {c_def.start_time.strftime('%H:%M')}-{c_def.end_time.strftime('%H:%M')})"
@@ -762,6 +766,11 @@ def offer_shift_giveaway(
     session.commit()
     session.refresh(giveaway)
     
+    swap_type = f"bezpośrednią (cel: {giveaway.target_shift_id})" if giveaway.target_shift_id else "otwartą na giełdzie"
+    logger.info(
+        f"[SWAP] Utworzono ofertę {swap_type} dla zmiany {schedule_id} (data: {schedule.date}) "
+        f"przez użytkownika '{current_user.username}' (giveaway_id={giveaway.id}) [tenant:{current_user.tenant_id}]."
+    )
     return {"id": str(giveaway.id), "status": "created"}
 
 @router.delete("/giveaway/{giveaway_id}")
@@ -779,6 +788,7 @@ def cancel_giveaway(
     ).first()
     
     if not giveaway:
+        logger.warning(f"[SWAP ANOMALY] Nie znaleziono oferty {giveaway_id} do anulowania przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=404, detail="Giveaway not found")
 
     target_schedule = None
@@ -792,9 +802,11 @@ def cancel_giveaway(
     is_target_user = target_schedule and target_schedule.user_id == current_user.id
 
     if not is_offerer and not is_target_user:
+        logger.warning(f"[SWAP ANOMALY] Próba anulowania obcej oferty {giveaway_id} przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=403, detail="Brak uprawnień do anulowania lub odrzucenia tej oferty")
     
     if giveaway.status != GiveawayStatus.OPEN:
+        logger.warning(f"[SWAP ANOMALY] Próba anulowania już przetworzonej oferty {giveaway_id} (status: {giveaway.status}) przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=400, detail="Cannot cancel, giveaway already processed")
     
     giveaway.status = GiveawayStatus.CANCELLED
@@ -820,6 +832,7 @@ def cancel_giveaway(
                 background_tasks.add_task(send_push_to_tokens, tokens, title, body)
 
     session.commit()
+    logger.info(f"[SWAP] Anulowano ofertę wymiany {giveaway_id} przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
     return {"status": "cancelled"}
 
 @router.get("/giveaways/my")
@@ -990,10 +1003,13 @@ def claim_giveaway(
         .where(ShiftGiveaway.id == giveaway_id, User.tenant_id == current_user.tenant_id)
     ).first()
     if not giveaway:
+        logger.warning(f"[SWAP ANOMALY] Nie znaleziono oferty {giveaway_id} do przejęcia przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=404, detail="Giveaway not found")
     if giveaway.status != GiveawayStatus.OPEN:
+        logger.warning(f"[SWAP ANOMALY] Oferta {giveaway_id} nie jest już otwarta (status: {giveaway.status}) - próba przejęcia przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=400, detail="Giveaway is no longer open")
     if giveaway.offered_by == current_user.id:
+        logger.warning(f"[SWAP ANOMALY] Próba przejęcia własnej oferty {giveaway_id} przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=400, detail="Cannot claim your own giveaway")
 
     schedule = giveaway.schedule
@@ -1004,6 +1020,7 @@ def claim_giveaway(
     if schedule.role_id is not None:
         user_role_ids = {r.id for r in current_user.job_roles}
         if schedule.role_id not in user_role_ids:
+            logger.warning(f"[SWAP ANOMALY] Brak wymaganej roli do przejęcia zmiany {schedule.id} przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
             raise HTTPException(
                 status_code=400,
                 detail="Brak wymaganej roli do przejęcia tej zmiany. Wymagana rola musi być przypisana do Twojego profilu."
@@ -1021,6 +1038,7 @@ def claim_giveaway(
             raise HTTPException(status_code=404, detail="Docelowa zmiana do wymiany nie została znaleziona")
 
         if target_schedule.user_id != current_user.id:
+            logger.warning(f"[SWAP ANOMALY] Oferta wymiany {giveaway_id} nie jest skierowana do pracownika '{current_user.username}' [tenant:{current_user.tenant_id}].")
             raise HTTPException(
                 status_code=400,
                 detail="Ta oferta wymiany jest skierowana do innego pracownika / innej zmiany."
@@ -1030,6 +1048,7 @@ def claim_giveaway(
         if offerer and target_schedule.role_id is not None:
             offerer_role_ids = {r.id for r in offerer.job_roles}
             if target_schedule.role_id not in offerer_role_ids:
+                logger.warning(f"[SWAP ANOMALY] Wystawiający ofertę {giveaway_id} nie posiada roli do zmiany docelowej [tenant:{current_user.tenant_id}].")
                 raise HTTPException(
                     status_code=400,
                     detail="Wystawiający zmianę nie posiada roli wymaganej do Twojej zmiany."
@@ -1058,6 +1077,7 @@ def claim_giveaway(
             overlap_start = max(to_minutes(shift.start_time), to_minutes(my_shift.start_time))
             overlap_end = min(to_minutes(shift.end_time), to_minutes(my_shift.end_time))
             if overlap_end - overlap_start > 30:
+                logger.warning(f"[SWAP ANOMALY] Kolizja czasowa > 30 min przy próbie przejęcia {schedule.id} przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
                 raise HTTPException(
                     status_code=400,
                     detail="You already have a shift that overlaps with this one by more than 30 minutes"
@@ -1138,7 +1158,6 @@ def claim_giveaway(
     session.commit()
 
     # Sync Google Calendars in the background (primitive IDs only, own DB session):
-    # remove the event from the previous owner, create it for the new one.
     from ..services.google_calendar_service import reassign_event_task
     background_tasks.add_task(
         reassign_event_task, schedule.id, old_user_id, current_user.id, current_user.tenant_id
@@ -1148,6 +1167,10 @@ def claim_giveaway(
             reassign_event_task, target_schedule.id, current_user.id, old_user_id, current_user.tenant_id
         )
 
+    logger.info(
+        f"[SWAP] Przejęto zmianę z giełdy (giveaway_id={giveaway_id}, schedule_id={schedule.id}, "
+        f"bezpośrednia={bool(target_schedule)}) przez '{current_user.username}' od user_id={old_user_id} [tenant:{current_user.tenant_id}]."
+    )
     return {"status": "claimed", "schedule_id": str(schedule.id)}
 
 
@@ -1164,6 +1187,7 @@ def create_leave_request(
     current_user: User = Depends(get_current_user)
 ):
     if request.start_date < date.today():
+        logger.warning(f"[LEAVE ANOMALY] Próba złożenia wniosku urlopowego w przeszłości ({request.start_date}) przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=400, detail="Cannot request leave in the past")
     
     # Check overlaps
@@ -1176,6 +1200,10 @@ def create_leave_request(
         )
     ).first()
     if overlaps:
+        logger.warning(
+            f"[LEAVE ANOMALY] Wniosek urlopowy ({request.start_date} - {request.end_date}) nakłada się "
+            f"na istniejący wniosek {overlaps.id} dla '{current_user.username}' [tenant:{current_user.tenant_id}]."
+        )
         raise HTTPException(status_code=400, detail="Leave request overlaps with an existing pending/approved request")
 
     new_req = LeaveRequest(
@@ -1208,6 +1236,11 @@ def create_leave_request(
         
     session.commit()
     session.refresh(new_req)
+
+    logger.info(
+        f"[LEAVE] Utworzono wniosek urlopowy (id={new_req.id}) od {request.start_date} do {request.end_date} "
+        f"przez '{current_user.username}' (powód: '{request.reason}') [tenant:{current_user.tenant_id}]."
+    )
 
     return LeaveRequestResponse(
         id=new_req.id,
@@ -1262,13 +1295,16 @@ def cancel_leave_request(
     if not req:
         raise HTTPException(status_code=404, detail="Leave request not found")
     if req.user_id != current_user.id:
+        logger.warning(f"[LEAVE ANOMALY] Próba anulowania cudzego wniosku urlopowego {request_id} przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=403, detail="Not authorized to cancel this request")
     if req.status != LeaveStatus.PENDING:
+        logger.warning(f"[LEAVE ANOMALY] Próba anulowania wniosku urlopowego {request_id} o statusie {req.status} przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=400, detail="Only PENDING requests can be cancelled")
     
     req.status = LeaveStatus.CANCELLED
     session.add(req)
     session.commit()
+    logger.info(f"[LEAVE] Anulowano wniosek urlopowy {request_id} przez '{current_user.username}' [tenant:{current_user.tenant_id}].")
     return {"status": "cancelled"}
 
 

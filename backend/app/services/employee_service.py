@@ -52,7 +52,7 @@ class EmployeeService:
                 self.session.add(new_avail)
         
         self.session.commit()
-        logger.info(f"Updated availability for user {user_id}: {len(updates)} records changed.")
+        logger.info(f"[AVAILABILITY] Użytkownik {user_id} zaktualizował dyspozycyjność: {len(updates)} wpisów [tenant:{self.tenant_id}].")
 
     def link_google_calendar(self, user_id: UUID, auth_code: str):
         import os
@@ -469,11 +469,19 @@ class EmployeeService:
         today = date.today()
         # 1. Block premature / future-date attendance registration
         if target_date > today:
+            logger.warning(
+                f"[ATTENDANCE ANOMALY] Próba rejestracji obecności w przyszłości: data={target_date}, "
+                f"użytkownik '{current_user.username}' (id={current_user.id}) [tenant:{self.tenant_id}]."
+            )
             raise HTTPException(
                 status_code=400,
                 detail="Nie można rejestrować obecności dla przyszłych dat (przedwczesne odbicie).",
             )
         if target_date < today - timedelta(days=60):
+            logger.warning(
+                f"[ATTENDANCE ANOMALY] Próba rejestracji przedawnionej obecności (>60 dni): data={target_date}, "
+                f"użytkownik '{current_user.username}' (id={current_user.id}) [tenant:{self.tenant_id}]."
+            )
             raise HTTPException(
                 status_code=400,
                 detail="Nie można rejestrować obecności starszej niż 60 dni.",
@@ -487,6 +495,10 @@ class EmployeeService:
             )
         ).first()
         if existing:
+            logger.warning(
+                f"[ATTENDANCE ANOMALY] Próba ponownej rejestracji obecności dla tej samej daty: data={target_date}, "
+                f"użytkownik '{current_user.username}' (id={current_user.id}) [tenant:{self.tenant_id}]."
+            )
             return {"error": "Attendance already registered for this date"}
 
         # 3. Check if employee was scheduled on target_date
@@ -500,6 +512,10 @@ class EmployeeService:
 
         if is_absent:
             if not was_scheduled:
+                logger.warning(
+                    f"[ATTENDANCE ANOMALY] Próba zgłoszenia nieobecności w dniu bez zaplanowanej zmiany: data={target_date}, "
+                    f"użytkownik '{current_user.username}' (id={current_user.id}) [tenant:{self.tenant_id}]."
+                )
                 raise HTTPException(
                     status_code=400,
                     detail="Nie można zgłosić nieobecności w dniu bez zaplanowanej zmiany w grafiku.",
@@ -531,6 +547,10 @@ class EmployeeService:
             if not validation["all_mandatory_completed"] and (
                 not checklist_skip_reason or not checklist_skip_reason.strip()
             ):
+                logger.warning(
+                    f"[ATTENDANCE ANOMALY] Odrzucono rejestrację obecności bez checklisty i bez powodu pominięcia: "
+                    f"data={target_date}, użytkownik '{current_user.username}' (id={current_user.id}) [tenant:{self.tenant_id}]."
+                )
                 raise HTTPException(
                     status_code=400,
                     detail="Niewykonane obowiązkowe zadania z checklisty zamknięcia. Podaj powód pominięcia (checklist_skip_reason).",
@@ -553,6 +573,17 @@ class EmployeeService:
         self.session.add(attendance)
         self.session.commit()
         self.session.refresh(attendance)
+
+        if is_absent:
+            logger.info(
+                f"[ATTENDANCE] Zgłoszono nieobecność: data={target_date}, powód='{absence_reason}', "
+                f"użytkownik '{current_user.username}' (id={current_user.id}) [tenant:{self.tenant_id}]."
+            )
+        else:
+            logger.info(
+                f"[ATTENDANCE] Zarejestrowano obecność: data={target_date}, godziny={check_in}-{check_out}, "
+                f"status={status.value}, planowana={was_scheduled}, użytkownik '{current_user.username}' (id={current_user.id}) [tenant:{self.tenant_id}]."
+            )
 
         return {
             "id": str(attendance.id),

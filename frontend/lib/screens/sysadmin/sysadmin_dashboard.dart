@@ -537,6 +537,158 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
     }
   }
 
+  List<Widget> _buildLogBadges(String message) {
+    final badges = <Widget>[];
+    if (message.contains('ANOMALY')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.red.shade700,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.warning_amber_rounded, size: 11, color: Colors.white),
+            SizedBox(width: 3),
+            Text(
+              'ANOMALIA',
+              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ));
+    }
+    if (message.contains('DEFICIT')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade900,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'BRAKI KADROWE',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
+    if (message.contains('REST VIOLATION')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.deepOrange.shade800,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          '11H ODPOCZYNEK',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
+    if (message.contains('[SOLVER WORKER')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.purple.shade700,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'SOLVER',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
+    if (message.contains('[AUTH')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.indigo.shade700,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'AUTH',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
+    if (message.contains('[ATTENDANCE')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.teal.shade700,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'OBECNOŚĆ',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
+    if (message.contains('[SWAP')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.deepPurple.shade700,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'WYMIANA',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
+    if (message.contains('[LEAVE')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.cyan.shade800,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'URLOP',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
+    if (message.contains('[SCHEDULE')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.blueGrey.shade800,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'GRAFIK',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
+    if (message.contains('[USER')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.brown.shade700,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'UŻYTKOWNIK',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
+    return badges;
+  }
+
   Widget _buildRestaurantsTab() {
     if (_isLoadingRestaurants) {
       return const Center(child: CircularProgressIndicator());
@@ -767,6 +919,57 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
                     ),
                   ],
                 ),
+
+                const SizedBox(height: 8),
+
+                // Row 3: Quick Category & Anomaly Tag Chips
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      const Text('Kategoria: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 6),
+                      for (final qf in [
+                        {'label': 'Wszystkie zdarzenia', 'tag': ''},
+                        {'label': 'ANOMALIE', 'tag': 'ANOMALY'},
+                        {'label': 'SOLVER WORKER', 'tag': 'SOLVER WORKER'},
+                        {'label': 'LOGOWANIA (AUTH)', 'tag': 'AUTH'},
+                        {'label': 'OBECNOŚĆ', 'tag': 'ATTENDANCE'},
+                        {'label': 'WYMIANA ZMIAN', 'tag': 'SWAP'},
+                        {'label': 'URLOPY', 'tag': 'LEAVE'},
+                        {'label': 'GRAFIK', 'tag': 'SCHEDULE'},
+                      ]) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: ActionChip(
+                            label: Text(
+                              qf['label']!,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: _logSearchCtrl.text.trim() == qf['tag']!
+                                    ? Colors.white
+                                    : (qf['tag'] == 'ANOMALY' ? Colors.red.shade900 : Colors.purple.shade900),
+                              ),
+                            ),
+                            backgroundColor: _logSearchCtrl.text.trim() == qf['tag']!
+                                ? (qf['tag'] == 'ANOMALY' ? Colors.red.shade700 : Colors.purple.shade800)
+                                : (qf['tag'] == 'ANOMALY' ? Colors.red.shade50 : Colors.purple.shade50),
+                            side: BorderSide(
+                              color: qf['tag'] == 'ANOMALY' ? Colors.red.shade300 : Colors.purple.shade200,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _logSearchCtrl.text = qf['tag']!;
+                              });
+                              _loadLogs(resetOffset: true);
+                            },
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -858,13 +1061,19 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
 
                         final lines = message.split('\n');
                         final isMultiline = lines.length > 2 || message.length > 200;
+                        final isAnomaly = message.contains('ANOMALY') || message.contains('REST VIOLATION');
+                        final badges = _buildLogBadges(message);
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
-                          elevation: 1,
+                          elevation: isAnomaly ? 2 : 1,
+                          color: isAnomaly ? Colors.red.shade50.withValues(alpha: 0.4) : null,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
-                            side: BorderSide(color: color.withValues(alpha: 0.3), width: 1),
+                            side: BorderSide(
+                              color: isAnomaly ? Colors.red.shade600 : color.withValues(alpha: 0.3),
+                              width: isAnomaly ? 1.5 : 1,
+                            ),
                           ),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(8),
@@ -964,6 +1173,17 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
                                       ),
                                     ],
                                   ),
+
+                                  // Category & Anomaly badges row
+                                  if (badges.isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    Wrap(
+                                      spacing: 4,
+                                      runSpacing: 4,
+                                      children: badges,
+                                    ),
+                                  ],
+
                                   const SizedBox(height: 6),
 
                                   // Logger name
