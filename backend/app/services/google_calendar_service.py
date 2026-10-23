@@ -95,7 +95,7 @@ class GoogleCalendarService:
         refresh_token = user.google_refresh_token
         if not refresh_token:
             logger.error(
-                f"User {user.id}: Google access token expired and NO refresh token stored. "
+                f"[GCAL ANOMALY] User {user.id} ('{user.username}'): Google access token expired and NO refresh token stored. "
                 "The user must re-link Google Calendar (consent with access_type=offline)."
             )
             return None
@@ -103,7 +103,7 @@ class GoogleCalendarService:
         client_id = os.getenv("GOOGLE_CLIENT_ID")
         client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
         if not client_id or not client_secret:
-            logger.error("GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not configured.")
+            logger.error("[GCAL ANOMALY] GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not configured.")
             return None
 
         try:
@@ -126,16 +126,16 @@ class GoogleCalendarService:
                         user.google_refresh_token = data.get("refresh_token")
                     self.session.add(user)
                     self.session.commit()
-                    logger.info(f"Successfully refreshed Google access token for user {user.id}")
+                    logger.info(f"[GCAL] Pomyślnie odświeżono token Google dla użytkownika '{user.username}' (id={user.id}) [tenant:{getattr(user, 'tenant_id', '?')}].")
                     return new_token
-                logger.error(f"Google token refresh for user {user.id} returned no access_token")
+                logger.error(f"[GCAL ANOMALY] Odpowiedź odświeżania tokenu Google dla '{user.username}' nie zawiera access_token.")
             else:
                 logger.error(
-                    f"Failed to refresh Google token for user {user.id}: "
+                    f"[GCAL ANOMALY] Nieudane odświeżenie tokenu Google dla '{user.username}' (id={user.id}): "
                     f"{refresh_res.status_code} {refresh_res.text}"
                 )
         except Exception:
-            logger.exception(f"Exception refreshing Google token for user {user.id}")
+            logger.exception(f"[GCAL ANOMALY] Wyjątek podczas odświeżania tokenu Google dla użytkownika '{user.username}'")
 
         return None
 
@@ -298,15 +298,15 @@ class GoogleCalendarService:
                 res = _attempt(new_token)
 
             if res.status_code in (200, 201):
-                logger.info(f"Synced shift {schedule.id} ({schedule.date}) to Google Calendar for {user.username}")
+                logger.info(f"[GCAL] Zsynchronizowano zmianę {schedule.id} ({schedule.date}) z Google Calendar dla '{user.username}' [tenant:{getattr(user, 'tenant_id', '?')}].")
                 return True
             logger.error(
-                f"Google Calendar API error {res.status_code} syncing shift {schedule.id} "
-                f"for user {user.id}: {res.text}"
+                f"[GCAL ANOMALY] Google Calendar API error {res.status_code} syncing shift {schedule.id} "
+                f"for user {user.id} ('{user.username}'): {res.text}"
             )
             return False
         except Exception:
-            logger.exception(f"Exception syncing shift {schedule.id} to Google Calendar")
+            logger.exception(f"[GCAL ANOMALY] Wyjątek podczas synchronizacji zmiany {schedule.id} z Google Calendar dla '{user.username}'")
             return False
 
     def delete_calendar_event(self, user: User, schedule_id: uuid.UUID) -> bool:
@@ -315,7 +315,7 @@ class GoogleCalendarService:
         """
         token = self.get_valid_access_token(user)
         if not token:
-            logger.error(f"Cannot delete event for schedule {schedule_id}: no valid Google token for user {user.id}")
+            logger.error(f"[GCAL ANOMALY] Nie można usunąć wydarzenia {schedule_id}: brak ważnego tokenu Google dla '{user.username}'")
             return False
 
         event_id = f"plannerv2{schedule_id.hex}"
@@ -329,12 +329,12 @@ class GoogleCalendarService:
                     return False
                 res = httpx.delete(url, headers={"Authorization": f"Bearer {new_token}"}, timeout=10.0)
             if res.status_code in (200, 204, 404, 410):
-                logger.info(f"Deleted calendar event {event_id} for user {user.username}")
+                logger.info(f"[GCAL] Usunięto wydarzenie z Google Calendar dla zmiany {schedule_id} ('{user.username}').")
                 return True
-            logger.error(f"Google Calendar DELETE error {res.status_code} for event {event_id}: {res.text}")
+            logger.error(f"[GCAL ANOMALY] Błąd usuwania wydarzenia z Google Calendar {res.status_code} dla zmiany {schedule_id}: {res.text}")
             return False
         except Exception:
-            logger.exception(f"Exception deleting calendar event {event_id}")
+            logger.exception(f"[GCAL ANOMALY] Wyjątek podczas usuwania wydarzenia Google Calendar dla zmiany {schedule_id}")
             return False
 
     def sync_user_schedules(
@@ -394,6 +394,7 @@ class GoogleCalendarService:
                 synced_count += 1
 
         if synced_count == 0 and len(schedules) > 0:
+            logger.warning(f"[GCAL ANOMALY] Nie udało się zsynchronizować żadnej z {len(schedules)} zmian z Google Calendar dla '{user.username}' [tenant:{getattr(user, 'tenant_id', '?')}].")
             return {
                 "status": "error",
                 "message": f"Nie udało się zsynchronizować żadnej z {len(schedules)} zmian z Kalendarzem Google.",
@@ -403,6 +404,7 @@ class GoogleCalendarService:
                 "end_date": str(end),
             }
 
+        logger.info(f"[GCAL] Zakończono synchronizację Google Calendar dla '{user.username}': zsynchronizowano {synced_count}/{len(schedules)} zmian [tenant:{getattr(user, 'tenant_id', '?')}].")
         return {
             "status": "success",
             "synced": synced_count,

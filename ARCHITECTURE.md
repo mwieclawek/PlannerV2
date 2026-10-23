@@ -509,13 +509,19 @@ System posiada moduł agregacji, inspekcji logów serwerowych oraz telemetrii si
 - **Strukturalne tagi zdarzeń biznesowych i anomalii**:
   - `[AUTH]` / `[AUTH ANOMALY]`: logowania, wylogowania, błędne hasła, próby dostępu do nieaktywnych kont lub lokali w trybie serwisowym.
   - `[ATTENDANCE]` / `[ATTENDANCE ANOMALY]`: rejestracja czasu pracy, braki checklist zamknięcia, próby rejestracji w przyszłości, zatwierdzenia/odrzucenia przez managera.
-  - `[SWAP]` / `[SWAP ANOMALY]`: wystawienia, bezpośrednia wymiana zmian (A <-> B), claim, odrzucenia z powodu kolizji lub braku ról.
+  - `[AVAILABILITY]`: zgłoszenia dyspozycyjności pracowników na nowy okres planistyczny.
+  - `[SWAP]` / `[SWAP ANOMALY]`: wystawienia, bezpośrednia wymiana zmian (A <-> B), claim, odrzucenia z powodu kolizji grafiku (>30 min) lub braku ról.
   - `[LEAVE]` / `[LEAVE ANOMALY]`: wnioski urlopowe, rozpatrywanie przez managera, nakładające się wnioski.
-  - `[SCHEDULE]`: zapisywanie partii, publikacja grafików, synchronizacja kalendarzy Google.
-  - `[USER]` / `[USER ANOMALY]`: tworzenie pracowników, modyfikacja ról oraz dezaktywacja kont.
-- **Telemetria Solver Workera (OR-Tools CP-SAT)**:
-  - Tagi `[SOLVER WORKER]`, `[SOLVER WORKER DEFICIT]`, `[SOLVER WORKER REST VIOLATION]` oraz `[SOLVER WORKER ANOMALY]`.
+  - `[SCHEDULE]` / `[SCHEDULE ANOMALY]`: zapisywanie partii grafików, publikacja z liczbą powiadomień, ręczne modyfikacje i usuwanie przypisań.
+  - `[USER]` / `[USER ANOMALY]`: tworzenie pracowników, modyfikacja ról, stawek oraz audyt dezaktywacji kont.
+  - `[PUSH]` / `[PUSH WARNING]` / `[PUSH ANOMALY]`: rejestracja i wyrejestrowywanie tokenów FCM (np. przy wylogowaniu), wysyłka powiadomień do urządzeń, ostrzeżenia o braku zarejestrowanego urządzenia pracownika oraz błędy Firebase Admin SDK.
+  - `[GCAL]` / `[GCAL ANOMALY]`: łączenie i odłączanie kalendarza Google, odświeżanie tokenów OAuth, podsumowania synchronizacji partii grafików oraz wykrywanie utraty sesji bez refresh_token.
+  - `[CONFIG]` / `[CONFIG ANOMALY]`: audyt zmian parametrów lokalu i godzin otwarcia dokonanych przez managera.
+- **Telemetria Solver Workera (OR-Tools CP-SAT) i Root Cause Analysis**:
+  - Tagi `[SOLVER WORKER]`, `[SOLVER WORKER DEFICIT]`, `[SOLVER WORKER DEFICIT CAUSE]`, `[SOLVER WORKER STATS]`, `[SOLVER WORKER REST VIOLATION]` oraz `[SOLVER WORKER ANOMALY]`.
   - Rejestrowanie statystyk zadania optymalizacyjnego, czasu wykonania `solve_duration`, liczby zmiennych, raportu braków obsadowych per zmiana/rola oraz ostrzeżeń o naruszeniach 11h dobowego odpoczynku (clopening).
+  - **Root Cause Analysis (RCA)**: natychmiastowa analiza kandydatów dla każdego deficytu obsady (brak pracowników z daną rolą w lokalu, pracownik zajęty inną zmianą w danym dniu, pracownik niedostępny wg zadeklarowanej dyspozycyjności lub optymalizacja innych reguł twardych/miękkich).
+  - **Worker Stats Summary**: podsumowanie przydziału godzin i zmian per pracownik w skali miesiąca z uwzględnieniem godzin zrealizowanych MTD, nowych godzin oraz limitów miesięcznych (`target_hours_per_month` i `target_shifts_per_month`), co wyjaśnia decyzje solvera przy zgłoszeniach od managerów.
 - **Parser wieloliniowy**: `LogService` scala tracebacki wyjątków Python (stack trace) z rekordem źródłowym, co pozwala na przejrzysty podgląd pełnych błędów 500 w panelu Superadmina bez rozrywania kontekstu.
 - **Bezpieczeństwo**: Endpointy `/sysadmin/logs` chronione są funkcją `require_superadmin`. Superadmin może filtrować wpisy po identyfikatorze lokalu, poziomie logowania (`INFO`, `WARNING`, `ERROR`, `CRITICAL`, `DEBUG`), frazie tekstowej (z dedykowanymi szybkimi filtrami kategorii i anomalii) oraz zarządzać czyszczeniem/rotacją pliku.
 
