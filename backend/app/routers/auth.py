@@ -66,6 +66,8 @@ def login_for_access_token(
     # Rate limit applied via state.limiter in main.py by the caller.
     login_input = form_data.username.strip().lower()
     
+    client_ip = request.client.host if request.client else "unknown"
+
     if _is_email(login_input):
         # Email login - globally unique, no tenant slug needed
         user = session.exec(select(User).where(User.email == login_input)).first()
@@ -75,6 +77,7 @@ def login_for_access_token(
         if tenant_slug:
             tenant = session.exec(select(RestaurantConfig).where(RestaurantConfig.slug == tenant_slug, RestaurantConfig.is_active == True)).first()
             if not tenant:
+                logger.warning(f"[AUTH ANOMALY] Nieudana próba logowania dla '{login_input}' (IP: {client_ip}): lokal o kodzie '{tenant_slug}' nie istnieje.")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Restaurant not found",
@@ -94,12 +97,14 @@ def login_for_access_token(
                 if len(matching_users) == 1:
                     user = matching_users[0]
                 elif len(matching_users) > 1:
+                    logger.warning(f"[AUTH ANOMALY] Niejednoznaczna nazwa użytkownika '{login_input}' z IP {client_ip} bez podania kodu lokalu.")
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Username exists in multiple restaurants. Please provide restaurant code (X-Tenant-Slug) or use email.",
                     )
 
     if not user or not verify_password(form_data.password, user.password_hash):
+        logger.warning(f"[AUTH ANOMALY] Nieudane logowanie dla identyfikatora '{login_input}' z IP {client_ip}: nieprawidłowy login lub hasło.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -115,6 +120,7 @@ def login_for_access_token(
             or (user.username and user.username.lower() == "mateusz")
         )
         if not is_admin_user:
+            logger.warning(f"[AUTH ANOMALY] Zablokowane logowanie dla '{user.username}' (id={user.id}) z IP {client_ip}: aktywny tryb serwisowy.")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=settings.blocked_login_message,
@@ -124,6 +130,7 @@ def login_for_access_token(
     ensure_tenant_active(user)
 
     if not user.is_active:
+        logger.warning(f"[AUTH ANOMALY] Próba logowania na dezaktywowane konto '{user.username}' (id={user.id}) z IP {client_ip}.")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is deactivated. Contact your manager.",
@@ -134,6 +141,9 @@ def login_for_access_token(
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     refresh_token = create_refresh_token(data={"sub": user.username, "tenant_id": str(user.tenant_id) if user.tenant_id else None})
+    
+    login_type = "email" if _is_email(login_input) else "username"
+    logger.info(f"[AUTH] Udane logowanie użytkownika '{user.username}' (id={user.id}, rola={user.role_system.value}) metodą {login_type} [tenant:{user.tenant_id}] (IP: {client_ip}).")
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -199,6 +209,7 @@ def logout(
         if device:
             session.delete(device)
             session.commit()
+    logger.info(f"[AUTH] Użytkownik '{current_user.username}' (id={current_user.id}) wylogował się [tenant:{current_user.tenant_id}].")
     return {"status": "logged_out"}
 
 
@@ -252,6 +263,7 @@ def update_users_me(
     session.add(current_user)
     session.commit()
     session.refresh(current_user)
+    logger.info(f"[USER] Aktualizacja profilu własnego użytkownika '{current_user.username}' (id={current_user.id}) [tenant:{current_user.tenant_id}].")
     return read_users_me(current_user)
 
 
@@ -262,10 +274,12 @@ def change_password(
     session: Session = Depends(get_session),
 ):
     if not verify_password(password_data.old_password, current_user.password_hash):
+        logger.warning(f"[AUTH ANOMALY] Nieudana próba zmiany hasła dla '{current_user.username}' (id={current_user.id}): błędne dotychczasowe hasło [tenant:{current_user.tenant_id}].")
         raise HTTPException(status_code=400, detail="Incorrect old password")
 
     current_user.password_hash = get_password_hash(password_data.new_password)
     session.add(current_user)
     session.commit()
+    logger.info(f"[AUTH] Pomyślna zmiana hasła dla użytkownika '{current_user.username}' (id={current_user.id}) [tenant:{current_user.tenant_id}].")
 
     return {"status": "password_changed"}

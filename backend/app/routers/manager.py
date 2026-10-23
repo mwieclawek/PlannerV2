@@ -21,6 +21,9 @@ from ..schemas import (
     UserStats, DashboardHomeResponse, GiveawayReassignRequest
 )
 from ..services.manager_service import ManagerService
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/manager", tags=["manager"])
 
@@ -175,6 +178,7 @@ def reset_user_password(
     user.password_hash = get_password_hash(reset.new_password)
     session.add(user)
     session.commit()
+    logger.info(f"[AUTH] Reset hasła użytkownika '{user.username}' (id={user.id}) przez managera '{current_user.username}' [tenant:{current_user.tenant_id}].")
     
     return {"status": "password_reset_success"}
 
@@ -341,6 +345,10 @@ def confirm_attendance(
         new_value=AttendanceStatus.CONFIRMED.value
     ))
     session.commit()
+    logger.info(
+        f"[ATTENDANCE] Manager '{current_user.username}' zatwierdził nieplanowaną obecność {attendance.id} "
+        f"(użytkownik {attendance.user_id}, data {attendance.date}) [tenant:{current_user.tenant_id}]."
+    )
     return {"status": "confirmed"}
 
 @router.put("/attendance/{attendance_id}/reject")
@@ -367,6 +375,10 @@ def reject_attendance(
         new_value=AttendanceStatus.REJECTED.value
     ))
     session.commit()
+    logger.info(
+        f"[ATTENDANCE] Manager '{current_user.username}' odrzucił nieplanowaną obecność {attendance.id} "
+        f"(użytkownik {attendance.user_id}, data {attendance.date}) [tenant:{current_user.tenant_id}]."
+    )
     return {"status": "rejected"}
 
 @router.get("/attendance/export")
@@ -565,6 +577,12 @@ def create_attendance(
     session.commit()
     session.refresh(attendance)
     
+    logger.info(
+        f"[ATTENDANCE] Manager '{current_user.username}' ręcznie zarejestrował obecność (id={attendance.id}): "
+        f"pracownik '{employee.username}' (id={employee.id}), data={attendance.date}, "
+        f"godziny={attendance.check_in}-{attendance.check_out}, status={attendance.status.value} [tenant:{current_user.tenant_id}]."
+    )
+
     # Ensure user relation is loaded
     response_data = AttendanceResponse.from_orm(attendance)
     if attendance.user:

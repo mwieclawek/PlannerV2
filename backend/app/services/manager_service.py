@@ -66,7 +66,7 @@ class ManagerService:
         self.session.add(user)
         self.session.commit()
         self.session.refresh(user)
-        logger.info(f"Created new user: {user.username} (ID: {user.id})")
+        logger.info(f"[USER] Utworzono nowego użytkownika '{user.username}' (id={user.id}, rola={user.role_system.value}) [tenant:{self.tenant_id}].")
         return user
 
 
@@ -426,7 +426,12 @@ class ManagerService:
 
         # Deactivated users must stop receiving push notifications
         if was_active and user.is_active is False:
+            logger.warning(f"[USER ANOMALY] Dezaktywacja konta użytkownika '{user.username}' (id={user.id}) [tenant:{self.tenant_id}].")
             self.purge_user_devices(user.id)
+        elif not was_active and user.is_active is True:
+            logger.info(f"[USER] Aktywacja konta użytkownika '{user.username}' (id={user.id}) [tenant:{self.tenant_id}].")
+        else:
+            logger.info(f"[USER] Zaktualizowano dane użytkownika '{user.username}' (id={user.id}, zmienione: {list(data.keys())}) [tenant:{self.tenant_id}].")
 
         self.session.commit()
         self.session.refresh(user)
@@ -458,6 +463,7 @@ class ManagerService:
             self.session.add(new_link)
             
         self.session.commit()
+        logger.info(f"[USER] Zaktualizowano przypisane role użytkownika '{user.username}' (id={user.id}, role={role_ids}) [tenant:{self.tenant_id}].")
 
     # --- New Features Logic ---
 
@@ -1004,6 +1010,11 @@ class ManagerService:
             enqueue(background_tasks, reassign_event_task, schedule.id, user_a_id, user_b_id, self.tenant_id)
             enqueue(background_tasks, reassign_event_task, target_schedule.id, user_b_id, user_a_id, self.tenant_id)
 
+            logger.info(
+                f"[SWAP] Manager zatwierdził bezpośrednią wymianę zmian (giveaway_id={giveaway_id}): "
+                f"pracownik '{user_a.username}' <-> '{user_b.username}' [tenant:{self.tenant_id}]."
+            )
+
             return {
                 "status": "swapped",
                 "message": "Shifts swapped successfully",
@@ -1039,6 +1050,11 @@ class ManagerService:
         # Google Calendar: delete the giver's event, create the taker's (background, own session)
         from .google_calendar_service import enqueue, reassign_event_task
         enqueue(background_tasks, reassign_event_task, schedule.id, old_user_id, new_user_id, self.tenant_id)
+
+        logger.info(
+            f"[SWAP] Manager przypisał zmianę z giełdy (giveaway_id={giveaway_id}, schedule_id={schedule.id}) "
+            f"do pracownika '{new_user_check.username}' (id={new_user_id}) [tenant:{self.tenant_id}]."
+        )
 
         return {
             "status": "reassigned",
@@ -1184,6 +1200,7 @@ class ManagerService:
         giveaway.status = GiveawayStatus.CANCELLED
         self.session.add(giveaway)
         self.session.commit()
+        logger.info(f"[SWAP] Manager anulował ofertę z giełdy (giveaway_id={giveaway_id}) [tenant:{self.tenant_id}].")
 
     def get_all_leave_requests(self, status: str = None):
         from sqlmodel import select
@@ -1222,7 +1239,11 @@ class ManagerService:
         req.reviewed_at = datetime.now(timezone.utc)
         self.session.add(req)
         
-        logger.info(f"Leave request {request_id} processed by {manager_id}. Approved: {approved}")
+        decision = "zaakceptowany" if approved else "odrzucony"
+        logger.info(
+            f"[LEAVE] Wniosek urlopowy {request_id} został {decision} przez managera {manager_id} "
+            f"(pracownik id={req.user_id}, zakres: {req.start_date} do {req.end_date}) [tenant:{self.tenant_id}]."
+        )
         
         if approved:
             # Auto-Set Availability on Approval

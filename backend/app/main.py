@@ -30,7 +30,7 @@ stream_handler.addFilter(tenant_filter)
 stream_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(tenant_str)s] %(name)s: %(message)s"))
 
 logging.root.handlers = [file_handler, stream_handler]
-logging.root.setLevel(logging.INFO)
+logging.root.setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # ── Rate Limiter ───────────────────────────────────────────────────────────────
@@ -93,8 +93,12 @@ async def log_requests_middleware(request: Request, call_next):
                 logger.error(msg)
             elif status_code >= 400:
                 logger.warning(msg)
-            else:
+            elif request.method in ("POST", "PUT", "PATCH", "DELETE"):
                 logger.info(msg)
+            elif duration_ms >= 1000:
+                logger.warning(f"SLOW {msg}")
+            else:
+                logger.debug(msg)
         return response
     except Exception as exc:
         duration_ms = int((time.time() - start_time) * 1000)

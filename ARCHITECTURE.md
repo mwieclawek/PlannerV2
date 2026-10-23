@@ -501,13 +501,23 @@ Pipeline CI/CD (Jenkins):
 3. Docker build & backup bazy danych (`pg_dump` z limitem czasowym i zwalnianiem blokad)
 4. Blue-Green deployment (DEV: auto z `main`, PROD: auto z tagów `v*`)
 
-## System Logów i Monitoringu (TenantLogFilter)
-System posiada moduł agregacji i inspekcji logów serwerowych w czasie rzeczywistym:
+## System Logów, Monitoringu i Telemetrii (TenantLogFilter)
+System posiada moduł agregacji, inspekcji logów serwerowych oraz telemetrii silnika optymalizacyjnego w czasie rzeczywistym:
 - **`TenantLogFilter`**: Filtr wstrzykiwany do handlera `RotatingFileHandler` oraz `StreamHandler` biblioteki standardowej `logging`. Pobiera wartość `tenant_id` z kontekstu asynchronicznego (`ContextVar` w `backend/app/tenant_context.py`), który jest automatycznie ustawiany w trakcie weryfikacji tokenu JWT przez `get_current_user`.
 - **Format logu**: `%(asctime)s [%(levelname)s] [%(tenant_str)s] %(name)s: %(message)s` — np. `[tenant:1]` dla zapytań powiązanych z lokalem lub `[tenant:system]` dla zadań asynchronicznych i zdarzeń globalnych.
-- **Middleware zapytań**: `log_requests_middleware` w `main.py` rejestruje każde przychodzące żądanie HTTP wraz z metodą, ścieżką, adresem klienta, statusem odpowiedzi oraz czasem wykonania w milisekundach.
+- **Wyciszenie zapytań bezstanowych (GET)**: Rutynowe zapytania odpytujące (`GET /api/notifications`, `GET /employee/attendance/missing`) zapisywane są na poziomie `DEBUG`, dzięki czemu na domyślnym poziomie `INFO` w panelu Superadmina eksponowane są wyłącznie mutacje stanu i zdarzenia biznesowe.
+- **Strukturalne tagi zdarzeń biznesowych i anomalii**:
+  - `[AUTH]` / `[AUTH ANOMALY]`: logowania, wylogowania, błędne hasła, próby dostępu do nieaktywnych kont lub lokali w trybie serwisowym.
+  - `[ATTENDANCE]` / `[ATTENDANCE ANOMALY]`: rejestracja czasu pracy, braki checklist zamknięcia, próby rejestracji w przyszłości, zatwierdzenia/odrzucenia przez managera.
+  - `[SWAP]` / `[SWAP ANOMALY]`: wystawienia, bezpośrednia wymiana zmian (A <-> B), claim, odrzucenia z powodu kolizji lub braku ról.
+  - `[LEAVE]` / `[LEAVE ANOMALY]`: wnioski urlopowe, rozpatrywanie przez managera, nakładające się wnioski.
+  - `[SCHEDULE]`: zapisywanie partii, publikacja grafików, synchronizacja kalendarzy Google.
+  - `[USER]` / `[USER ANOMALY]`: tworzenie pracowników, modyfikacja ról oraz dezaktywacja kont.
+- **Telemetria Solver Workera (OR-Tools CP-SAT)**:
+  - Tagi `[SOLVER WORKER]`, `[SOLVER WORKER DEFICIT]`, `[SOLVER WORKER REST VIOLATION]` oraz `[SOLVER WORKER ANOMALY]`.
+  - Rejestrowanie statystyk zadania optymalizacyjnego, czasu wykonania `solve_duration`, liczby zmiennych, raportu braków obsadowych per zmiana/rola oraz ostrzeżeń o naruszeniach 11h dobowego odpoczynku (clopening).
 - **Parser wieloliniowy**: `LogService` scala tracebacki wyjątków Python (stack trace) z rekordem źródłowym, co pozwala na przejrzysty podgląd pełnych błędów 500 w panelu Superadmina bez rozrywania kontekstu.
-- **Bezpieczeństwo**: Endpointy `/sysadmin/logs` chronione są funkcją `require_superadmin`. Superadmin może filtrować wpisy po identyfikatorze lokalu, poziomie logowania (`INFO`, `WARNING`, `ERROR`, `CRITICAL`, `DEBUG`), frazie tekstowej oraz zarządzać czyszczeniem/rotacją pliku.
+- **Bezpieczeństwo**: Endpointy `/sysadmin/logs` chronione są funkcją `require_superadmin`. Superadmin może filtrować wpisy po identyfikatorze lokalu, poziomie logowania (`INFO`, `WARNING`, `ERROR`, `CRITICAL`, `DEBUG`), frazie tekstowej (z dedykowanymi szybkimi filtrami kategorii i anomalii) oraz zarządzać czyszczeniem/rotacją pliku.
 
 ## Zgodność z Pamięcią 16 KB (Android 15+)
 System Android 15 wprowadza opcję oraz wymóg obsługi stron pamięci o wielkości 16 KB (zamiast dotychczasowych 4 KB) w architekturze ARM64:
