@@ -380,6 +380,47 @@ class SolverService:
                             f"[SOLVER WORKER DEFICIT] Braki kadrowe: data {d.isoformat()}, zmiana '{s_name}', rola '{r_name}' "
                             f"- wymagano {required}, obsadzono {assigned} (deficyt: {missing}) [tenant:{tid}]."
                         )
+                        # Diagnostyka przyczyn deficytu (Root Cause Analysis)
+                        candidates = [u for u in employees if any(ur.id == r_id for ur in u.job_roles)]
+                        if not candidates:
+                            logger.warning(
+                                f"[SOLVER WORKER DEFICIT CAUSE] Przyczyna braku obsady ({d.isoformat()}, {s_name}, {r_name}): "
+                                f"W lokalu [tenant:{tid}] żaden aktywny pracownik nie posiada roli '{r_name}'!"
+                            )
+                        else:
+                            candidate_diagnostics = []
+                            for cand in candidates:
+                                day_assignments = [sc for sc in generated_schedules if sc.user_id == cand.id and sc.date == d]
+                                if day_assignments:
+                                    assigned_s_names = [shift_map.get(sc.shift_def_id, '?') for sc in day_assignments]
+                                    candidate_diagnostics.append(f"{cand.full_name}: zajęty na innej zmianie ({', '.join(assigned_s_names)})")
+                                else:
+                                    st = avail_map.get((str(cand.id), d.isoformat(), s_id), "UNKNOWN")
+                                    if st not in ["AVAILABLE", "PREFERRED"]:
+                                        candidate_diagnostics.append(f"{cand.full_name}: brak dostępności ({st})")
+                                    else:
+                                        candidate_diagnostics.append(f"{cand.full_name}: dostępny ({st}), ale solver zoptymalizował inne kryterium (np. limit godzin)")
+                            logger.warning(
+                                f"[SOLVER WORKER DEFICIT CAUSE] Analiza kandydatów ({d.isoformat()}, {s_name}, {r_name}): "
+                                f"{'; '.join(candidate_diagnostics)} [tenant:{tid}]."
+                            )
+
+            # Podsumowanie przydziału godzin i zmian per pracownik
+            sched_by_user = {}
+            for sc in generated_schedules:
+                sched_by_user.setdefault(sc.user_id, []).append(sc)
+
+            for e in employees:
+                e_scheds = sched_by_user.get(e.id, [])
+                gen_hours = sum(shift_durations.get(sc.shift_def_id, 0.0) for sc in e_scheds)
+                prev_h = mtd_hours.get(e.id, 0.0)
+                tot_h = prev_h + gen_hours
+                target_h_str = f"{e.target_hours_per_month:.1f}h" if e.target_hours_per_month is not None else "brak"
+                target_s_str = f"{e.target_shifts_per_month}" if e.target_shifts_per_month is not None else "brak"
+                logger.info(
+                    f"[SOLVER WORKER STATS] Pracownik '{e.full_name}' (id={e.id}): przydzielono {len(e_scheds)} zmian ({gen_hours:.1f}h). "
+                    f"Miesiąc łącznie: {tot_h:.1f}h (MTD: {prev_h:.1f}h + nowe: {gen_hours:.1f}h, limit: {target_h_str}, limit zmian: {target_s_str}) [tenant:{tid}]."
+                )
 
             # Check 11h rest violations (clopening) in final schedule
             sched_by_user_day = {}

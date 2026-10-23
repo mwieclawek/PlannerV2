@@ -14,16 +14,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - `[ATTENDANCE]` oraz `[ATTENDANCE ANOMALY]`: rejestracja wejść/wyjść, zgłoszenia nieobecności z powodem, zatwierdzanie/odrzucanie obecności przez managera, wykrywanie prób rejestracji w przyszłości, duplikatów oraz blokad z powodu niewykonanych checklist zamknięcia.
     - `[SWAP]` oraz `[SWAP ANOMALY]`: wystawianie zmian na giełdę, bezpośrednie wymiany A <-> B, przejmowanie ofert, anulowania oraz wykrywanie kolizji grafiku (>30 min) i braków ról.
     - `[LEAVE]` oraz `[LEAVE ANOMALY]`: składanie wniosków urlopowych, anulowania, rozpatrywanie przez managera oraz wykrywanie nakładających się terminów.
-    - `[SCHEDULE]`: zapis partii grafików, publikacja harmonogramu z liczbą powiadomień oraz ręczne zmiany przypisań.
+    - `[SCHEDULE]` oraz `[SCHEDULE ANOMALY]`: zapis partii grafików, publikacja harmonogramu z liczbą powiadomień oraz ręczne zmiany przypisań i usuwanie zmian.
     - `[USER]` oraz `[USER ANOMALY]`: tworzenie pracowników, modyfikacja danych, zmiany ról i alerty o dezaktywacji kont.
-- **Szczegółowa telemetria Solver Workera (OR-Tools CP-SAT)**:
-  - Tagi `[SOLVER WORKER]`, `[SOLVER WORKER DEFICIT]`, `[SOLVER WORKER REST VIOLATION]` oraz `[SOLVER WORKER ANOMALY]`.
+    - `[AVAILABILITY]`: rejestrowanie przesłania dyspozycyjności na grafik przez pracowników z liczbą zadeklarowanych slotów.
+    - `[PUSH]`, `[PUSH WARNING]` oraz `[PUSH ANOMALY]`: rejestracja i wyrejestrowanie tokenów FCM, monitorowanie wysyłki powiadomień push do urządzeń, ostrzeżenia o braku zarejestrowanych urządzeń/tokenów pracownika oraz błędy Firebase.
+    - `[GCAL]` oraz `[GCAL ANOMALY]`: łączenie i odłączanie Kalendarza Google, odświeżanie tokenów OAuth, podsumowania synchronizacji partii grafików i diagnoza problemów (np. wygasła sesja bez refresh_token).
+    - `[CONFIG]` oraz `[CONFIG ANOMALY]`: audyt zmian parametrów lokalu i godzin otwarcia przez managerów restauracji.
+- **Szczegółowa telemetria Solver Workera (OR-Tools CP-SAT) i Root Cause Analysis**:
+  - Tagi `[SOLVER WORKER]`, `[SOLVER WORKER DEFICIT]`, `[SOLVER WORKER DEFICIT CAUSE]`, `[SOLVER WORKER STATS]`, `[SOLVER WORKER REST VIOLATION]` oraz `[SOLVER WORKER ANOMALY]`.
   - Rejestrowanie parametrów wejściowych (liczba pracowników, zdefiniowanych zmian, ról, dni i łączna liczba wymaganych slotów).
   - Precyzyjny pomiar czasu obliczeń w sekundach (`solve_duration`), liczba zmiennych i składników funkcji celu oraz status solvera (`OPTIMAL`, `FEASIBLE`, `INFEASIBLE`).
+  - **Analiza przyczyn braków kadrowych (Root Cause Analysis)**: dla każdego deficytu kadrowego solver analizuje każdego kandydata z wymaganą rolą i loguje przyczynę nieobsadzenia (brak pracowników z daną rolą w lokalu, zajętość na innej zmianie w tym dniu, zadeklarowana niedostępność UNAVAILABLE/UNKNOWN lub optymalizacja innych kryteriów).
+  - **Podsumowanie przydziału godzin per pracownik**: zestawienie liczby nowych zmian, wygenerowanych godzin, sumy miesiąca (MTD + nowe) względem miesięcznego limitu godzin (`target_hours_per_month`) i limitu zmian (`target_shifts_per_month`), co natychmiast wyjaśnia decyzje optymalizacyjne solvera.
   - Szczegółowe logowanie każdego deficytu kadrowego (data, zmiana, rola, brakująca liczba pracowników) oraz naruszeń 11-godzinnego dobowego odpoczynku (clopening).
 - **Wizualne badge i szybkie filtry w panelu Superadmina**:
-  - Dedykowane filtry szybkiego wyboru w nagłówku logów: `Wszystkie zdarzenia`, `ANOMALIE`, `SOLVER WORKER`, `LOGOWANIA (AUTH)`, `OBECNOŚĆ`, `WYMIANA ZMIAN`, `URLOPY`, `GRAFIK`.
-  - Wizualne kolorystyczne badge w kafelkach logów (`ANOMALIA`, `BRAKI KADROWE`, `11H ODPOCZYNEK`, `SOLVER`, `AUTH`, `OBECNOŚĆ`, `WYMIANA`, `URLOP`, `GRAFIK`, `UŻYTKOWNIK`).
+  - Dedykowane filtry szybkiego wyboru w nagłówku logów: `Wszystkie zdarzenia`, `ANOMALIE`, `SOLVER WORKER`, `DEFICYTY`, `LOGOWANIA (AUTH)`, `OBECNOŚĆ`, `DYSPOZYCYJNOŚĆ`, `WYMIANA ZMIAN`, `URLOPY`, `GRAFIK`, `POWIADOMIENIA (PUSH)`, `GOOGLE CALENDAR`, `KONFIGURACJA`.
+  - Wizualne kolorystyczne badge w kafelkach logów (`ANOMALIA`, `BRAKI KADROWE`, `11H ODPOCZYNEK`, `SOLVER`, `AUTH`, `OBECNOŚĆ`, `DYSPOZYCYJNOŚĆ`, `WYMIANA`, `URLOP`, `GRAFIK`, `UŻYTKOWNIK`, `PUSH`, `GCAL`, `KONFIG`).
   - Specjalne akcentowanie (czerwone obramowanie i delikatne tło) dla wpisów reprezentujących wykryte anomalie i naruszenia prawa pracy.
 
 ## [v2.2.1] - 2026-10-22

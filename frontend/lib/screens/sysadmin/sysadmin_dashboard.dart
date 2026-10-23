@@ -686,6 +686,62 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
         ),
       ));
     }
+    if (message.contains('[PUSH')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.pink.shade700,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'PUSH',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
+    if (message.contains('[GCAL')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.lightBlue.shade800,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'GCAL',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
+    if (message.contains('[AVAILABILITY')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.green.shade800,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'DYSPOZYCYJNOŚĆ',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
+    if (message.contains('[CONFIG')) {
+      badges.add(Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        margin: const EdgeInsets.only(right: 6),
+        decoration: BoxDecoration(
+          color: Colors.blueGrey.shade700,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'KONFIG',
+          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      ));
+    }
     return badges;
   }
 
@@ -933,11 +989,16 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
                         {'label': 'Wszystkie zdarzenia', 'tag': ''},
                         {'label': 'ANOMALIE', 'tag': 'ANOMALY'},
                         {'label': 'SOLVER WORKER', 'tag': 'SOLVER WORKER'},
+                        {'label': 'DEFICYTY', 'tag': 'DEFICIT'},
                         {'label': 'LOGOWANIA (AUTH)', 'tag': 'AUTH'},
                         {'label': 'OBECNOŚĆ', 'tag': 'ATTENDANCE'},
+                        {'label': 'DYSPOZYCYJNOŚĆ', 'tag': 'AVAILABILITY'},
                         {'label': 'WYMIANA ZMIAN', 'tag': 'SWAP'},
                         {'label': 'URLOPY', 'tag': 'LEAVE'},
                         {'label': 'GRAFIK', 'tag': 'SCHEDULE'},
+                        {'label': 'POWIADOMIENIA (PUSH)', 'tag': 'PUSH'},
+                        {'label': 'GOOGLE CALENDAR', 'tag': 'GCAL'},
+                        {'label': 'KONFIGURACJA', 'tag': 'CONFIG'},
                       ]) ...[
                         Padding(
                           padding: const EdgeInsets.only(right: 6),

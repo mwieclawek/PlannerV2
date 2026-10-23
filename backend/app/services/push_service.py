@@ -85,7 +85,13 @@ class PushService:
         If Firebase is not initialized, logs the intention instead.
         """
         tokens = self._get_user_tokens(user_id)
-        send_push_to_tokens(tokens, title, body, data, session=self.session)
+        if not tokens:
+            logger.warning(
+                f"[PUSH WARNING] Brak zarejestrowanych urządzeń/tokenów FCM dla użytkownika user_id={user_id}. "
+                f"Powiadomienie '{title}' pominięte."
+            )
+            return
+        send_push_to_tokens(tokens, title, body, data, session=self.session, user_id=user_id)
 
 
 def _remove_stale_tokens(stale_tokens: List[str], session: Optional[Session] = None) -> None:
@@ -120,6 +126,7 @@ def send_push_to_tokens(
     body: str,
     data: Optional[dict] = None,
     session: Optional[Session] = None,
+    user_id: Optional[UUID] = None,
 ) -> None:
     if not tokens:
         return
@@ -130,8 +137,9 @@ def send_push_to_tokens(
     str_data.setdefault("body", str(body))
     str_data.setdefault("tag", "plannerv2-push")
 
+    u_ctx = f" dla user_id={user_id}" if user_id else ""
     if not _ensure_firebase_initialized():
-        logger.info(f"[MOCK PUSH] Would send to {len(tokens)} devices - Title: '{title}', Body: '{body}'")
+        logger.info(f"[PUSH] [MOCK PUSH] Symulacja wysłania powiadomienia do {len(tokens)} urządzeń{u_ctx} - Tytuł: '{title}', Treść: '{body}'")
         return
 
     message = messaging.MulticastMessage(
@@ -154,7 +162,10 @@ def send_push_to_tokens(
 
     try:
         response = messaging.send_each_for_multicast(message)
-        logger.info(f"Push notification sent. {response.success_count} success, {response.failure_count} failures.")
+        logger.info(
+            f"[PUSH] Wysłano powiadomienie push do {len(tokens)} urządzeń{u_ctx} "
+            f"(sukces: {response.success_count}, błędy: {response.failure_count}) - Tytuł: '{title}'"
+        )
 
         if response.failure_count > 0:
             stale_tokens: List[str] = []
@@ -162,7 +173,7 @@ def send_push_to_tokens(
             for idx, resp in enumerate(responses):
                 if not resp.success:
                     exc = resp.exception
-                    logger.warning(f"Failed to send to token {tokens[idx]}: {exc}")
+                    logger.warning(f"[PUSH WARNING] Błąd dostarczenia do tokenu {tokens[idx]}{u_ctx}: {exc}")
                     exc_code = getattr(exc, "code", None)
                     if (
                         isinstance(exc, messaging.UnregisteredError)
@@ -174,4 +185,4 @@ def send_push_to_tokens(
                 _remove_stale_tokens(stale_tokens, session=session)
 
     except Exception as e:
-        logger.error(f"Error sending push notification via FCM: {e}")
+        logger.error(f"[PUSH ANOMALY] Błąd wysyłania powiadomień FCM{u_ctx}: {e}")

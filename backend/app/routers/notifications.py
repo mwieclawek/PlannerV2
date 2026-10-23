@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
@@ -7,6 +8,8 @@ from ..models import User, Notification, UserDevice
 from .auth import get_current_user
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
@@ -82,6 +85,7 @@ def register_device(
         new_device = UserDevice(user_id=current_user.id, fcm_token=payload.token)
         session.add(new_device)
     session.commit()
+    logger.info(f"[PUSH] Zarejestrowano token urządzenia FCM dla użytkownika '{current_user.username}' (id={current_user.id}) [tenant:{current_user.tenant_id}].")
     return {"status": "ok"}
 
 @router.post("/devices/unregister")
@@ -99,6 +103,7 @@ def unregister_device_post(
     if existing:
         session.delete(existing)
         session.commit()
+        logger.info(f"[PUSH] Wyrejestrowano token FCM dla użytkownika '{current_user.username}' (id={current_user.id}) [tenant:{current_user.tenant_id}].")
     return {"status": "ok"}
 
 
@@ -113,4 +118,5 @@ def unregister_device(
     if existing and existing.user_id == current_user.id:
         session.delete(existing)
         session.commit()
+        logger.info(f"[PUSH] Wyrejestrowano token FCM dla użytkownika '{current_user.username}' (id={current_user.id}) [tenant:{current_user.tenant_id}].")
     return {"status": "ok"}

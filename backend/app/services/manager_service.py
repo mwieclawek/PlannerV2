@@ -373,9 +373,16 @@ class ManagerService:
                         self.session.add(new_h)
                     self.session.commit()
             except (json.JSONDecodeError, KeyError, ValueError) as e:
-                logger.warning(f"Skipping opening_hours update – invalid format: {e}")
+                logger.warning(f"[CONFIG ANOMALY] Nieprawidłowy format opening_hours dla lokalu [tenant:{config.id}]: {e}")
             
         self.session.refresh(config)
+        changed_fields = list(data.keys())
+        if opening_hours_json is not None:
+            changed_fields.append("opening_hours")
+        logger.info(
+            f"[CONFIG] Zaktualizowano konfigurację lokalu '{config.name}' [tenant:{config.id}]. "
+            f"Zmienione parametry: {', '.join(changed_fields) if changed_fields else 'brak'}."
+        )
         return config
 
     # --- User Role Management ---

@@ -2,7 +2,7 @@ from typing import List, Optional
 from datetime import date
 from uuid import UUID
 from sqlmodel import Session, select
-from ..models import Availability, Schedule, ShiftDefinition, JobRole
+from ..models import Availability, Schedule, ShiftDefinition, JobRole, User
 from ..schemas import AvailabilityUpdate
 import logging
 
@@ -52,7 +52,9 @@ class EmployeeService:
                 self.session.add(new_avail)
         
         self.session.commit()
-        logger.info(f"[AVAILABILITY] Użytkownik {user_id} zaktualizował dyspozycyjność: {len(updates)} wpisów [tenant:{self.tenant_id}].")
+        user = self.session.get(User, user_id)
+        u_name = user.username if user else str(user_id)
+        logger.info(f"[AVAILABILITY] Użytkownik '{u_name}' (id={user_id}) zapisał dyspozycyjność ({len(updates)} wpisów) [tenant:{self.tenant_id}].")
 
     def link_google_calendar(self, user_id: UUID, auth_code: str):
         import os
@@ -76,8 +78,8 @@ class EmployeeService:
                     self.session.add(user)
                     self.session.commit()
                     logger.warning(
-                        f"User {user_id} linked Google Calendar with a bare access token "
-                        "(no refresh_token): sync will stop after ~1h. Client must send a serverAuthCode."
+                        f"[GCAL ANOMALY] Użytkownik '{user.username}' (id={user_id}) połączył Google Calendar tokenem bez refresh_token: "
+                        "synchronizacja w tle wygaśnie po ok. 1 godzinie."
                     )
                     return
                 else:
@@ -122,11 +124,12 @@ class EmployeeService:
                 user.google_refresh_token = token_data.get("refresh_token")
             elif not user.google_refresh_token:
                 logger.warning(
-                    f"Google did not return a refresh_token for user {user_id}; "
-                    "calendar sync will stop when the access token expires."
+                    f"[GCAL ANOMALY] Google nie zwrócił refresh_token dla '{user.username}' (id={user_id}); "
+                    "synchronizacja kalendarza wygaśnie po wygaśnięciu tokenu dostępowego."
                 )
             self.session.add(user)
             self.session.commit()
+            logger.info(f"[GCAL] Połączono Google Calendar dla użytkownika '{user.username}' (id={user_id}) [tenant:{self.tenant_id}].")
         except httpx.HTTPStatusError as e:
             # Check if this was an access token that didn't start with ya29.
             try:
@@ -138,6 +141,7 @@ class EmployeeService:
                     user.google_access_token = auth_code
                     self.session.add(user)
                     self.session.commit()
+                    logger.info(f"[GCAL] Połączono Google Calendar (token ya29) dla użytkownika '{user.username}' (id={user_id}) [tenant:{self.tenant_id}].")
                     return
             except Exception:
                 pass
@@ -179,6 +183,7 @@ class EmployeeService:
         user.google_refresh_token = None
         self.session.add(user)
         self.session.commit()
+        logger.info(f"[GCAL] Odłączono Google Calendar dla użytkownika '{user.username}' (id={user_id}) [tenant:{self.tenant_id}].")
 
     def get_schedule(self, user_id: UUID, start_date: date, end_date: date) -> List[dict]:
         statement = select(Schedule).where(
