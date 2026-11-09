@@ -124,17 +124,38 @@ class SchedulerService:
         )
         existing = self.session.exec(statements).all()
         
-        # Handle linked Attendance records (set schedule_id to None) to avoid FK violation
+        # Handle linked Attendance and ShiftAuditLog records (set schedule_id to None) to avoid FK violation
         existing_ids = [e.id for e in existing]
+        existing_map = {e.id: e for e in existing}
+        existing_str_map = {str(e.id): e for e in existing}
         if existing_ids:
-            from ..models import Attendance
+            from ..models import Attendance, ShiftAuditLog
             linked_attendances = self.session.exec(
                 select(Attendance).where(Attendance.schedule_id.in_(existing_ids))
             ).all()
             for att in linked_attendances:
                 att.schedule_id = None
                 self.session.add(att)
-            self.session.commit() # Commit updates to Attendance first
+            linked_logs = self.session.exec(
+                select(ShiftAuditLog).where(
+                    (ShiftAuditLog.schedule_id.in_(existing_ids))
+                    | (ShiftAuditLog.shift_id.in_(list(existing_str_map.keys())))
+                )
+            ).all()
+            for log_row in linked_logs:
+                sched_obj = (
+                    existing_map.get(log_row.schedule_id)
+                    if log_row.schedule_id
+                    else existing_str_map.get(log_row.shift_id)
+                )
+                if sched_obj is not None:
+                    if log_row.shift_def_id is None:
+                        log_row.shift_def_id = sched_obj.shift_def_id
+                    if log_row.date is None:
+                        log_row.date = sched_obj.date
+                log_row.schedule_id = None
+                self.session.add(log_row)
+            self.session.commit() # Commit updates to Attendance & ShiftAuditLog first
             
         # Published entries that are about to disappear must also vanish from Google Calendar
         removed_events = [(e.id, e.user_id) for e in existing if e.is_published]
@@ -439,6 +460,9 @@ class SchedulerService:
                 self.session.add(ShiftAuditLog(
                     restaurant_id=self.tenant_id,
                     shift_id=str(s.id),
+                    schedule_id=s.id,
+                    shift_def_id=s.shift_def_id,
+                    date=s.date,
                     changed_by_user_id=changed_by_user_id,
                     action="PUBLISH",
                     old_value="is_published=False",
@@ -521,6 +545,9 @@ class SchedulerService:
             self.session.add(ShiftAuditLog(
                 restaurant_id=self.tenant_id,
                 shift_id=str(existing_daily.id),
+                schedule_id=existing_daily.id,
+                shift_def_id=assign.shift_def_id,
+                date=assign.date,
                 changed_by_user_id=changed_by_user_id,
                 action="ASSIGNMENT_CHANGE",
                 old_value=old_val,
@@ -559,6 +586,9 @@ class SchedulerService:
         self.session.add(ShiftAuditLog(
             restaurant_id=self.tenant_id,
             shift_id=str(new_entry.id),
+            schedule_id=new_entry.id,
+            shift_def_id=assign.shift_def_id,
+            date=assign.date,
             changed_by_user_id=changed_by_user_id,
             action="ASSIGNMENT_CHANGE",
             old_value=None,
@@ -611,9 +641,24 @@ class SchedulerService:
         shift_label = shift_obj.name if shift_obj else str(entry.shift_def_id)
 
         from ..models import Attendance, ShiftAuditLog
+        prior_logs = self.session.exec(
+            select(ShiftAuditLog).where(
+                (ShiftAuditLog.schedule_id == sched_id) | (ShiftAuditLog.shift_id == str(sched_id))
+            )
+        ).all()
+        for pl in prior_logs:
+            if pl.shift_def_id is None:
+                pl.shift_def_id = entry.shift_def_id
+            if pl.date is None:
+                pl.date = s_date
+            pl.schedule_id = None
+            self.session.add(pl)
         self.session.add(ShiftAuditLog(
             restaurant_id=self.tenant_id,
             shift_id=str(sched_id),
+            schedule_id=None,
+            shift_def_id=entry.shift_def_id,
+            date=s_date,
             changed_by_user_id=changed_by_user_id,
             action="UNASSIGN",
             old_value=f"user_id={user_id}, role_id={entry.role_id}, shift_def_id={entry.shift_def_id}",
@@ -622,6 +667,7 @@ class SchedulerService:
         for att in self.session.exec(select(Attendance).where(Attendance.schedule_id == sched_id)).all():
             att.schedule_id = None
             self.session.add(att)
+        self.session.flush()
         self.session.delete(entry)
         self.session.commit()
 

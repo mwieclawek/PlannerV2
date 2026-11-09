@@ -1,0 +1,10 @@
+# Ignored POS/KDS module paths (deactivated)
+backend/app/routers/pos.py
+backend/app/routers/kitchen.py
+backend/app/services/pos_service.py
+backend/app/services/kds_service.py
+backend/tests/test_pos.py
+backend/tests/test_kds*.py
+backend/tests/test_kitchen.py
+frontend/lib/screens/pos/
+frontend/lib/providers/pos_providers.dart

@@ -4,7 +4,7 @@ from typing import Optional, List
 from enum import Enum
 from pydantic import EmailStr, computed_field
 from sqlmodel import SQLModel, Field, Relationship, col
-from sqlalchemy import Column, Date, Float, Integer, String, UniqueConstraint
+from sqlalchemy import Column, Date, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy import false as sa_false
 
 class RoleSystem(str, Enum):
@@ -213,6 +213,18 @@ class ShiftAuditLog(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     restaurant_id: int = Field(foreign_key="restaurantconfig.id", index=True)
     shift_id: str = Field(index=True)
+    schedule_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(ForeignKey("schedule.id", ondelete="SET NULL"), nullable=True, index=True),
+    )
+    shift_def_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("shiftdefinition.id", ondelete="SET NULL"), nullable=True, index=True),
+    )
+    date: Optional[date_type] = Field(
+        default=None,
+        sa_column=Column(Date, nullable=True, index=True),
+    )
     changed_by_user_id: Optional[UUID] = Field(default=None, foreign_key="user.id")
     action: str
     old_value: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))

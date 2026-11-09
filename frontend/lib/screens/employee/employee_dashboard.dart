@@ -776,7 +776,10 @@ class _EmployeeDashboardState extends ConsumerState<EmployeeDashboard> {
             },
             itemBuilder:
                 (BuildContext context) {
-              final posEnabled = ref.watch(posEnabledProvider).valueOrNull ?? false;
+              const bool defaultPosEnabled = kPosModuleDefaultEnabled;
+              final bool posEnabled =
+                  defaultPosEnabled &&
+                  (ref.watch(posEnabledProvider).valueOrNull ?? false);
               return <PopupMenuEntry<String>>[
                 if (posEnabled)
                   const PopupMenuItem<String>(

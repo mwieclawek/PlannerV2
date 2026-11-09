@@ -603,11 +603,17 @@ class SolverService:
                             )
 
             if save:
+                from ..models import ShiftAuditLog
                 statements = select(Schedule).where(Schedule.date >= start_date, Schedule.date <= end_date)
                 results = self.session.exec(statements).all()
+                res_ids = [r.id for r in results]
+                if res_ids:
+                    for al in self.session.exec(select(ShiftAuditLog).where(ShiftAuditLog.schedule_id.in_(res_ids))).all():
+                        al.schedule_id = None
+                        self.session.add(al)
                 for res in results:
                     self.session.delete(res)
-                
+
                 for item in generated_schedules:
                     self.session.add(item)
                 self.session.commit()

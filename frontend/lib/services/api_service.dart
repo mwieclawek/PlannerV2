@@ -908,9 +908,37 @@ class ApiService {
     return Map<String, dynamic>.from(response.data as Map);
   }
 
-  Future<List<Map<String, dynamic>>> getShiftAuditLog(String shiftId) async {
-    final response = await _dio.get('/manager/shifts/$shiftId/audit-log');
-    return (response.data as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  Future<List<ShiftAuditLogEntry>> getShiftAuditLog(
+    String shiftId, {
+    DateTime? date,
+    int? shiftDefId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final queryParams = <String, dynamic>{};
+    if (date != null) {
+      queryParams['date'] = date.toIso8601String().split('T')[0];
+    }
+    if (shiftDefId != null) {
+      queryParams['shift_def_id'] = shiftDefId;
+    }
+    if (startDate != null) {
+      queryParams['start_date'] = startDate.toIso8601String().split('T')[0];
+    }
+    if (endDate != null) {
+      queryParams['end_date'] = endDate.toIso8601String().split('T')[0];
+    }
+    final response = await _dio.get(
+      '/manager/shifts/$shiftId/audit-log',
+      queryParameters: queryParams.isEmpty ? null : queryParams,
+    );
+    return (response.data as List)
+        .map(
+          (e) => ShiftAuditLogEntry.fromJson(
+            Map<String, dynamic>.from(e as Map),
+          ),
+        )
+        .toList();
   }
 
   // --- Google Calendar Integration ---
@@ -1617,7 +1645,7 @@ class ApiService {
 
   // ── WFM Workforce Prediction & Live Labor Cost Simulator ───────────────────
 
-  Future<Map<String, dynamic>> getWfmPredictions(
+  Future<WfmPrediction> getWfmPredictions(
     DateTime startDate,
     DateTime endDate,
   ) async {
@@ -1628,10 +1656,12 @@ class ApiService {
         'end_date': endDate.toIso8601String().split('T')[0],
       },
     );
-    return Map<String, dynamic>.from(response.data as Map);
+    return WfmPrediction.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
   }
 
-  Future<Map<String, dynamic>> simulateLaborCost(
+  Future<LaborCostSimulation> simulateLaborCost(
     DateTime startDate,
     DateTime endDate,
     List<ScheduleEntry> entries,
@@ -1654,7 +1684,9 @@ class ApiService {
         'items': items,
       },
     );
-    return Map<String, dynamic>.from(response.data as Map);
+    return LaborCostSimulation.fromJson(
+      Map<String, dynamic>.from(response.data as Map),
+    );
   }
 }
 

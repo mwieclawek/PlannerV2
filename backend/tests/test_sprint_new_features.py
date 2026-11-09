@@ -435,6 +435,31 @@ class TestShiftSwapAndAuditLog:
         sched_logs = audit_sched.json()
         assert len(sched_logs) >= 1
         assert sched_logs[0]["action"] == "ASSIGNMENT_CHANGE"
+        assert sched_logs[0]["schedule_id"] == sched_id
+        assert sched_logs[0]["shift_def_id"] == shift_definition.id
+        assert sched_logs[0]["date"] == str(today)
+
+        # 3. Delete schedule assignment -> ShiftAuditLog must persist with schedule_id=None and date+shift_def_id intact
+        del_res = await client.delete(
+            f"/scheduler/assignment/{sched_id}",
+            headers=auth_headers,
+        )
+        assert del_res.status_code == 200
+        assert del_res.json()["status"] == "deleted"
+
+        audit_after_del = await client.get(
+            f"/manager/shifts/slot:{today}:{shift_definition.id}/audit-log",
+            headers=auth_headers,
+        )
+        assert audit_after_del.status_code == 200
+        logs_after_del = audit_after_del.json()
+        actions = [l["action"] for l in logs_after_del]
+        assert "ASSIGNMENT_CHANGE" in actions
+        assert "UNASSIGN" in actions
+        for l in logs_after_del:
+            assert l["schedule_id"] is None
+            assert l["shift_def_id"] == shift_definition.id
+            assert l["date"] == str(today)
 
     async def test_audit_log_tenant_isolation(
         self, client: AsyncClient, session: Session, auth_headers: dict, test_tenant

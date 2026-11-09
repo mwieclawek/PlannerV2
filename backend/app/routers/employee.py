@@ -1115,6 +1115,9 @@ def claim_giveaway(
         ShiftAuditLog(
             restaurant_id=current_user.tenant_id,
             shift_id=str(schedule.id),
+            schedule_id=schedule.id,
+            shift_def_id=schedule.shift_def_id,
+            date=schedule.date,
             changed_by_user_id=current_user.id,
             action="SWAPPED" if target_schedule else "CLAIMED",
             old_value=str(old_user_id),
@@ -1126,6 +1129,9 @@ def claim_giveaway(
             ShiftAuditLog(
                 restaurant_id=current_user.tenant_id,
                 shift_id=str(target_schedule.id),
+                schedule_id=target_schedule.id,
+                shift_def_id=target_schedule.shift_def_id,
+                date=target_schedule.date,
                 changed_by_user_id=current_user.id,
                 action="SWAPPED",
                 old_value=str(current_user.id),

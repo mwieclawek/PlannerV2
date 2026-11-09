@@ -58,6 +58,7 @@ def _record_solver_domain_log(
         audit_entry = ShiftAuditLog(
             restaurant_id=tenant_id,
             shift_id=f"solver:{start_date.isoformat()}_{end_date.isoformat()}",
+            date=start_date,
             changed_by_user_id=None,
             action="SOLVER_CP_SAT_RUN",
             old_value=None,

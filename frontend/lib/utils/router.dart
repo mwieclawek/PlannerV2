@@ -35,6 +35,7 @@ final routerListenableProvider = Provider<RouterNotifierListenable>((ref) {
 
 final routerProvider = Provider<GoRouter>((ref) {
   final routerListenable = ref.watch(routerListenableProvider);
+  const bool posEnabled = kPosModuleDefaultEnabled;
 
   return GoRouter(
     initialLocation: '/login',
@@ -86,26 +87,26 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
 
         if (isLoginRoute) {
-          if (activeModule == AppModule.planning) {
+          if (!posEnabled || activeModule == AppModule.planning) {
             return user.isManager ? '/manager' : '/employee';
           } else {
             return user.isManager ? '/pos/manager' : '/pos/waiter';
           }
         }
 
-        // Module isolation redirects
+        // Module isolation redirects (POS routes are blocked when posEnabled == false)
         final isPosRoute = state.matchedLocation.startsWith('/pos');
 
-        if (activeModule == AppModule.planning && isPosRoute) {
+        if ((!posEnabled || activeModule == AppModule.planning) && isPosRoute) {
           return user.isManager ? '/manager' : '/employee';
         }
 
-        if (activeModule == AppModule.posKds && !isPosRoute) {
+        if (posEnabled && activeModule == AppModule.posKds && !isPosRoute) {
           return user.isManager ? '/pos/manager' : '/pos/waiter';
         }
 
         // Role isolation redirects within modules
-        if (activeModule == AppModule.planning) {
+        if (!posEnabled || activeModule == AppModule.planning) {
           if (!user.isManager && state.matchedLocation.startsWith('/manager')) {
             return '/employee';
           }
@@ -126,7 +127,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ServerSetupScreen(),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-      GoRoute(path: '/superadmin', builder: (context, state) => const SysAdminDashboardScreen()),
+      GoRoute(
+        path: '/superadmin',
+        builder: (context, state) => const SysAdminDashboardScreen(),
+      ),
 
       // Module: Planning
       GoRoute(
@@ -138,16 +142,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ManagerDashboard(),
       ),
 
-      // Module: POS & KDS
-      GoRoute(
-        path: '/pos/manager',
-        builder: (context, state) => const ManagerSetupScreen(),
-      ),
-      GoRoute(
-        path: '/pos/waiter',
-        builder: (context, state) => const WaiterTablesScreen(),
-      ),
-      GoRoute(path: '/pos/kds', builder: (context, state) => const KdsScreen()),
+      // Module: POS & KDS (hidden by default when posEnabled = false)
+      if (posEnabled) ...[
+        GoRoute(
+          path: '/pos/manager',
+          builder: (context, state) => const ManagerSetupScreen(),
+        ),
+        GoRoute(
+          path: '/pos/waiter',
+          builder: (context, state) => const WaiterTablesScreen(),
+        ),
+        GoRoute(
+          path: '/pos/kds',
+          builder: (context, state) => const KdsScreen(),
+        ),
+      ],
     ],
   );
 });

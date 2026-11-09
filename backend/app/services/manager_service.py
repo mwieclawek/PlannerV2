@@ -193,6 +193,7 @@ class ManagerService:
         self.session.add(ShiftAuditLog(
             restaurant_id=self.tenant_id,
             shift_id=str(shift.id),
+            shift_def_id=shift.id,
             changed_by_user_id=changed_by_user_id,
             action="UPDATE_SHIFT_HOURS",
             old_value=old_val,
@@ -1010,6 +1011,9 @@ class ManagerService:
             self.session.add(ShiftAuditLog(
                 restaurant_id=self.tenant_id,
                 shift_id=str(schedule.id),
+                schedule_id=schedule.id,
+                shift_def_id=schedule.shift_def_id,
+                date=schedule.date,
                 changed_by_user_id=changed_by_user_id,
                 action="SWAP_ASSIGNMENT",
                 old_value=str(user_a_id),
@@ -1018,6 +1022,9 @@ class ManagerService:
             self.session.add(ShiftAuditLog(
                 restaurant_id=self.tenant_id,
                 shift_id=str(target_schedule.id),
+                schedule_id=target_schedule.id,
+                shift_def_id=target_schedule.shift_def_id,
+                date=target_schedule.date,
                 changed_by_user_id=changed_by_user_id,
                 action="SWAP_ASSIGNMENT",
                 old_value=str(user_b_id),
@@ -1060,6 +1067,9 @@ class ManagerService:
         self.session.add(ShiftAuditLog(
             restaurant_id=self.tenant_id,
             shift_id=str(schedule.id),
+            schedule_id=schedule.id,
+            shift_def_id=schedule.shift_def_id,
+            date=schedule.date,
             changed_by_user_id=changed_by_user_id,
             action="REASSIGN",
             old_value=str(old_user_id),

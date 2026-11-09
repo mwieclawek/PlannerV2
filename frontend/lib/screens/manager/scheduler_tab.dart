@@ -30,7 +30,8 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
   bool _isLoadingStats = false;
   int _localIdCounter = -1; // For generating temporary IDs
   bool _isFirstEdit = true; // To show info banner on first edit
-  Map<String, dynamic>? _wfmPredictions;
+  WfmPrediction? _wfmPredictions;
+  SolverExplanation? _solverExplanation;
   bool _isLoadingPredictions = false;
   Map<int, double> _shiftDriftHoursMap = {};
   double _overallDriftRatio = 1.0;
@@ -149,19 +150,9 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         _selectedWeekEnd,
       );
       if (!mounted) return;
-      final simData = data['labor_cost_simulation'] as Map<String, dynamic>?;
-      final rawDriftMap =
-          simData?['shift_drift_hours_map'] as Map<String, dynamic>? ?? {};
-      final parsedDriftMap = <int, double>{};
-      for (final entry in rawDriftMap.entries) {
-        final k = int.tryParse(entry.key);
-        final v = (entry.value as num?)?.toDouble();
-        if (k != null && v != null) {
-          parsedDriftMap[k] = v;
-        }
-      }
-      final ratio =
-          (simData?['overall_drift_ratio'] as num?)?.toDouble() ?? 1.0;
+      final simData = data.laborCostSimulation;
+      final parsedDriftMap = simData?.shiftDriftHoursMap ?? <int, double>{};
+      final ratio = simData?.overallDriftRatio ?? 1.0;
       setState(() {
         _wfmPredictions = data;
         _shiftDriftHoursMap = parsedDriftMap;
@@ -731,8 +722,14 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         ),
         content: SizedBox(
           width: 450,
-          child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: ref.read(apiServiceProvider).getShiftAuditLog(entry.id),
+          child: FutureBuilder<List<ShiftAuditLogEntry>>(
+            future: ref
+                .read(apiServiceProvider)
+                .getShiftAuditLog(
+                  entry.id,
+                  date: entry.date,
+                  shiftDefId: entry.shiftDefId,
+                ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
@@ -758,13 +755,14 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, idx) {
                   final log = logs[idx];
-                  final action = log['action'] ?? 'UNKNOWN';
-                  final author = log['changed_by_user_name'] ?? 'System';
-                  final createdStr = log['created_at'] != null
-                      ? DateFormat('d MMM yyyy HH:mm', 'pl_PL').format(DateTime.parse(log['created_at']))
-                      : '';
-                  final oldVal = log['old_value'];
-                  final newVal = log['new_value'];
+                  final action = log.action;
+                  final author = log.changedByUserName ?? 'System';
+                  final createdStr = DateFormat(
+                    'd MMM yyyy HH:mm',
+                    'pl_PL',
+                  ).format(log.createdAt);
+                  final oldVal = log.oldValue;
+                  final newVal = log.newValue;
 
                   Color badgeColor = Colors.blue.shade100;
                   Color textColor = Colors.blue.shade900;
@@ -1144,11 +1142,18 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
             warningsJson
                 .map((w) => StaffingWarning.fromJson(w as Map<String, dynamic>))
                 .toList();
+        final explanationJson =
+            result['solver_explanation'] as Map<String, dynamic>?;
+        final parsedExplanation =
+            explanationJson != null
+                ? SolverExplanation.fromJson(explanationJson)
+                : null;
 
         setState(() {
           _scheduleEntries = generatedEntries;
           _originalEntries = List.from(generatedEntries);
           _warnings = parsedWarnings;
+          _solverExplanation = parsedExplanation;
           _lastResult = result;
           _isGenerating = false;
           _hasUnsavedChanges = true; // Mark as unsaved since it's a draft
@@ -1156,17 +1161,27 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         });
 
         if (mounted) {
+          final covSuffix =
+              _solverExplanation != null
+                  ? ' • pokrycie ${_solverExplanation!.coveragePct.toStringAsFixed(0)}%'
+                  : '';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '✓ Wygenerowano grafik (${result['count']} przypisań)',
+                '✓ Wygenerowano grafik (${result['count']} przypisań$covSuffix)',
               ),
               backgroundColor: Colors.green,
             ),
           );
         }
       } else {
+        final explanationJson =
+            result['solver_explanation'] as Map<String, dynamic>?;
         setState(() {
+          _solverExplanation =
+              explanationJson != null
+                  ? SolverExplanation.fromJson(explanationJson)
+                  : null;
           _lastResult = result;
           _isGenerating = false;
         });
@@ -1719,7 +1734,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     return 0.0;
   }
 
-  Map<String, dynamic> _computeLiveLaborCostData() {
+  LaborCostSimulation _computeLiveLaborCostData() {
     final userMap = {for (final u in _users) u.id: u};
     final roleMap = {for (final r in _roles) r.id: r};
     final shiftMap = {for (final s in _shifts) s.id: s};
@@ -1746,8 +1761,9 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     final List<Map<String, dynamic>> dailyCosts = List.generate(7, (idx) {
       final d = _selectedWeekStart.add(Duration(days: idx));
       return {
-        'date': d,
+        'date': DateFormat('yyyy-MM-dd').format(d),
         'date_key': DateFormat('yyyy-MM-dd').format(d),
+        'day_of_week': idx,
         'day_label': '${polishShortDays[idx]} ${DateFormat('dd.MM').format(d)}',
         'planned_hours': 0.0,
         'planned_cost': 0.0,
@@ -1837,7 +1853,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         ),
       );
 
-    return {
+    return LaborCostSimulation.fromJson({
       'total_planned_hours': totalPlannedHours,
       'total_projected_hours': totalProjectedHours,
       'estimated_planned_cost': estimatedPlannedCost,
@@ -1845,17 +1861,17 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
       'avg_hourly_cost': avgHourlyCost,
       'roles': sortedRoles,
       'daily': dailyCosts,
-    };
+    });
   }
 
   Widget _buildLiveLaborCostBar(BuildContext context) {
     final sim = _computeLiveLaborCostData();
-    final totalHours = sim['total_planned_hours'] as double;
-    final plannedCost = sim['estimated_planned_cost'] as double;
-    final projectedCost = sim['projected_cost_with_drift'] as double;
-    final avgRate = sim['avg_hourly_cost'] as double;
-    final rolesList = sim['roles'] as List<Map<String, dynamic>>;
-    final dailyList = sim['daily'] as List<Map<String, dynamic>>;
+    final totalHours = sim.totalPlannedHours;
+    final plannedCost = sim.estimatedPlannedCost;
+    final projectedCost = sim.projectedCostWithDrift;
+    final avgRate = sim.avgHourlyCost;
+    final rolesList = sim.hoursByRole;
+    final dailyList = sim.dailyCosts;
     final driftDelta = projectedCost - plannedCost;
 
     return Card(
@@ -1962,9 +1978,9 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                 runSpacing: 6,
                 children:
                     rolesList.map((r) {
-                      final rHours = r['planned_hours'] as double;
-                      final rCost = r['planned_cost'] as double;
-                      final rHex = (r['color_hex'] as String?) ?? '#607D8B';
+                      final rHours = r.plannedHours;
+                      final rCost = r.plannedCost;
+                      final rHex = r.colorHex;
                       Color roleColor = Colors.blueGrey;
                       try {
                         roleColor = Color(
@@ -1984,7 +2000,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                           ),
                         ),
                         child: Text(
-                          '${r['role_name']}: ${rHours.toStringAsFixed(1)} h (${rCost.toStringAsFixed(0)} PLN)',
+                          '${r.roleName}: ${rHours.toStringAsFixed(1)} h (${rCost.toStringAsFixed(0)} PLN)',
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -2010,9 +2026,9 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               child: Row(
                 children:
                     dailyList.map((d) {
-                      final isMax = d['is_most_expensive'] == true;
-                      final dHours = d['planned_hours'] as double;
-                      final dCost = d['planned_cost'] as double;
+                      final isMax = d.isMostExpensive;
+                      final dHours = d.plannedHours;
+                      final dCost = d.plannedCost;
                       return Container(
                         margin: const EdgeInsets.only(right: 8),
                         padding: const EdgeInsets.symmetric(
@@ -2048,7 +2064,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                                   const SizedBox(width: 4),
                                 ],
                                 Text(
-                                  d['day_label'] as String,
+                                  d.dayLabel,
                                   style: GoogleFonts.inter(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
@@ -2136,33 +2152,18 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
   }
 
   Widget _buildWfmAnalyticsPanel(BuildContext context) {
-    final bottleneckForecast =
-        _wfmPredictions?['bottleneck_forecast'] as Map<String, dynamic>?;
-    final bottlenecks =
-        (bottleneckForecast?['bottlenecks'] as List?)
-            ?.cast<Map<String, dynamic>>() ??
-        [];
+    final bottlenecks = _wfmPredictions?.bottlenecks ?? <WfmBottleneckItem>[];
     final targetRisks =
-        (bottleneckForecast?['employee_target_risks'] as List?)
-            ?.cast<Map<String, dynamic>>()
-            .where((r) => (r['risk_level'] ?? 'LOW') != 'LOW')
-            .toList() ??
-        [];
+        (_wfmPredictions?.employeeTargetRisks ?? <WfmEmployeeTargetRisk>[])
+            .where((r) => r.riskLevel != 'LOW')
+            .toList();
 
-    final driftData =
-        _wfmPredictions?['attendance_drift'] as Map<String, dynamic>?;
     final driftingShifts =
-        (driftData?['drifting_shifts'] as List?)
-            ?.cast<Map<String, dynamic>>() ??
-        [];
-    final monthlyProj =
-        driftData?['monthly_projection'] as Map<String, dynamic>?;
+        _wfmPredictions?.driftingShifts ?? <WfmShiftDriftItem>[];
+    final monthlyProj = _wfmPredictions?.monthlyDriftProjection;
 
-    final stabilityData =
-        _wfmPredictions?['shift_stability'] as Map<String, dynamic>?;
     final hotspots =
-        (stabilityData?['hotspots'] as List?)?.cast<Map<String, dynamic>>() ??
-        [];
+        _wfmPredictions?.stabilityHotspots ?? <WfmStabilityHotspot>[];
 
     final totalAlerts =
         bottlenecks.length + driftingShifts.length + targetRisks.length;
@@ -2236,19 +2237,19 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(
-                      b['severity'] == 'CRITICAL'
+                      b.severity == 'CRITICAL'
                           ? Icons.error_outline
                           : Icons.info_outline,
                       size: 15,
                       color:
-                          b['severity'] == 'CRITICAL'
+                          b.severity == 'CRITICAL'
                               ? Colors.red.shade700
                               : Colors.orange.shade800,
                     ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        b['message']?.toString() ?? '',
+                        b.message,
                         style: GoogleFonts.inter(fontSize: 12),
                       ),
                     ),
@@ -2277,8 +2278,8 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Text(
-                'Prognoza na koniec miesiąca: Plan ${monthlyProj['planned_hours']}h (${monthlyProj['planned_cost']} PLN) → '
-                'Realne wykonanie z dryfem: ${monthlyProj['projected_actual_hours']}h (${monthlyProj['projected_actual_cost']} PLN)',
+                'Prognoza na koniec miesiąca: Plan ${monthlyProj.plannedHours}h (${monthlyProj.plannedCost} PLN) → '
+                'Realne wykonanie z dryfem: ${monthlyProj.projectedActualHours}h (${monthlyProj.projectedActualCost} PLN)',
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -2299,7 +2300,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               (ds) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Text(
-                  '• ${ds['message']}',
+                  '• ${ds.message ?? ds.shiftName}',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: Colors.deepOrange.shade900,
@@ -2341,7 +2342,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               (tr) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Text(
-                  '• ${tr['message']}',
+                  '• ${tr.message ?? tr.userName}',
                   style: GoogleFonts.inter(fontSize: 12),
                 ),
               ),
@@ -2376,7 +2377,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               (hs) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
                 child: Text(
-                  '• ${hs['message']}',
+                  '• ${hs.message}',
                   style: GoogleFonts.inter(fontSize: 12),
                 ),
               ),

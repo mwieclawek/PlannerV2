@@ -1923,3 +1923,699 @@ class AnnouncementModel {
       );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  Solver Explanation, Shift Audit Log & WFM Prediction Models
+// ═══════════════════════════════════════════════════════════════════════════
+
+class SolverDeficitExplanation {
+  final String date;
+  final int shiftDefId;
+  final String shiftName;
+  final int roleId;
+  final String roleName;
+  final int requiredCount;
+  final int assignedCount;
+  final int missingCount;
+  final List<String> rootCauses;
+
+  SolverDeficitExplanation({
+    required this.date,
+    required this.shiftDefId,
+    required this.shiftName,
+    required this.roleId,
+    required this.roleName,
+    required this.requiredCount,
+    required this.assignedCount,
+    required this.missingCount,
+    this.rootCauses = const [],
+  });
+
+  factory SolverDeficitExplanation.fromJson(Map<String, dynamic> json) =>
+      SolverDeficitExplanation(
+        date: json['date']?.toString() ?? '',
+        shiftDefId: (json['shift_def_id'] as num?)?.toInt() ?? 0,
+        shiftName: json['shift_name']?.toString() ?? '',
+        roleId: (json['role_id'] as num?)?.toInt() ?? 0,
+        roleName: json['role_name']?.toString() ?? '',
+        requiredCount: (json['required'] as num?)?.toInt() ?? 0,
+        assignedCount: (json['assigned'] as num?)?.toInt() ?? 0,
+        missingCount: (json['missing'] as num?)?.toInt() ?? 0,
+        rootCauses:
+            (json['root_causes'] as List? ?? [])
+                .map((e) => e.toString())
+                .toList(),
+      );
+}
+
+class SolverEmployeeSummary {
+  final String userId;
+  final String userName;
+  final int assignedShifts;
+  final double assignedHours;
+  final double mtdHours;
+  final double totalMonthHours;
+  final double? targetHours;
+  final int? targetShifts;
+  final double effectiveWeeklyTargetHours;
+  final double scarcityRatio;
+
+  SolverEmployeeSummary({
+    required this.userId,
+    required this.userName,
+    required this.assignedShifts,
+    required this.assignedHours,
+    required this.mtdHours,
+    required this.totalMonthHours,
+    this.targetHours,
+    this.targetShifts,
+    this.effectiveWeeklyTargetHours = 0.0,
+    this.scarcityRatio = 0.0,
+  });
+
+  factory SolverEmployeeSummary.fromJson(Map<String, dynamic> json) =>
+      SolverEmployeeSummary(
+        userId: json['user_id']?.toString() ?? '',
+        userName: json['user_name']?.toString() ?? '',
+        assignedShifts: (json['assigned_shifts'] as num?)?.toInt() ?? 0,
+        assignedHours: (json['assigned_hours'] as num?)?.toDouble() ?? 0.0,
+        mtdHours: (json['mtd_hours'] as num?)?.toDouble() ?? 0.0,
+        totalMonthHours: (json['total_month_hours'] as num?)?.toDouble() ?? 0.0,
+        targetHours: (json['target_hours'] as num?)?.toDouble(),
+        targetShifts: (json['target_shifts'] as num?)?.toInt(),
+        effectiveWeeklyTargetHours:
+            (json['effective_weekly_target_hours'] as num?)?.toDouble() ?? 0.0,
+        scarcityRatio: (json['scarcity_ratio'] as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+class SolverRestViolation {
+  final String userId;
+  final String userName;
+  final String dateFrom;
+  final String dateTo;
+  final String shiftFrom;
+  final String shiftTo;
+
+  SolverRestViolation({
+    required this.userId,
+    required this.userName,
+    required this.dateFrom,
+    required this.dateTo,
+    required this.shiftFrom,
+    required this.shiftTo,
+  });
+
+  factory SolverRestViolation.fromJson(Map<String, dynamic> json) =>
+      SolverRestViolation(
+        userId: json['user_id']?.toString() ?? '',
+        userName: json['user_name']?.toString() ?? '',
+        dateFrom: json['date_from']?.toString() ?? '',
+        dateTo: json['date_to']?.toString() ?? '',
+        shiftFrom: json['shift_from']?.toString() ?? '',
+        shiftTo: json['shift_to']?.toString() ?? '',
+      );
+}
+
+class SolverExplanation {
+  final String solverStatus;
+  final double solveDurationSec;
+  final int variablesCount;
+  final int objectiveTermsCount;
+  final double objectiveValue;
+  final int totalRequiredSlots;
+  final int totalAssignedSlots;
+  final double coveragePct;
+  final String? executedVia;
+  final List<SolverDeficitExplanation> deficitExplanations;
+  final List<SolverEmployeeSummary> employeeSummaries;
+  final List<SolverRestViolation> restViolations;
+  final List<String> domainLogs;
+
+  SolverExplanation({
+    required this.solverStatus,
+    this.solveDurationSec = 0.0,
+    this.variablesCount = 0,
+    this.objectiveTermsCount = 0,
+    this.objectiveValue = 0.0,
+    this.totalRequiredSlots = 0,
+    this.totalAssignedSlots = 0,
+    this.coveragePct = 0.0,
+    this.executedVia,
+    this.deficitExplanations = const [],
+    this.employeeSummaries = const [],
+    this.restViolations = const [],
+    this.domainLogs = const [],
+  });
+
+  factory SolverExplanation.fromJson(Map<String, dynamic> json) =>
+      SolverExplanation(
+        solverStatus: json['solver_status']?.toString() ?? 'UNKNOWN',
+        solveDurationSec:
+            (json['solve_duration_sec'] as num?)?.toDouble() ?? 0.0,
+        variablesCount: (json['variables_count'] as num?)?.toInt() ?? 0,
+        objectiveTermsCount:
+            (json['objective_terms_count'] as num?)?.toInt() ?? 0,
+        objectiveValue: (json['objective_value'] as num?)?.toDouble() ?? 0.0,
+        totalRequiredSlots:
+            (json['total_required_slots'] as num?)?.toInt() ?? 0,
+        totalAssignedSlots:
+            (json['total_assigned_slots'] as num?)?.toInt() ??
+            (json['assigned_count'] as num?)?.toInt() ??
+            0,
+        coveragePct: (json['coverage_pct'] as num?)?.toDouble() ?? 0.0,
+        executedVia: json['executed_via']?.toString(),
+        deficitExplanations:
+            (json['deficit_explanations'] as List? ?? [])
+                .map(
+                  (e) => SolverDeficitExplanation.fromJson(
+                    Map<String, dynamic>.from(e as Map),
+                  ),
+                )
+                .toList(),
+        employeeSummaries:
+            (json['employee_summaries'] as List? ?? [])
+                .map(
+                  (e) => SolverEmployeeSummary.fromJson(
+                    Map<String, dynamic>.from(e as Map),
+                  ),
+                )
+                .toList(),
+        restViolations:
+            (json['rest_violations'] as List? ?? [])
+                .map(
+                  (e) => SolverRestViolation.fromJson(
+                    Map<String, dynamic>.from(e as Map),
+                  ),
+                )
+                .toList(),
+        domainLogs:
+            (json['domain_logs'] as List? ?? [])
+                .map((e) => e.toString())
+                .toList(),
+      );
+}
+
+class ShiftAuditLogEntry {
+  final int id;
+  final int restaurantId;
+  final String shiftId;
+  final String? scheduleId;
+  final int? shiftDefId;
+  final DateTime? date;
+  final String? changedByUserId;
+  final String? changedByUserName;
+  final String action;
+  final String? oldValue;
+  final String? newValue;
+  final DateTime createdAt;
+
+  ShiftAuditLogEntry({
+    required this.id,
+    required this.restaurantId,
+    required this.shiftId,
+    this.scheduleId,
+    this.shiftDefId,
+    this.date,
+    this.changedByUserId,
+    this.changedByUserName,
+    required this.action,
+    this.oldValue,
+    this.newValue,
+    required this.createdAt,
+  });
+
+  factory ShiftAuditLogEntry.fromJson(Map<String, dynamic> json) =>
+      ShiftAuditLogEntry(
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        restaurantId: (json['restaurant_id'] as num?)?.toInt() ?? 0,
+        shiftId: json['shift_id']?.toString() ?? '',
+        scheduleId: json['schedule_id']?.toString(),
+        shiftDefId: (json['shift_def_id'] as num?)?.toInt(),
+        date:
+            json['date'] != null
+                ? DateTime.tryParse(json['date'].toString())
+                : null,
+        changedByUserId: json['changed_by_user_id']?.toString(),
+        changedByUserName: json['changed_by_user_name']?.toString(),
+        action: json['action']?.toString() ?? 'UNKNOWN',
+        oldValue: json['old_value']?.toString(),
+        newValue: json['new_value']?.toString(),
+        createdAt:
+            json['created_at'] != null
+                ? DateTime.tryParse(json['created_at'].toString()) ??
+                    DateTime.now()
+                : DateTime.now(),
+      );
+}
+
+class WfmBottleneckItem {
+  final String date;
+  final String dayName;
+  final int shiftDefId;
+  final String shiftName;
+  final int roleId;
+  final String roleName;
+  final int requiredCount;
+  final int availableCount;
+  final int availableWithinTargetCount;
+  final int deficit;
+  final String severity;
+  final String scope;
+  final String message;
+
+  WfmBottleneckItem({
+    required this.date,
+    required this.dayName,
+    required this.shiftDefId,
+    required this.shiftName,
+    required this.roleId,
+    required this.roleName,
+    required this.requiredCount,
+    required this.availableCount,
+    required this.availableWithinTargetCount,
+    required this.deficit,
+    required this.severity,
+    required this.scope,
+    required this.message,
+  });
+
+  factory WfmBottleneckItem.fromJson(Map<String, dynamic> json) =>
+      WfmBottleneckItem(
+        date: json['date']?.toString() ?? '',
+        dayName: json['day_name']?.toString() ?? '',
+        shiftDefId: (json['shift_def_id'] as num?)?.toInt() ?? 0,
+        shiftName: json['shift_name']?.toString() ?? '',
+        roleId: (json['role_id'] as num?)?.toInt() ?? 0,
+        roleName: json['role_name']?.toString() ?? '',
+        requiredCount: (json['required_count'] as num?)?.toInt() ?? 0,
+        availableCount: (json['available_count'] as num?)?.toInt() ?? 0,
+        availableWithinTargetCount:
+            (json['available_within_target_count'] as num?)?.toInt() ?? 0,
+        deficit: (json['deficit'] as num?)?.toInt() ?? 0,
+        severity: json['severity']?.toString() ?? 'WARNING',
+        scope: json['scope']?.toString() ?? 'WEEK',
+        message: json['message']?.toString() ?? '',
+      );
+}
+
+class WfmEmployeeTargetRisk {
+  final String userId;
+  final String userName;
+  final double? targetHoursPerMonth;
+  final double scheduledHours;
+  final double remainingHoursToTarget;
+  final double potentialAvailableHours;
+  final int leaveDaysInHorizon;
+  final String riskLevel;
+  final String? message;
+
+  WfmEmployeeTargetRisk({
+    required this.userId,
+    required this.userName,
+    this.targetHoursPerMonth,
+    required this.scheduledHours,
+    required this.remainingHoursToTarget,
+    required this.potentialAvailableHours,
+    required this.leaveDaysInHorizon,
+    required this.riskLevel,
+    this.message,
+  });
+
+  factory WfmEmployeeTargetRisk.fromJson(Map<String, dynamic> json) =>
+      WfmEmployeeTargetRisk(
+        userId: json['user_id']?.toString() ?? '',
+        userName: json['user_name']?.toString() ?? '',
+        targetHoursPerMonth:
+            (json['target_hours_per_month'] as num?)?.toDouble(),
+        scheduledHours: (json['scheduled_hours'] as num?)?.toDouble() ?? 0.0,
+        remainingHoursToTarget:
+            (json['remaining_hours_to_target'] as num?)?.toDouble() ?? 0.0,
+        potentialAvailableHours:
+            (json['potential_available_hours'] as num?)?.toDouble() ?? 0.0,
+        leaveDaysInHorizon:
+            (json['leave_days_in_horizon'] as num?)?.toInt() ?? 0,
+        riskLevel: json['risk_level']?.toString() ?? 'LOW',
+        message: json['message']?.toString(),
+      );
+}
+
+class WfmShiftDriftItem {
+  final int shiftDefId;
+  final String shiftName;
+  final String plannedStartTime;
+  final String plannedEndTime;
+  final String avgActualEndTime;
+  final double avgEndDriftMinutes;
+  final double avgDurationDriftMinutes;
+  final int sampleCount;
+  final bool isDrifting;
+  final String? message;
+
+  WfmShiftDriftItem({
+    required this.shiftDefId,
+    required this.shiftName,
+    required this.plannedStartTime,
+    required this.plannedEndTime,
+    required this.avgActualEndTime,
+    required this.avgEndDriftMinutes,
+    required this.avgDurationDriftMinutes,
+    required this.sampleCount,
+    required this.isDrifting,
+    this.message,
+  });
+
+  factory WfmShiftDriftItem.fromJson(Map<String, dynamic> json) =>
+      WfmShiftDriftItem(
+        shiftDefId: (json['shift_def_id'] as num?)?.toInt() ?? 0,
+        shiftName: json['shift_name']?.toString() ?? '',
+        plannedStartTime: json['planned_start_time']?.toString() ?? '',
+        plannedEndTime: json['planned_end_time']?.toString() ?? '',
+        avgActualEndTime: json['avg_actual_end_time']?.toString() ?? '',
+        avgEndDriftMinutes:
+            (json['avg_end_drift_minutes'] as num?)?.toDouble() ?? 0.0,
+        avgDurationDriftMinutes:
+            (json['avg_duration_drift_minutes'] as num?)?.toDouble() ?? 0.0,
+        sampleCount: (json['sample_count'] as num?)?.toInt() ?? 0,
+        isDrifting: json['is_drifting'] == true,
+        message: json['message']?.toString(),
+      );
+}
+
+class WfmMonthlyDriftProjection {
+  final String month;
+  final double plannedHours;
+  final double projectedActualHours;
+  final double projectedOvertimeDriftHours;
+  final double plannedCost;
+  final double projectedActualCost;
+  final double projectedCostDriftDelta;
+
+  WfmMonthlyDriftProjection({
+    required this.month,
+    required this.plannedHours,
+    required this.projectedActualHours,
+    required this.projectedOvertimeDriftHours,
+    required this.plannedCost,
+    required this.projectedActualCost,
+    required this.projectedCostDriftDelta,
+  });
+
+  factory WfmMonthlyDriftProjection.fromJson(Map<String, dynamic> json) =>
+      WfmMonthlyDriftProjection(
+        month: json['month']?.toString() ?? '',
+        plannedHours: (json['planned_hours'] as num?)?.toDouble() ?? 0.0,
+        projectedActualHours:
+            (json['projected_actual_hours'] as num?)?.toDouble() ?? 0.0,
+        projectedOvertimeDriftHours:
+            (json['projected_overtime_drift_hours'] as num?)?.toDouble() ?? 0.0,
+        plannedCost: (json['planned_cost'] as num?)?.toDouble() ?? 0.0,
+        projectedActualCost:
+            (json['projected_actual_cost'] as num?)?.toDouble() ?? 0.0,
+        projectedCostDriftDelta:
+            (json['projected_cost_drift_delta'] as num?)?.toDouble() ?? 0.0,
+      );
+}
+
+class WfmStabilityHotspot {
+  final int shiftDefId;
+  final String shiftName;
+  final int dayOfWeek;
+  final String dayName;
+  final int giveawayCount;
+  final int scheduledCount;
+  final double rotationRatePct;
+  final String message;
+
+  WfmStabilityHotspot({
+    required this.shiftDefId,
+    required this.shiftName,
+    required this.dayOfWeek,
+    required this.dayName,
+    required this.giveawayCount,
+    required this.scheduledCount,
+    required this.rotationRatePct,
+    required this.message,
+  });
+
+  factory WfmStabilityHotspot.fromJson(Map<String, dynamic> json) =>
+      WfmStabilityHotspot(
+        shiftDefId: (json['shift_def_id'] as num?)?.toInt() ?? 0,
+        shiftName: json['shift_name']?.toString() ?? '',
+        dayOfWeek: (json['day_of_week'] as num?)?.toInt() ?? 0,
+        dayName: json['day_name']?.toString() ?? '',
+        giveawayCount: (json['giveaway_count'] as num?)?.toInt() ?? 0,
+        scheduledCount: (json['scheduled_count'] as num?)?.toInt() ?? 0,
+        rotationRatePct: (json['rotation_rate_pct'] as num?)?.toDouble() ?? 0.0,
+        message: json['message']?.toString() ?? '',
+      );
+}
+
+class LaborCostRoleItem {
+  final int roleId;
+  final String roleName;
+  final String colorHex;
+  final double plannedHours;
+  final double projectedHoursWithDrift;
+  final double plannedCost;
+  final double projectedCostWithDrift;
+  final int shiftsCount;
+
+  LaborCostRoleItem({
+    required this.roleId,
+    required this.roleName,
+    required this.colorHex,
+    required this.plannedHours,
+    this.projectedHoursWithDrift = 0.0,
+    required this.plannedCost,
+    required this.projectedCostWithDrift,
+    required this.shiftsCount,
+  });
+
+  factory LaborCostRoleItem.fromJson(Map<String, dynamic> json) =>
+      LaborCostRoleItem(
+        roleId: (json['role_id'] as num?)?.toInt() ?? 0,
+        roleName: json['role_name']?.toString() ?? '',
+        colorHex: json['color_hex']?.toString() ?? '#607D8B',
+        plannedHours: (json['planned_hours'] as num?)?.toDouble() ?? 0.0,
+        projectedHoursWithDrift:
+            (json['projected_hours_with_drift'] as num?)?.toDouble() ?? 0.0,
+        plannedCost: (json['planned_cost'] as num?)?.toDouble() ?? 0.0,
+        projectedCostWithDrift:
+            (json['projected_cost_with_drift'] as num?)?.toDouble() ?? 0.0,
+        shiftsCount: (json['shifts_count'] as num?)?.toInt() ?? 0,
+      );
+}
+
+class LaborCostDailyItem {
+  final String date;
+  final int dayOfWeek;
+  final String dayName;
+  final String dayLabel;
+  final double plannedHours;
+  final double projectedHoursWithDrift;
+  final double plannedCost;
+  final double projectedCostWithDrift;
+  final int shiftsCount;
+  final bool isMostExpensive;
+
+  LaborCostDailyItem({
+    required this.date,
+    this.dayOfWeek = 0,
+    this.dayName = '',
+    this.dayLabel = '',
+    required this.plannedHours,
+    this.projectedHoursWithDrift = 0.0,
+    required this.plannedCost,
+    required this.projectedCostWithDrift,
+    required this.shiftsCount,
+    required this.isMostExpensive,
+  });
+
+  factory LaborCostDailyItem.fromJson(Map<String, dynamic> json) =>
+      LaborCostDailyItem(
+        date: json['date']?.toString() ?? '',
+        dayOfWeek: (json['day_of_week'] as num?)?.toInt() ?? 0,
+        dayName: json['day_name']?.toString() ?? '',
+        dayLabel:
+            json['day_label']?.toString() ?? json['day_name']?.toString() ?? '',
+        plannedHours: (json['planned_hours'] as num?)?.toDouble() ?? 0.0,
+        projectedHoursWithDrift:
+            (json['projected_hours_with_drift'] as num?)?.toDouble() ?? 0.0,
+        plannedCost: (json['planned_cost'] as num?)?.toDouble() ?? 0.0,
+        projectedCostWithDrift:
+            (json['projected_cost_with_drift'] as num?)?.toDouble() ?? 0.0,
+        shiftsCount: (json['shifts_count'] as num?)?.toInt() ?? 0,
+        isMostExpensive: json['is_most_expensive'] == true,
+      );
+}
+
+class LaborCostSimulation {
+  final String startDate;
+  final String endDate;
+  final double totalPlannedHours;
+  final double totalProjectedHoursWithDrift;
+  final double estimatedPlannedCost;
+  final double projectedCostWithDrift;
+  final double driftCostDelta;
+  final double avgHourlyCost;
+  final List<LaborCostRoleItem> hoursByRole;
+  final List<LaborCostDailyItem> dailyCosts;
+  final Map<int, double> shiftDriftHoursMap;
+  final double overallDriftRatio;
+
+  LaborCostSimulation({
+    this.startDate = '',
+    this.endDate = '',
+    required this.totalPlannedHours,
+    required this.totalProjectedHoursWithDrift,
+    required this.estimatedPlannedCost,
+    required this.projectedCostWithDrift,
+    this.driftCostDelta = 0.0,
+    required this.avgHourlyCost,
+    this.hoursByRole = const [],
+    this.dailyCosts = const [],
+    this.shiftDriftHoursMap = const {},
+    this.overallDriftRatio = 1.0,
+  });
+
+  factory LaborCostSimulation.fromJson(Map<String, dynamic> json) {
+    final rawDriftMap =
+        json['shift_drift_hours_map'] as Map<String, dynamic>? ?? {};
+    final parsedDriftMap = <int, double>{};
+    for (final entry in rawDriftMap.entries) {
+      final k = int.tryParse(entry.key);
+      final v = (entry.value as num?)?.toDouble();
+      if (k != null && v != null) {
+        parsedDriftMap[k] = v;
+      }
+    }
+    return LaborCostSimulation(
+      startDate: json['start_date']?.toString() ?? '',
+      endDate: json['end_date']?.toString() ?? '',
+      totalPlannedHours:
+          (json['total_planned_hours'] as num?)?.toDouble() ?? 0.0,
+      totalProjectedHoursWithDrift:
+          (json['total_projected_hours_with_drift'] as num?)?.toDouble() ??
+          (json['total_projected_hours'] as num?)?.toDouble() ??
+          0.0,
+      estimatedPlannedCost:
+          (json['estimated_planned_cost'] as num?)?.toDouble() ?? 0.0,
+      projectedCostWithDrift:
+          (json['projected_cost_with_drift'] as num?)?.toDouble() ?? 0.0,
+      driftCostDelta: (json['drift_cost_delta'] as num?)?.toDouble() ?? 0.0,
+      avgHourlyCost: (json['avg_hourly_cost'] as num?)?.toDouble() ?? 0.0,
+      hoursByRole:
+          ((json['hours_by_role'] ?? json['roles']) as List? ?? [])
+              .map(
+                (e) => LaborCostRoleItem.fromJson(
+                  Map<String, dynamic>.from(e as Map),
+                ),
+              )
+              .toList(),
+      dailyCosts:
+          ((json['daily_costs'] ?? json['daily']) as List? ?? [])
+              .map(
+                (e) => LaborCostDailyItem.fromJson(
+                  Map<String, dynamic>.from(e as Map),
+                ),
+              )
+              .toList(),
+      shiftDriftHoursMap: parsedDriftMap,
+      overallDriftRatio:
+          (json['overall_drift_ratio'] as num?)?.toDouble() ?? 1.0,
+    );
+  }
+}
+
+class WfmPrediction {
+  final String startDate;
+  final String endDate;
+  final List<WfmBottleneckItem> bottlenecks;
+  final int weekBottlenecksCount;
+  final int monthBottlenecksCount;
+  final List<WfmEmployeeTargetRisk> employeeTargetRisks;
+  final List<WfmShiftDriftItem> shiftDrifts;
+  final List<WfmShiftDriftItem> driftingShifts;
+  final WfmMonthlyDriftProjection? monthlyDriftProjection;
+  final int totalGiveaways;
+  final List<WfmStabilityHotspot> stabilityHotspots;
+  final LaborCostSimulation? laborCostSimulation;
+
+  WfmPrediction({
+    required this.startDate,
+    required this.endDate,
+    this.bottlenecks = const [],
+    this.weekBottlenecksCount = 0,
+    this.monthBottlenecksCount = 0,
+    this.employeeTargetRisks = const [],
+    this.shiftDrifts = const [],
+    this.driftingShifts = const [],
+    this.monthlyDriftProjection,
+    this.totalGiveaways = 0,
+    this.stabilityHotspots = const [],
+    this.laborCostSimulation,
+  });
+
+  factory WfmPrediction.fromJson(Map<String, dynamic> json) {
+    final bf = json['bottleneck_forecast'] as Map<String, dynamic>? ?? {};
+    final ad = json['attendance_drift'] as Map<String, dynamic>? ?? {};
+    final ss = json['shift_stability'] as Map<String, dynamic>? ?? {};
+    final lcs = json['labor_cost_simulation'] as Map<String, dynamic>?;
+    final mp = ad['monthly_projection'] as Map<String, dynamic>?;
+
+    return WfmPrediction(
+      startDate: json['start_date']?.toString() ?? '',
+      endDate: json['end_date']?.toString() ?? '',
+      bottlenecks:
+          (bf['bottlenecks'] as List? ?? [])
+              .map(
+                (e) => WfmBottleneckItem.fromJson(
+                  Map<String, dynamic>.from(e as Map),
+                ),
+              )
+              .toList(),
+      weekBottlenecksCount: (bf['week_bottlenecks_count'] as num?)?.toInt() ?? 0,
+      monthBottlenecksCount:
+          (bf['month_bottlenecks_count'] as num?)?.toInt() ?? 0,
+      employeeTargetRisks:
+          (bf['employee_target_risks'] as List? ?? [])
+              .map(
+                (e) => WfmEmployeeTargetRisk.fromJson(
+                  Map<String, dynamic>.from(e as Map),
+                ),
+              )
+              .toList(),
+      shiftDrifts:
+          (ad['shift_drifts'] as List? ?? [])
+              .map(
+                (e) => WfmShiftDriftItem.fromJson(
+                  Map<String, dynamic>.from(e as Map),
+                ),
+              )
+              .toList(),
+      driftingShifts:
+          (ad['drifting_shifts'] as List? ?? [])
+              .map(
+                (e) => WfmShiftDriftItem.fromJson(
+                  Map<String, dynamic>.from(e as Map),
+                ),
+              )
+              .toList(),
+      monthlyDriftProjection:
+          mp != null ? WfmMonthlyDriftProjection.fromJson(mp) : null,
+      totalGiveaways: (ss['total_giveaways'] as num?)?.toInt() ?? 0,
+      stabilityHotspots:
+          (ss['hotspots'] as List? ?? [])
+              .map(
+                (e) => WfmStabilityHotspot.fromJson(
+                  Map<String, dynamic>.from(e as Map),
+                ),
+              )
+              .toList(),
+      laborCostSimulation:
+          lcs != null ? LaborCostSimulation.fromJson(lcs) : null,
+    );
+  }
+}
+
+

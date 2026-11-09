@@ -61,7 +61,10 @@ class _ManagerDashboardState extends ConsumerState<ManagerDashboard> {
           const NotificationBell(),
           Consumer(
             builder: (context, ref, _) {
-              final posEnabled = ref.watch(posEnabledProvider).valueOrNull ?? false;
+              const bool defaultPosEnabled = kPosModuleDefaultEnabled;
+              final bool posEnabled =
+                  defaultPosEnabled &&
+                  (ref.watch(posEnabledProvider).valueOrNull ?? false);
               if (!posEnabled) return const SizedBox.shrink();
               return IconButton(
                 icon: const Icon(Icons.restaurant),

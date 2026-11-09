@@ -524,6 +524,9 @@ class ShiftAuditLogResponse(BaseModel):
     id: int
     restaurant_id: int
     shift_id: str
+    schedule_id: Optional[UUID] = None
+    shift_def_id: Optional[int] = None
+    date: Optional[date_type] = None
     changed_by_user_id: Optional[UUID] = None
     changed_by_user_name: Optional[str] = None
     action: str

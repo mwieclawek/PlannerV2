@@ -1028,14 +1028,29 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
           as _i6.Future<Map<String, dynamic>>);
 
   @override
-  _i6.Future<List<Map<String, dynamic>>> getShiftAuditLog(String? shiftId) =>
+  _i6.Future<List<_i3.ShiftAuditLogEntry>> getShiftAuditLog(
+    String? shiftId, {
+    DateTime? date,
+    int? shiftDefId,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#getShiftAuditLog, [shiftId]),
-            returnValue: _i6.Future<List<Map<String, dynamic>>>.value(
-              <Map<String, dynamic>>[],
+            Invocation.method(
+              #getShiftAuditLog,
+              [shiftId],
+              {
+                #date: date,
+                #shiftDefId: shiftDefId,
+                #startDate: startDate,
+                #endDate: endDate,
+              },
+            ),
+            returnValue: _i6.Future<List<_i3.ShiftAuditLogEntry>>.value(
+              <_i3.ShiftAuditLogEntry>[],
             ),
           )
-          as _i6.Future<List<Map<String, dynamic>>>);
+          as _i6.Future<List<_i3.ShiftAuditLogEntry>>);
 
   @override
   _i6.Future<Map<String, dynamic>> getGoogleCalendarStatus() =>

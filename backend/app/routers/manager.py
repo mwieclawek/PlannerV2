@@ -347,6 +347,8 @@ def confirm_attendance(
     session.add(ShiftAuditLog(
         restaurant_id=current_user.tenant_id,
         shift_id=str(attendance.schedule_id or attendance.id),
+        schedule_id=attendance.schedule_id,
+        date=attendance.date,
         changed_by_user_id=current_user.id,
         action="CONFIRM_ATTENDANCE",
         old_value=old_status,
@@ -389,6 +391,8 @@ def reject_attendance(
     session.add(ShiftAuditLog(
         restaurant_id=current_user.tenant_id,
         shift_id=str(attendance.schedule_id or attendance.id),
+        schedule_id=attendance.schedule_id,
+        date=attendance.date,
         changed_by_user_id=current_user.id,
         action="REJECT_ATTENDANCE",
         old_value=old_status,
@@ -843,18 +847,52 @@ def publish_schedules(
 @router.get("/shifts/{shift_id}/audit-log", response_model=List[ShiftAuditLogResponse])
 def get_shift_audit_log(
     shift_id: str,
+    target_date: Optional[date] = Query(None, alias="date"),
+    shift_def_id: Optional[int] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_manager_user)
 ):
-    """Get audit log for a shift or schedule (tenant-filtered)"""
-    logs = session.exec(
-        select(ShiftAuditLog)
-        .where(
-            ShiftAuditLog.restaurant_id == current_user.tenant_id,
-            ShiftAuditLog.shift_id == str(shift_id)
+    """Get audit log for a shift, schedule, slot (date + shift_def_id), or date range (tenant-filtered)"""
+    slot_date = target_date
+    slot_shift_def_id = shift_def_id
+
+    if shift_id.startswith("slot:"):
+        parts = shift_id.split(":")
+        if len(parts) >= 3:
+            try:
+                slot_date = date.fromisoformat(parts[1])
+                slot_shift_def_id = int(parts[2])
+            except (ValueError, TypeError):
+                pass
+    elif slot_date is None or slot_shift_def_id is None:
+        try:
+            sched_uuid = UUID(str(shift_id))
+            sched_obj = session.get(Schedule, sched_uuid)
+            if sched_obj is not None:
+                if slot_date is None:
+                    slot_date = sched_obj.date
+                if slot_shift_def_id is None:
+                    slot_shift_def_id = sched_obj.shift_def_id
+        except (ValueError, TypeError):
+            pass
+
+    query = select(ShiftAuditLog).where(ShiftAuditLog.restaurant_id == current_user.tenant_id)
+    if start_date is not None and end_date is not None:
+        query = query.where(
+            ShiftAuditLog.date >= start_date,
+            ShiftAuditLog.date <= end_date,
         )
-        .order_by(ShiftAuditLog.created_at.desc())
-    ).all()
+    elif slot_date is not None and slot_shift_def_id is not None:
+        query = query.where(
+            (ShiftAuditLog.shift_id == str(shift_id))
+            | ((ShiftAuditLog.date == slot_date) & (ShiftAuditLog.shift_def_id == slot_shift_def_id))
+        )
+    else:
+        query = query.where(ShiftAuditLog.shift_id == str(shift_id))
+
+    logs = session.exec(query.order_by(ShiftAuditLog.created_at.desc())).all()
 
     res = []
     for l in logs:
@@ -868,6 +906,9 @@ def get_shift_audit_log(
                 id=l.id,
                 restaurant_id=l.restaurant_id,
                 shift_id=l.shift_id,
+                schedule_id=l.schedule_id,
+                shift_def_id=l.shift_def_id,
+                date=l.date,
                 changed_by_user_id=l.changed_by_user_id,
                 changed_by_user_name=u_name,
                 action=l.action,
