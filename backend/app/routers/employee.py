@@ -9,6 +9,7 @@ from ..models import User, Availability
 from ..auth_utils import get_current_user
 from ..schemas import AvailabilityUpdate, EmployeeScheduleResponse, GoogleAuthRequest, ScheduleResponse
 from ..services.employee_service import EmployeeService
+from ..services.log_service import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -771,6 +772,17 @@ def offer_shift_giveaway(
         f"[SWAP] Utworzono ofertę {swap_type} dla zmiany {schedule_id} (data: {schedule.date}) "
         f"przez użytkownika '{current_user.username}' (giveaway_id={giveaway.id}) [tenant:{current_user.tenant_id}]."
     )
+    log_event(
+        "SHIFT_SWAP",
+        "Zaproponowano bezpośrednią wymianę zmiany" if giveaway.target_shift_id else "Wystawiono zmianę na giełdę",
+        {
+            "pracownik": current_user.full_name,
+            "data_zmiany": str(schedule.date),
+            "typ": "wymiana bezpośrednia" if giveaway.target_shift_id else "giełda otwarta",
+        },
+        actor=current_user,
+        tenant_id=current_user.tenant_id,
+    )
     return {"id": str(giveaway.id), "status": "created"}
 
 @router.delete("/giveaway/{giveaway_id}")
@@ -1171,6 +1183,18 @@ def claim_giveaway(
         f"[SWAP] Przejęto zmianę z giełdy (giveaway_id={giveaway_id}, schedule_id={schedule.id}, "
         f"bezpośrednia={bool(target_schedule)}) przez '{current_user.username}' od user_id={old_user_id} [tenant:{current_user.tenant_id}]."
     )
+    old_user = session.get(User, old_user_id)
+    log_event(
+        "SHIFT_SWAP",
+        "Wymieniono zmiany między pracownikami" if target_schedule else "Przejęto zmianę z giełdy",
+        {
+            "przejmujacy": current_user.full_name,
+            "oddajacy": old_user.full_name if old_user else str(old_user_id),
+            "data_zmiany": str(schedule.date),
+        },
+        actor=current_user,
+        tenant_id=current_user.tenant_id,
+    )
     return {"status": "claimed", "schedule_id": str(schedule.id)}
 
 
@@ -1240,6 +1264,17 @@ def create_leave_request(
     logger.info(
         f"[LEAVE] Utworzono wniosek urlopowy (id={new_req.id}) od {request.start_date} do {request.end_date} "
         f"przez '{current_user.username}' (powód: '{request.reason}') [tenant:{current_user.tenant_id}]."
+    )
+    log_event(
+        "LEAVE",
+        "Złożono wniosek urlopowy",
+        {
+            "pracownik": current_user.full_name,
+            "zakres": f"{request.start_date} - {request.end_date}",
+            "powod": request.reason or "-",
+        },
+        actor=current_user,
+        tenant_id=current_user.tenant_id,
     )
 
     return LeaveRequestResponse(

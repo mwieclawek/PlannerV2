@@ -26,6 +26,7 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
   int _totalLogsCount = 0;
   int? _selectedLogRestaurantId; // null = Wszystkie, 0 = Systemowe, >0 = Konkretna
   String _selectedLogLevel = 'ALL';
+  String _selectedLogCategory = 'ALL';
   final TextEditingController _logSearchCtrl = TextEditingController();
   final Set<int> _expandedLogIndices = {};
   int _logOffset = 0;
@@ -428,6 +429,7 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
       final data = await service.getLogs(
         restaurantId: _selectedLogRestaurantId,
         level: _selectedLogLevel,
+        category: _selectedLogCategory,
         search: _logSearchCtrl.text.trim(),
         limit: _logLimit,
         offset: _logOffset,
@@ -537,212 +539,149 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
     }
   }
 
-  List<Widget> _buildLogBadges(String message) {
-    final badges = <Widget>[];
-    if (message.contains('ANOMALY')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.red.shade700,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.warning_amber_rounded, size: 11, color: Colors.white),
-            SizedBox(width: 3),
-            Text(
-              'ANOMALIA',
-              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-      ));
+  Color _getCategoryColor(String category) {
+    switch (category.toUpperCase()) {
+      case 'ANOMALY':
+        return Colors.red.shade800;
+      case 'DEFICIT':
+        return Colors.amber.shade900;
+      case 'SOLVER':
+      case 'SOLVER WORKER':
+        return Colors.purple.shade700;
+      case 'SCHEDULE':
+        return Colors.blueGrey.shade800;
+      case 'AVAILABILITY':
+        return Colors.green.shade800;
+      case 'SHIFT_SWAP':
+      case 'SWAP':
+        return Colors.deepPurple.shade700;
+      case 'LEAVE':
+        return Colors.cyan.shade800;
+      case 'ATTENDANCE':
+        return Colors.teal.shade700;
+      case 'AUTH':
+        return Colors.indigo.shade700;
+      case 'PUSH':
+        return Colors.pink.shade700;
+      case 'GCAL':
+        return Colors.lightBlue.shade800;
+      case 'POS':
+        return Colors.orange.shade900;
+      case 'CONFIG':
+        return Colors.brown.shade700;
+      default:
+        return Colors.grey.shade800;
     }
-    if (message.contains('DEFICIT')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.amber.shade900,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          'BRAKI KADROWE',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
-      ));
+  }
+
+  String _getCategoryLabel(String category) {
+    switch (category.toUpperCase()) {
+      case 'ANOMALY':
+        return 'ANOMALIA';
+      case 'DEFICIT':
+        return 'DEFICYTY';
+      case 'SOLVER':
+      case 'SOLVER WORKER':
+        return 'SOLVER';
+      case 'SCHEDULE':
+        return 'GRAFIK';
+      case 'AVAILABILITY':
+        return 'DYSPOZYCYJNOŚĆ';
+      case 'SHIFT_SWAP':
+      case 'SWAP':
+        return 'WYMIANA ZMIAN';
+      case 'LEAVE':
+        return 'URLOPY';
+      case 'ATTENDANCE':
+        return 'OBECNOŚĆ';
+      case 'AUTH':
+        return 'AUTH';
+      case 'PUSH':
+        return 'PUSH';
+      case 'GCAL':
+        return 'GOOGLE CAL';
+      case 'POS':
+        return 'POS';
+      case 'CONFIG':
+        return 'KONFIGURACJA';
+      case 'SYSTEM':
+        return 'SYSTEM';
+      default:
+        return category.toUpperCase();
     }
-    if (message.contains('REST VIOLATION')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
+  }
+
+  Widget _buildDetailsSection(dynamic details) {
+    if (details == null) return const SizedBox.shrink();
+    if (details is Map) {
+      final entries = details.entries
+          .where((e) => e.value != null && e.value.toString().trim().isNotEmpty)
+          .toList();
+      if (entries.isEmpty) return const SizedBox.shrink();
+      return Container(
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.deepOrange.shade800,
-          borderRadius: BorderRadius.circular(4),
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.grey.shade200),
         ),
-        child: const Text(
-          '11H ODPOCZYNEK',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: entries.map((entry) {
+            final key = entry.key.toString();
+            final val = entry.value;
+            String formattedValue;
+            if (val is Map || val is List) {
+              formattedValue = val.toString();
+            } else {
+              formattedValue = val.toString();
+            }
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: RichText(
+                text: TextSpan(
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade900,
+                    fontFamily: 'monospace',
+                  ),
+                  children: [
+                    TextSpan(
+                      text: '$key: ',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.purple.shade900,
+                      ),
+                    ),
+                    TextSpan(text: formattedValue),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
         ),
-      ));
+      );
     }
-    if (message.contains('[SOLVER WORKER')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.purple.shade700,
-          borderRadius: BorderRadius.circular(4),
+    final text = details.toString().trim();
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: SelectableText(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontFamily: 'monospace',
+          color: Colors.grey.shade800,
         ),
-        child: const Text(
-          'SOLVER',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
-      ));
-    }
-    if (message.contains('[AUTH')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.indigo.shade700,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          'AUTH',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
-      ));
-    }
-    if (message.contains('[ATTENDANCE')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.teal.shade700,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          'OBECNOŚĆ',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
-      ));
-    }
-    if (message.contains('[SWAP')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.deepPurple.shade700,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          'WYMIANA',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
-      ));
-    }
-    if (message.contains('[LEAVE')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.cyan.shade800,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          'URLOP',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
-      ));
-    }
-    if (message.contains('[SCHEDULE')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.blueGrey.shade800,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          'GRAFIK',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
-      ));
-    }
-    if (message.contains('[USER')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.brown.shade700,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          'UŻYTKOWNIK',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
-      ));
-    }
-    if (message.contains('[PUSH')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.pink.shade700,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          'PUSH',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
-      ));
-    }
-    if (message.contains('[GCAL')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.lightBlue.shade800,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          'GCAL',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
-      ));
-    }
-    if (message.contains('[AVAILABILITY')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.green.shade800,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          'DYSPOZYCYJNOŚĆ',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
-      ));
-    }
-    if (message.contains('[CONFIG')) {
-      badges.add(Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        margin: const EdgeInsets.only(right: 6),
-        decoration: BoxDecoration(
-          color: Colors.blueGrey.shade700,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: const Text(
-          'KONFIG',
-          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
-      ));
-    }
-    return badges;
+      ),
+    );
   }
 
   Widget _buildRestaurantsTab() {
@@ -978,7 +917,7 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
 
                 const SizedBox(height: 8),
 
-                // Row 3: Quick Category & Anomaly Tag Chips
+                // Row 3: Quick Category & Anomaly Tag Chips (independent of search bar)
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -986,44 +925,48 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
                       const Text('Kategoria: ', style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(width: 6),
                       for (final qf in [
-                        {'label': 'Wszystkie zdarzenia', 'tag': ''},
+                        {'label': 'Wszystkie zdarzenia', 'tag': 'ALL'},
                         {'label': 'ANOMALIE', 'tag': 'ANOMALY'},
-                        {'label': 'SOLVER WORKER', 'tag': 'SOLVER WORKER'},
+                        {'label': 'SOLVER', 'tag': 'SOLVER'},
                         {'label': 'DEFICYTY', 'tag': 'DEFICIT'},
-                        {'label': 'LOGOWANIA (AUTH)', 'tag': 'AUTH'},
-                        {'label': 'OBECNOŚĆ', 'tag': 'ATTENDANCE'},
-                        {'label': 'DYSPOZYCYJNOŚĆ', 'tag': 'AVAILABILITY'},
-                        {'label': 'WYMIANA ZMIAN', 'tag': 'SWAP'},
-                        {'label': 'URLOPY', 'tag': 'LEAVE'},
                         {'label': 'GRAFIK', 'tag': 'SCHEDULE'},
+                        {'label': 'DYSPOZYCYJNOŚĆ', 'tag': 'AVAILABILITY'},
+                        {'label': 'WYMIANA ZMIAN', 'tag': 'SHIFT_SWAP'},
+                        {'label': 'URLOPY', 'tag': 'LEAVE'},
+                        {'label': 'OBECNOŚĆ', 'tag': 'ATTENDANCE'},
+                        {'label': 'LOGOWANIA (AUTH)', 'tag': 'AUTH'},
                         {'label': 'POWIADOMIENIA (PUSH)', 'tag': 'PUSH'},
                         {'label': 'GOOGLE CALENDAR', 'tag': 'GCAL'},
+                        {'label': 'POS', 'tag': 'POS'},
                         {'label': 'KONFIGURACJA', 'tag': 'CONFIG'},
+                        {'label': 'SYSTEM', 'tag': 'SYSTEM'},
                       ]) ...[
                         Padding(
                           padding: const EdgeInsets.only(right: 6),
-                          child: ActionChip(
+                          child: ChoiceChip(
                             label: Text(
                               qf['label']!,
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                                color: _logSearchCtrl.text.trim() == qf['tag']!
+                                color: _selectedLogCategory == qf['tag']!
                                     ? Colors.white
                                     : (qf['tag'] == 'ANOMALY' ? Colors.red.shade900 : Colors.purple.shade900),
                               ),
                             ),
-                            backgroundColor: _logSearchCtrl.text.trim() == qf['tag']!
-                                ? (qf['tag'] == 'ANOMALY' ? Colors.red.shade700 : Colors.purple.shade800)
-                                : (qf['tag'] == 'ANOMALY' ? Colors.red.shade50 : Colors.purple.shade50),
+                            selected: _selectedLogCategory == qf['tag']!,
+                            selectedColor: qf['tag'] == 'ANOMALY' ? Colors.red.shade700 : Colors.purple.shade800,
+                            backgroundColor: qf['tag'] == 'ANOMALY' ? Colors.red.shade50 : Colors.purple.shade50,
                             side: BorderSide(
                               color: qf['tag'] == 'ANOMALY' ? Colors.red.shade300 : Colors.purple.shade200,
                             ),
-                            onPressed: () {
-                              setState(() {
-                                _logSearchCtrl.text = qf['tag']!;
-                              });
-                              _loadLogs(resetOffset: true);
+                            onSelected: (selected) {
+                              if (selected) {
+                                setState(() {
+                                  _selectedLogCategory = qf['tag']!;
+                                });
+                                _loadLogs(resetOffset: true);
+                              }
                             },
                           ),
                         ),
@@ -1044,15 +987,20 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
             children: [
               Text(
                 'Wpisy: ${_logs.length} z $_totalLogsCount'
-                '${_selectedLogRestaurantId != null ? " • Filtrowane po ID: $_selectedLogRestaurantId" : ""}',
+                '${_selectedLogRestaurantId != null ? " • Filtrowane po ID: $_selectedLogRestaurantId" : ""}'
+                '${_selectedLogCategory != "ALL" ? " • Kategoria: ${_getCategoryLabel(_selectedLogCategory)}" : ""}',
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
               ),
-              if (_selectedLogRestaurantId != null || _selectedLogLevel != 'ALL' || _logSearchCtrl.text.isNotEmpty)
+              if (_selectedLogRestaurantId != null ||
+                  _selectedLogLevel != 'ALL' ||
+                  _selectedLogCategory != 'ALL' ||
+                  _logSearchCtrl.text.isNotEmpty)
                 InkWell(
                   onTap: () {
                     setState(() {
                       _selectedLogRestaurantId = null;
                       _selectedLogLevel = 'ALL';
+                      _selectedLogCategory = 'ALL';
                       _logSearchCtrl.clear();
                     });
                     _loadLogs(resetOffset: true);
@@ -1113,17 +1061,26 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
                         final item = _logs[index];
                         final level = (item['level'] ?? 'INFO').toString().toUpperCase();
                         final color = _getLevelColor(level);
-                        final timestamp = item['timestamp'] ?? '';
-                        final loggerName = item['logger'] ?? '';
-                        final message = (item['message'] ?? '').toString();
+                        final timestamp = (item['timestamp'] ?? '').toString();
+                        final loggerName = (item['logger'] ?? '').toString();
+                        final category = (item['category'] ?? 'SYSTEM').toString().toUpperCase();
+                        final eventTitle = (item['event_title'] ?? item['message'] ?? '').toString();
+                        final details = item['details'];
+                        final rawTraceback = item['traceback'];
+                        final traceback = rawTraceback != null && rawTraceback.toString().trim().isNotEmpty
+                            ? rawTraceback.toString().trim()
+                            : null;
+                        final hasTraceback = traceback != null;
+                        final tracebackLines = hasTraceback ? traceback.split('\n') : <String>[];
+
                         final tenantId = item['tenant_id'];
-                        final restName = item['restaurant_name'];
+                        final tenantName = item['tenant_name'] ?? item['restaurant_name'];
+                        final actorName = item['actor_name'];
                         final isExpanded = _expandedLogIndices.contains(index);
 
-                        final lines = message.split('\n');
-                        final isMultiline = lines.length > 2 || message.length > 200;
-                        final isAnomaly = message.contains('ANOMALY') || message.contains('REST VIOLATION');
-                        final badges = _buildLogBadges(message);
+                        final isAnomaly = category == 'ANOMALY' ||
+                            eventTitle.contains('ANOMALY') ||
+                            eventTitle.contains('REST VIOLATION');
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
@@ -1138,7 +1095,7 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
                           ),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(8),
-                            onTap: isMultiline
+                            onTap: hasTraceback
                                 ? () {
                                     setState(() {
                                       if (isExpanded) {
@@ -1154,67 +1111,116 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Top row: Level Badge, Timestamp, Tenant Badge, Copy button
+                                  // Top row: Level Badge, Timestamp, Restaurant Badge, Category Badge, Actor Badge, Copy button
                                   Row(
                                     children: [
-                                      // Level badge
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: color,
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          level,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      // Timestamp
-                                      Text(
-                                        timestamp,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey.shade600,
-                                          fontFamily: 'monospace',
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      // Restaurant Badge
-                                      if (tenantId != null)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.purple.shade50,
-                                            border: Border.all(color: Colors.purple.shade200),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            restName != null ? '$restName (ID: $tenantId)' : 'Restauracja ID: $tenantId',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: Colors.purple.shade900,
-                                              fontWeight: FontWeight.w600,
+                                      Expanded(
+                                        child: Wrap(
+                                          spacing: 6,
+                                          runSpacing: 4,
+                                          crossAxisAlignment: WrapCrossAlignment.center,
+                                          children: [
+                                            // Level badge
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: color,
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                level,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
                                             ),
-                                          ),
-                                        )
-                                      else
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.grey.shade200,
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            'System / Ogólne',
-                                            style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                                          ),
+                                            // Timestamp
+                                            Text(
+                                              timestamp,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey.shade600,
+                                                fontFamily: 'monospace',
+                                              ),
+                                            ),
+                                            // Restaurant Badge
+                                            if (tenantId != null)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.purple.shade50,
+                                                  border: Border.all(color: Colors.purple.shade200),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  tenantName != null
+                                                      ? '$tenantName (ID: $tenantId)'
+                                                      : 'Restauracja ID: $tenantId',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.purple.shade900,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              )
+                                            else
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.grey.shade200,
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  'System / Ogólne',
+                                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                                                ),
+                                              ),
+                                            // Category Badge
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: _getCategoryColor(category),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                _getCategoryLabel(category),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                            // Actor Badge
+                                            if (actorName != null && actorName.toString().trim().isNotEmpty)
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.teal.shade50,
+                                                  border: Border.all(color: Colors.teal.shade200),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.person_outline, size: 12, color: Colors.teal.shade900),
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      actorName.toString(),
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.teal.shade900,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                          ],
                                         ),
-                                      const Spacer(),
+                                      ),
                                       // Copy to clipboard button
                                       IconButton(
                                         icon: const Icon(Icons.copy, size: 16),
@@ -1222,7 +1228,12 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
                                         padding: EdgeInsets.zero,
                                         constraints: const BoxConstraints(),
                                         onPressed: () {
-                                          final fullText = '[$timestamp] [$level] [tenant:${tenantId ?? '-'}] $loggerName: $message';
+                                          final fullText = '[$timestamp] [$level] [$category] '
+                                              '[tenant:${tenantId ?? '-'}] '
+                                              '${actorName != null ? "[actor:$actorName] " : ""}'
+                                              '$eventTitle '
+                                              '${details != null ? "| details: $details " : ""}'
+                                              '${hasTraceback ? "\n$traceback" : ""}';
                                           Clipboard.setData(ClipboardData(text: fullText));
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             const SnackBar(
@@ -1235,45 +1246,57 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
                                     ],
                                   ),
 
-                                  // Category & Anomaly badges row
-                                  if (badges.isNotEmpty) ...[
-                                    const SizedBox(height: 6),
-                                    Wrap(
-                                      spacing: 4,
-                                      runSpacing: 4,
-                                      children: badges,
-                                    ),
-                                  ],
+                                  const SizedBox(height: 8),
 
-                                  const SizedBox(height: 6),
-
-                                  // Logger name
-                                  Text(
-                                    loggerName,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey.shade700,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-
-                                  // Log message
+                                  // Bold Event Title
                                   SelectableText(
-                                    isMultiline && !isExpanded
-                                        ? '${lines.take(3).join('\n')}\n...'
-                                        : message,
+                                    eventTitle,
                                     style: TextStyle(
-                                      fontSize: 13,
-                                      fontFamily: 'monospace',
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
                                       color: level == 'ERROR' || level == 'CRITICAL'
                                           ? Colors.red.shade900
                                           : Colors.grey.shade900,
                                     ),
                                   ),
 
-                                  // Expand/collapse indicator for multiline
-                                  if (isMultiline)
+                                  // Details Key-Value Section
+                                  _buildDetailsSection(details),
+
+                                  // Logger name subtitle (subtle)
+                                  if (loggerName.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        'Źródło: $loggerName',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                      ),
+                                    ),
+
+                                  // Traceback section ONLY when a real exception traceback exists
+                                  if (hasTraceback) ...[
+                                    if (isExpanded)
+                                      Container(
+                                        width: double.infinity,
+                                        margin: const EdgeInsets.only(top: 6),
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade50,
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(color: Colors.red.shade200),
+                                        ),
+                                        child: SelectableText(
+                                          traceback,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontFamily: 'monospace',
+                                            color: Colors.red.shade900,
+                                          ),
+                                        ),
+                                      ),
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Row(
@@ -1281,22 +1304,23 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
                                         children: [
                                           Text(
                                             isExpanded
-                                                ? 'Zwiń szczegóły'
-                                                : 'Pokaż pełny traceback (${lines.length} linii)',
+                                                ? 'Zwiń traceback'
+                                                : 'Pokaż pełny traceback (${tracebackLines.length} linii)',
                                             style: TextStyle(
                                               fontSize: 11,
-                                              color: Colors.purple.shade700,
+                                              color: Colors.red.shade800,
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
                                           Icon(
                                             isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
                                             size: 16,
-                                            color: Colors.purple.shade700,
+                                            color: Colors.red.shade800,
                                           ),
                                         ],
                                       ),
                                     ),
+                                  ],
                                 ],
                               ),
                             ),

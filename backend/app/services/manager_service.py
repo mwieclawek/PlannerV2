@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 from ..models import JobRole, ShiftDefinition, StaffingRequirement, RestaurantConfig, User, UserJobRoleLink, RoleSystem, AttendanceStatus, Schedule, Attendance
 from ..schemas import JobRoleCreate, ShiftDefCreate, RequirementCreate, ConfigUpdate, UserUpdate, UserCreate
+from .log_service import log_event
 
 class ManagerService:
     def __init__(self, session: Session, tenant_id: Optional[int] = None):
@@ -292,6 +293,12 @@ class ManagerService:
         for res in results:
             self.session.refresh(res)
         logger.info(f"Requirements successfully set/saved. Deleted {old_reqs_count} old reqs and created {len(results)} new ones.")
+        log_event(
+            "CONFIG",
+            "Zaktualizowano zapotrzebowanie kadrowe",
+            {"usunieto_starych": old_reqs_count, "zapisano_nowych": len(results)},
+            tenant_id=self.tenant_id,
+        )
         return results
 
     def get_requirements(self, start_date: date, end_date: date) -> List[StaffingRequirement]:
@@ -382,6 +389,12 @@ class ManagerService:
         logger.info(
             f"[CONFIG] Zaktualizowano konfigurację lokalu '{config.name}' [tenant:{config.id}]. "
             f"Zmienione parametry: {', '.join(changed_fields) if changed_fields else 'brak'}."
+        )
+        log_event(
+            "CONFIG",
+            "Zaktualizowano konfigurację restauracji",
+            {"restauracja": config.name, "zmienione_pola": ", ".join(changed_fields) if changed_fields else "brak"},
+            tenant_id=config.id,
         )
         return config
 
@@ -1250,6 +1263,19 @@ class ManagerService:
         logger.info(
             f"[LEAVE] Wniosek urlopowy {request_id} został {decision} przez managera {manager_id} "
             f"(pracownik id={req.user_id}, zakres: {req.start_date} do {req.end_date}) [tenant:{self.tenant_id}]."
+        )
+        emp_user = self.session.get(User, req.user_id)
+        mgr_user = self.session.get(User, manager_id)
+        log_event(
+            "LEAVE",
+            "Zaakceptowano wniosek urlopowy" if approved else "Odrzucono wniosek urlopowy",
+            {
+                "pracownik": emp_user.full_name if emp_user else str(req.user_id),
+                "zakres": f"{req.start_date} - {req.end_date}",
+                "decyzja": decision,
+            },
+            actor=mgr_user,
+            tenant_id=self.tenant_id,
         )
         
         if approved:

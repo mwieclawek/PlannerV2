@@ -9,6 +9,7 @@ import httpx
 from sqlmodel import Session, select
 
 from ..models import User, Schedule, ShiftDefinition, JobRole, RestaurantConfig
+from .log_service import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -395,6 +396,14 @@ class GoogleCalendarService:
 
         if synced_count == 0 and len(schedules) > 0:
             logger.warning(f"[GCAL ANOMALY] Nie udało się zsynchronizować żadnej z {len(schedules)} zmian z Google Calendar dla '{user.username}' [tenant:{getattr(user, 'tenant_id', '?')}].")
+            log_event(
+                "GCAL",
+                "Błąd synchronizacji zmian z Google Calendar",
+                {"pracownik": user.full_name, "liczba_zmian": len(schedules), "zakres": f"{start} - {end}"},
+                level="WARNING",
+                actor=user,
+                tenant_id=getattr(user, "tenant_id", None),
+            )
             return {
                 "status": "error",
                 "message": f"Nie udało się zsynchronizować żadnej z {len(schedules)} zmian z Kalendarzem Google.",
@@ -405,6 +414,13 @@ class GoogleCalendarService:
             }
 
         logger.info(f"[GCAL] Zakończono synchronizację Google Calendar dla '{user.username}': zsynchronizowano {synced_count}/{len(schedules)} zmian [tenant:{getattr(user, 'tenant_id', '?')}].")
+        log_event(
+            "GCAL",
+            "Zsynchronizowano grafik z Google Calendar",
+            {"pracownik": user.full_name, "zsynchronizowane": f"{synced_count}/{len(schedules)}", "zakres": f"{start} - {end}"},
+            actor=user,
+            tenant_id=getattr(user, "tenant_id", None),
+        )
         return {
             "status": "success",
             "synced": synced_count,

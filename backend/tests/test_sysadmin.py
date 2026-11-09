@@ -334,3 +334,116 @@ async def test_sysadmin_logs_filtering_and_retrieval(
     assert resp.status_code == 200
     assert "wyczyszczony" in resp.json()["message"]
 
+
+@pytest.mark.asyncio
+async def test_structured_domain_logs_and_sql_noise_filtering(
+    client: AsyncClient, superadmin_headers, test_tenant, tmp_path, monkeypatch
+):
+    """
+    Verify:
+    1. log_event writes structured JSON logs with category, actor_name, event_title, details,
+       and only populates traceback when a real Python exception is logged.
+    2. Category filtering (?category=SOLVER, ?category=AUTH) works independently of search.
+    3. SQLAlchemy SQL noise lines (SELECT ..., [cached since ...], ROLLBACK) are filtered out
+       both by SqlNoiseFilter and get_logs.
+    """
+    import logging
+    import app.services.log_service as log_srv
+
+    test_log_file = tmp_path / "planner_structured.log"
+    monkeypatch.setattr(log_srv, "LOG_DIR", tmp_path)
+    monkeypatch.setattr(log_srv, "LOG_FILE", test_log_file)
+
+    # Set up temporary file handler with TenantLogFilter + SqlNoiseFilter
+    test_logger = logging.getLogger("planner.domain")
+    handler = logging.FileHandler(test_log_file, encoding="utf-8")
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] [tenant:%(tenant_id)s] %(name)s: %(message)s")
+    )
+    handler.addFilter(log_srv.TenantLogFilter())
+    handler.addFilter(log_srv.SqlNoiseFilter())
+    test_logger.addHandler(handler)
+
+    try:
+        # 1. Log a normal business event (no exception -> traceback must be None)
+        log_srv.log_event(
+            category="SOLVER",
+            event_title="Wygenerowano grafik tygodniowy (2026-11-02 – 2026-11-08)",
+            details={"status": "OPTIMAL", "assigned_shifts": 14, "deficits": 0},
+            actor={"id": "u-1", "full_name": "Jan Manager", "username": "jan"},
+            tenant_id=test_tenant.id,
+            tenant_name=test_tenant.name,
+            level="INFO",
+        )
+
+        # 2. Log an exception event (real exception -> traceback must be populated)
+        try:
+            raise ValueError("Błąd synchronizacji z Google Calendar API")
+        except ValueError as exc:
+            log_srv.log_event(
+                category="GCAL",
+                event_title="Nieudany eksport zmiany do Google Calendar",
+                details={"shift_id": "s-100"},
+                actor_name="Anna Kelnerka",
+                tenant_id=test_tenant.id,
+                level="ERROR",
+                exc_info=exc,
+            )
+
+        # 3. Inject raw SQL noise lines directly into the file to ensure parser also strips them
+        handler.flush()
+        with open(test_log_file, "a", encoding="utf-8") as f:
+            f.write(
+                f"2026-11-02 12:00:00,000 [INFO] [tenant:{test_tenant.id}] sqlalchemy.engine.Engine: SELECT user.id FROM user WHERE user.tenant_id = ?\n"
+                f"2026-11-02 12:00:00,001 [INFO] [tenant:{test_tenant.id}] sqlalchemy.engine.Engine: [cached since 0.1234s ago] (1,)\n"
+                f"2026-11-02 12:00:00,002 [INFO] [tenant:{test_tenant.id}] sqlalchemy.engine.Engine: ROLLBACK\n"
+            )
+
+        # Verify SqlNoiseFilter rejects SQL records directly
+        sql_record = logging.LogRecord(
+            name="sqlalchemy.engine.Engine",
+            level=logging.INFO,
+            pathname=__file__,
+            lineno=1,
+            msg="SELECT * FROM schedule",
+            args=(),
+            exc_info=None,
+        )
+        assert log_srv.SqlNoiseFilter().filter(sql_record) is False
+
+        # Fetch all logs via API -> SQL noise must NOT appear, only the 2 domain events
+        resp = await client.get("/sysadmin/logs", headers=superadmin_headers)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 2
+
+        by_cat = {item["category"]: item for item in data["items"]}
+        assert "SOLVER" in by_cat
+        assert "GCAL" in by_cat
+
+        solver_entry = by_cat["SOLVER"]
+        assert solver_entry["actor_name"] == "Jan Manager"
+        assert solver_entry["event_title"] == "Wygenerowano grafik tygodniowy (2026-11-02 – 2026-11-08)"
+        assert solver_entry["details"]["status"] == "OPTIMAL"
+        assert solver_entry["traceback"] is None
+
+        gcal_entry = by_cat["GCAL"]
+        assert gcal_entry["actor_name"] == "Anna Kelnerka"
+        assert gcal_entry["level"] == "ERROR"
+        assert gcal_entry["traceback"] is not None
+        assert "ValueError: Błąd synchronizacji z Google Calendar API" in gcal_entry["traceback"]
+
+        # Filter by category=SOLVER AND search=OPTIMAL independently
+        resp_cat = await client.get(
+            "/sysadmin/logs?category=SOLVER&search=OPTIMAL",
+            headers=superadmin_headers,
+        )
+        assert resp_cat.status_code == 200
+        cat_data = resp_cat.json()
+        assert cat_data["total"] == 1
+        assert cat_data["items"][0]["category"] == "SOLVER"
+    finally:
+        test_logger.removeHandler(handler)
+        handler.close()
+
+

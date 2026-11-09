@@ -1,4 +1,7 @@
+import os
 import pytest
+
+os.environ.setdefault("USE_ASYNC_WORKER", "false")
 from httpx import AsyncClient, ASGITransport
 from sqlmodel import SQLModel, Session, create_engine
 from sqlmodel.pool import StaticPool

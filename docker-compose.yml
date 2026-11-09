@@ -13,19 +13,45 @@ services:
     networks:
       - plannerv2-network
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - plannerv2-network
+
   backend:
     build: ./backend
     restart: unless-stopped
     depends_on:
       - db
+      - redis
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - USE_ASYNC_WORKER=${USE_ASYNC_WORKER:-true}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
       - MANAGER_REGISTRATION_PIN=${MANAGER_REGISTRATION_PIN:-}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
       - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/firebase-admin-key.json}
       - FIREBASE_CREDENTIALS_JSON=${FIREBASE_CREDENTIALS_JSON:-}
+    networks:
+      - plannerv2-network
+
+  planner-worker:
+    build: ./backend
+    command: python -m app.workers.main
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - USE_ASYNC_WORKER=true
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - PYTHONPATH=/app/backend:/app
     networks:
       - plannerv2-network
 

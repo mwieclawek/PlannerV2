@@ -19,3 +19,5 @@ slowapi
 firebase-admin
 cryptography
 tzdata
+redis
+arq

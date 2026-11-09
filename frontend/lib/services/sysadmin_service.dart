@@ -74,6 +74,7 @@ class SysAdminService {
   Future<Map<String, dynamic>> getLogs({
     int? restaurantId,
     String? level,
+    String? category,
     String? search,
     int limit = 200,
     int offset = 0,
@@ -85,6 +86,9 @@ class SysAdminService {
     if (restaurantId != null) queryParams['restaurant_id'] = restaurantId;
     if (level != null && level.toUpperCase() != 'ALL') {
       queryParams['level'] = level.toUpperCase();
+    }
+    if (category != null && category.trim().isNotEmpty && category.toUpperCase() != 'ALL') {
+      queryParams['category'] = category.trim().toUpperCase();
     }
     if (search != null && search.trim().isNotEmpty) {
       queryParams['search'] = search.trim();

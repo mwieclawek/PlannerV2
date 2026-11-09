@@ -15,6 +15,7 @@ from ..auth_utils import (
     ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user, ensure_tenant_active
 )
 from ..schemas import Token, UserCreate, UserResponse, UserPasswordChange, UserProfileUpdate
+from ..services.log_service import log_event
 from ..main import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -105,6 +106,14 @@ def login_for_access_token(
 
     if not user or not verify_password(form_data.password, user.password_hash):
         logger.warning(f"[AUTH ANOMALY] Nieudane logowanie dla identyfikatora '{login_input}' z IP {client_ip}: nieprawidłowy login lub hasło.")
+        log_event(
+            "AUTH",
+            "Nieudana próba logowania (błędny login lub hasło)",
+            {"login": login_input, "ip": client_ip},
+            level="WARNING",
+            actor=login_input,
+            tenant_id=getattr(user, "tenant_id", None) if user else None,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -121,6 +130,14 @@ def login_for_access_token(
         )
         if not is_admin_user:
             logger.warning(f"[AUTH ANOMALY] Zablokowane logowanie dla '{user.username}' (id={user.id}) z IP {client_ip}: aktywny tryb serwisowy.")
+            log_event(
+                "AUTH",
+                "Zablokowano logowanie – aktywny tryb serwisowy",
+                {"uzytkownik": user.username, "ip": client_ip},
+                level="WARNING",
+                actor=user,
+                tenant_id=user.tenant_id,
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=settings.blocked_login_message,
@@ -131,6 +148,14 @@ def login_for_access_token(
 
     if not user.is_active:
         logger.warning(f"[AUTH ANOMALY] Próba logowania na dezaktywowane konto '{user.username}' (id={user.id}) z IP {client_ip}.")
+        log_event(
+            "AUTH",
+            "Próba logowania na nieaktywne konto",
+            {"uzytkownik": user.username, "ip": client_ip},
+            level="WARNING",
+            actor=user,
+            tenant_id=user.tenant_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is deactivated. Contact your manager.",
@@ -144,6 +169,13 @@ def login_for_access_token(
     
     login_type = "email" if _is_email(login_input) else "username"
     logger.info(f"[AUTH] Udane logowanie użytkownika '{user.username}' (id={user.id}, rola={user.role_system.value}) metodą {login_type} [tenant:{user.tenant_id}] (IP: {client_ip}).")
+    log_event(
+        "AUTH",
+        "Zalogowano do systemu",
+        {"metoda": login_type, "ip": client_ip},
+        actor=user,
+        tenant_id=user.tenant_id,
+    )
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -275,11 +307,26 @@ def change_password(
 ):
     if not verify_password(password_data.old_password, current_user.password_hash):
         logger.warning(f"[AUTH ANOMALY] Nieudana próba zmiany hasła dla '{current_user.username}' (id={current_user.id}): błędne dotychczasowe hasło [tenant:{current_user.tenant_id}].")
+        log_event(
+            "AUTH",
+            "Nieudana próba zmiany hasła (błędne stare hasło)",
+            {"uzytkownik": current_user.username},
+            level="WARNING",
+            actor=current_user,
+            tenant_id=current_user.tenant_id,
+        )
         raise HTTPException(status_code=400, detail="Incorrect old password")
 
     current_user.password_hash = get_password_hash(password_data.new_password)
     session.add(current_user)
     session.commit()
     logger.info(f"[AUTH] Pomyślna zmiana hasła dla użytkownika '{current_user.username}' (id={current_user.id}) [tenant:{current_user.tenant_id}].")
+    log_event(
+        "AUTH",
+        "Zmieniono hasło własnego konta",
+        {"uzytkownik": current_user.username},
+        actor=current_user,
+        tenant_id=current_user.tenant_id,
+    )
 
     return {"status": "password_changed"}

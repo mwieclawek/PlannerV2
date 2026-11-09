@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
 from datetime import datetime, date as date_type, time
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 from uuid import UUID
 from .models import (
     RoleSystem, AvailabilityStatus, AttendanceStatus, GiveawayStatus, LeaveStatus,
@@ -319,6 +319,12 @@ class BatchSaveRequest(BaseModel):
     end_date: date_type
     items: List[ScheduleBatchItem]
     is_published: bool = False
+
+
+class LaborCostSimulationRequest(BaseModel):
+    start_date: date_type
+    end_date: date_type
+    items: Optional[List[ScheduleBatchItem]] = None
 
 class PublishScheduleRequest(BaseModel):
     start_date: Optional[date_type] = None
@@ -1427,9 +1433,16 @@ class SysAdminManagerResponse(BaseModel):
 class SysAdminLogEntry(BaseModel):
     timestamp: str
     level: str
-    logger: str
-    message: str
+    category: str = "SYSTEM"
+    logger: str = ""
+    message: str = ""
+    event_title: Optional[str] = None
+    details: Optional[Any] = None
+    traceback: Optional[str] = None
+    actor_id: Optional[str] = None
+    actor_name: Optional[str] = "System"
     tenant_id: Optional[int] = None
+    tenant_name: Optional[str] = None
     restaurant_name: Optional[str] = None
     restaurant_slug: Optional[str] = None
 
@@ -1438,6 +1451,7 @@ class SysAdminLogsResponse(BaseModel):
     total: int
     items: List[SysAdminLogEntry]
     available_levels: List[str]
+    available_categories: List[str] = []
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

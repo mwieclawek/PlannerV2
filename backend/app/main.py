@@ -14,23 +14,32 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from .services.log_service import TenantLogFilter
+from .services.log_service import (
+    TenantLogFilter,
+    SqlNoiseFilter,
+    configure_noise_levels,
+    purge_noise_from_logs,
+)
 from .tenant_context import set_current_tenant_id
 from .auth_utils import SECRET_KEY, ALGORITHM
 
 os.makedirs("logs", exist_ok=True)
 tenant_filter = TenantLogFilter()
+sql_noise_filter = SqlNoiseFilter()
 
 file_handler = RotatingFileHandler("logs/planner.log", maxBytes=5*1024*1024, backupCount=3, encoding="utf-8")
 file_handler.addFilter(tenant_filter)
+file_handler.addFilter(sql_noise_filter)
 file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(tenant_str)s] %(name)s: %(message)s"))
 
 stream_handler = logging.StreamHandler()
 stream_handler.addFilter(tenant_filter)
+stream_handler.addFilter(sql_noise_filter)
 stream_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] [%(tenant_str)s] %(name)s: %(message)s"))
 
 logging.root.handlers = [file_handler, stream_handler]
-logging.root.setLevel(logging.DEBUG)
+logging.root.setLevel(logging.INFO)
+configure_noise_levels()
 logger = logging.getLogger(__name__)
 
 # ── Rate Limiter ───────────────────────────────────────────────────────────────
@@ -40,6 +49,8 @@ limiter = Limiter(key_func=get_remote_address)
 async def lifespan(app: FastAPI):
     from .database import init_db, DATABASE_URL
 
+    configure_noise_levels()
+    purge_noise_from_logs()
     logger.info(f"Initializing database (URL starts with: {DATABASE_URL[:10]}...)...")
     init_db()
 

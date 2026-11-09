@@ -21,6 +21,7 @@ from ..schemas import (
     UserStats, DashboardHomeResponse, GiveawayReassignRequest
 )
 from ..services.manager_service import ManagerService
+from ..services.log_service import log_event
 import logging
 
 logger = logging.getLogger(__name__)
@@ -179,6 +180,13 @@ def reset_user_password(
     session.add(user)
     session.commit()
     logger.info(f"[AUTH] Reset hasła użytkownika '{user.username}' (id={user.id}) przez managera '{current_user.username}' [tenant:{current_user.tenant_id}].")
+    log_event(
+        "AUTH",
+        "Zresetowano hasło pracownika przez managera",
+        {"pracownik": f"{user.full_name} ({user.username})"},
+        actor=current_user,
+        tenant_id=current_user.tenant_id,
+    )
     
     return {"status": "password_reset_success"}
 
@@ -349,6 +357,18 @@ def confirm_attendance(
         f"[ATTENDANCE] Manager '{current_user.username}' zatwierdził nieplanowaną obecność {attendance.id} "
         f"(użytkownik {attendance.user_id}, data {attendance.date}) [tenant:{current_user.tenant_id}]."
     )
+    emp_obj = session.get(User, attendance.user_id)
+    log_event(
+        "ATTENDANCE",
+        "Zatwierdzono obecność pracownika",
+        {
+            "pracownik": emp_obj.full_name if emp_obj else str(attendance.user_id),
+            "data": str(attendance.date),
+            "godziny": f"{attendance.check_in.strftime('%H:%M')} - {attendance.check_out.strftime('%H:%M')}",
+        },
+        actor=current_user,
+        tenant_id=current_user.tenant_id,
+    )
     return {"status": "confirmed"}
 
 @router.put("/attendance/{attendance_id}/reject")
@@ -378,6 +398,19 @@ def reject_attendance(
     logger.info(
         f"[ATTENDANCE] Manager '{current_user.username}' odrzucił nieplanowaną obecność {attendance.id} "
         f"(użytkownik {attendance.user_id}, data {attendance.date}) [tenant:{current_user.tenant_id}]."
+    )
+    emp_obj = session.get(User, attendance.user_id)
+    log_event(
+        "ATTENDANCE",
+        "Odrzucono nieplanowaną obecność pracownika",
+        {
+            "pracownik": emp_obj.full_name if emp_obj else str(attendance.user_id),
+            "data": str(attendance.date),
+            "godziny": f"{attendance.check_in.strftime('%H:%M')} - {attendance.check_out.strftime('%H:%M')}",
+        },
+        level="WARNING",
+        actor=current_user,
+        tenant_id=current_user.tenant_id,
     )
     return {"status": "rejected"}
 

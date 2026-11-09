@@ -573,6 +573,154 @@ class TestSolverEdgeCases:
         # Should still work (just won't find data)
         assert result["status"] in ["success", "infeasible"]
 
+    def test_monthly_target_lookahead_scarcity_distribution(
+        self, session: Session, job_role, shift_definition
+    ):
+        """
+        Test monthly target lookahead and scarcity distribution:
+        - Employee A and Employee B both have 80h monthly target.
+        - Employee A is 100% AVAILABLE in Week 1 (Nov 2-8) and 0% (UNAVAILABLE) in Week 2 (Nov 9-15).
+        - Employee B is ~50% AVAILABLE in Week 1 (Mon-Thu, 4 days) and ~50% AVAILABLE in Week 2 (Mon-Thu, 4 days).
+        - Verify that effective_weekly_target for Week 1 is higher for Employee A than Employee B,
+          and that in Week 1 both receive hours aligned with their effective weekly targets
+          (and Employee B is not skipped on their available days).
+        """
+        from app.services.scheduler_service import SchedulerService
+
+        user_a = User(
+            username="emp_a_lookahead",
+            password_hash=get_password_hash("test"),
+            full_name="Pracownik A",
+            role_system=RoleSystem.EMPLOYEE,
+            target_hours_per_month=80,
+            is_active=True,
+        )
+        user_b = User(
+            username="emp_b_lookahead",
+            password_hash=get_password_hash("test"),
+            full_name="Pracownik B",
+            role_system=RoleSystem.EMPLOYEE,
+            target_hours_per_month=80,
+            is_active=True,
+        )
+        session.add(user_a)
+        session.add(user_b)
+        session.commit()
+        session.refresh(user_a)
+        session.refresh(user_b)
+
+        session.add(UserJobRoleLink(user_id=user_a.id, role_id=job_role.id))
+        session.add(UserJobRoleLink(user_id=user_b.id, role_id=job_role.id))
+        session.commit()
+
+        # Week 1: 2026-11-02 (Mon) .. 2026-11-08 (Sun)
+        # Week 2: 2026-11-09 (Mon) .. 2026-11-15 (Sun)
+        w1_start = date(2026, 11, 2)
+        w1_end = date(2026, 11, 8)
+        w2_start = date(2026, 11, 9)
+
+        # Configure Week 1 staffing: Mon-Wed require 2 employees (both A and B can work),
+        # Thu-Sun require 1 employee (only A is available Fri-Sun; Thu both available).
+        for offset in range(7):
+            d = w1_start + timedelta(days=offset)
+            min_needed = 2 if offset < 3 else 1
+            session.add(
+                StaffingRequirement(
+                    date=d,
+                    shift_def_id=shift_definition.id,
+                    role_id=job_role.id,
+                    min_count=min_needed,
+                )
+            )
+            # Employee A: 100% AVAILABLE in Week 1
+            session.add(
+                Availability(
+                    user_id=user_a.id,
+                    date=d,
+                    shift_def_id=shift_definition.id,
+                    status=AvailabilityStatus.AVAILABLE,
+                )
+            )
+            # Employee B: AVAILABLE Mon-Thu (4 days), UNAVAILABLE Fri-Sun (3 days) in Week 1
+            b_status_w1 = (
+                AvailabilityStatus.AVAILABLE
+                if offset < 4
+                else AvailabilityStatus.UNAVAILABLE
+            )
+            session.add(
+                Availability(
+                    user_id=user_b.id,
+                    date=d,
+                    shift_def_id=shift_definition.id,
+                    status=b_status_w1,
+                )
+            )
+
+        # Configure Week 2 availability (Nov 9-15):
+        # Employee A declared 0% (UNAVAILABLE all 7 days of Week 2)
+        # Employee B declared ~50% (AVAILABLE Mon-Thu, UNAVAILABLE Fri-Sun)
+        for offset in range(7):
+            d2 = w2_start + timedelta(days=offset)
+            session.add(
+                Availability(
+                    user_id=user_a.id,
+                    date=d2,
+                    shift_def_id=shift_definition.id,
+                    status=AvailabilityStatus.UNAVAILABLE,
+                )
+            )
+            b_status_w2 = (
+                AvailabilityStatus.AVAILABLE
+                if offset < 4
+                else AvailabilityStatus.UNAVAILABLE
+            )
+            session.add(
+                Availability(
+                    user_id=user_b.id,
+                    date=d2,
+                    shift_def_id=shift_definition.id,
+                    status=b_status_w2,
+                )
+            )
+        session.commit()
+
+        # 1. Verify compute_weekly_targets with monthly lookahead
+        sched_service = SchedulerService(session)
+        weekly_targets = sched_service.compute_weekly_targets(w1_start, w1_end)
+
+        target_a = weekly_targets[user_a.id]
+        target_b = weekly_targets[user_b.id]
+
+        assert target_a["effective_weekly_target_hours"] > target_b["effective_weekly_target_hours"], (
+            f"Expected Employee A effective target ({target_a['effective_weekly_target_hours']}h) "
+            f"> Employee B ({target_b['effective_weekly_target_hours']}h)"
+        )
+
+        # 2. Run Solver for Week 1 with weekly_targets
+        solver = SolverService(session)
+        result = solver.solve(
+            w1_start,
+            w1_end,
+            save=False,
+            weekly_targets=weekly_targets,
+        )
+
+        assert result["status"] == "success"
+        schedules = result["schedules"]
+
+        shifts_a = [s for s in schedules if str(s["user_id"]) == str(user_a.id)]
+        shifts_b = [s for s in schedules if str(s["user_id"]) == str(user_b.id)]
+
+        hours_a = len(shifts_a) * 8.0
+        hours_b = len(shifts_b) * 8.0
+
+        # Employee A must get more hours in Week 1 than Employee B because A is unavailable in Week 2
+        assert hours_a > hours_b, f"Expected hours_a ({hours_a}) > hours_b ({hours_b})"
+        # Employee B is NOT skipped on their available days (gets at least 3 shifts = 24h)
+        assert hours_b >= 24.0, f"Expected Employee B to get at least 24h in Week 1, got {hours_b}h"
+        # Employee A gets at least 40h (5-6 shifts) in Week 1
+        assert hours_a >= 40.0, f"Expected Employee A to get at least 40h in Week 1, got {hours_a}h"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

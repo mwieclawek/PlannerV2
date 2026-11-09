@@ -26,8 +26,8 @@ COPY app/ backend/app/
 COPY alembic.ini .
 COPY alembic/ alembic/
 
-# Set PYTHONPATH so python can find the 'backend' package and disable stdout buffering
-ENV PYTHONPATH=/app
+# Set PYTHONPATH so python can find both 'backend.app' and 'app' packages and disable stdout buffering
+ENV PYTHONPATH=/app/backend:/app
 ENV PYTHONUNBUFFERED=1
 
 # Expose port

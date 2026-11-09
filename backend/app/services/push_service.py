@@ -8,6 +8,7 @@ import firebase_admin
 from firebase_admin import credentials, messaging
 
 from ..models import UserDevice
+from .log_service import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +141,12 @@ def send_push_to_tokens(
     u_ctx = f" dla user_id={user_id}" if user_id else ""
     if not _ensure_firebase_initialized():
         logger.info(f"[PUSH] [MOCK PUSH] Symulacja wysłania powiadomienia do {len(tokens)} urządzeń{u_ctx} - Tytuł: '{title}', Treść: '{body}'")
+        log_event(
+            "PUSH",
+            f"Powiadomienie push (tryb symulacji): {title}",
+            {"tytul": title, "tresc": body, "urzadzenia": len(tokens)},
+            actor="System / Push",
+        )
         return
 
     message = messaging.MulticastMessage(
@@ -166,6 +173,18 @@ def send_push_to_tokens(
             f"[PUSH] Wysłano powiadomienie push do {len(tokens)} urządzeń{u_ctx} "
             f"(sukces: {response.success_count}, błędy: {response.failure_count}) - Tytuł: '{title}'"
         )
+        log_event(
+            "PUSH",
+            f"Wysłano powiadomienie push: {title}",
+            {
+                "tytul": title,
+                "urzadzenia": len(tokens),
+                "sukces": response.success_count,
+                "bledy": response.failure_count,
+            },
+            level="INFO" if response.failure_count == 0 else "WARNING",
+            actor="System / Push",
+        )
 
         if response.failure_count > 0:
             stale_tokens: List[str] = []
@@ -186,3 +205,11 @@ def send_push_to_tokens(
 
     except Exception as e:
         logger.error(f"[PUSH ANOMALY] Błąd wysyłania powiadomień FCM{u_ctx}: {e}")
+        log_event(
+            "PUSH",
+            f"Błąd wysyłania powiadomienia push: {title}",
+            {"tytul": title, "blad": str(e)},
+            level="ERROR",
+            actor="System / Push",
+            exc_info=e,
+        )

@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlmodel import Session, select
 from ..models import Availability, Schedule, ShiftDefinition, JobRole, User
 from ..schemas import AvailabilityUpdate
+from .log_service import log_event
 import logging
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,19 @@ class EmployeeService:
         user = self.session.get(User, user_id)
         u_name = user.username if user else str(user_id)
         logger.info(f"[AVAILABILITY] Użytkownik '{u_name}' (id={user_id}) zapisał dyspozycyjność ({len(updates)} wpisów) [tenant:{self.tenant_id}].")
+        dates_sorted = sorted({str(u.date) for u in updates})
+        date_range_str = f"{dates_sorted[0]} – {dates_sorted[-1]}" if len(dates_sorted) > 1 else (dates_sorted[0] if dates_sorted else "-")
+        log_event(
+            "AVAILABILITY",
+            "Zapisano dyspozycyjność pracownika",
+            {
+                "pracownik": user.full_name if user else u_name,
+                "zakres_dat": date_range_str,
+                "liczba_wpisow": len(updates),
+            },
+            actor=user or u_name,
+            tenant_id=self.tenant_id,
+        )
 
     def link_google_calendar(self, user_id: UUID, auth_code: str):
         import os
@@ -584,10 +598,35 @@ class EmployeeService:
                 f"[ATTENDANCE] Zgłoszono nieobecność: data={target_date}, powód='{absence_reason}', "
                 f"użytkownik '{current_user.username}' (id={current_user.id}) [tenant:{self.tenant_id}]."
             )
+            log_event(
+                "ATTENDANCE",
+                "Zgłoszono nieobecność na zmianie",
+                {
+                    "pracownik": current_user.full_name,
+                    "data": str(target_date),
+                    "powod": absence_reason,
+                },
+                level="WARNING",
+                actor=current_user,
+                tenant_id=self.tenant_id,
+            )
         else:
             logger.info(
                 f"[ATTENDANCE] Zarejestrowano obecność: data={target_date}, godziny={check_in}-{check_out}, "
                 f"status={status.value}, planowana={was_scheduled}, użytkownik '{current_user.username}' (id={current_user.id}) [tenant:{self.tenant_id}]."
+            )
+            log_event(
+                "ATTENDANCE",
+                "Zarejestrowano obecność",
+                {
+                    "pracownik": current_user.full_name,
+                    "data": str(target_date),
+                    "godziny": f"{check_in} - {check_out}",
+                    "status": status.value,
+                    "planowana": was_scheduled,
+                },
+                actor=current_user,
+                tenant_id=self.tenant_id,
             )
 
         return {

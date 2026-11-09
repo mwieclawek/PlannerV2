@@ -15,7 +15,8 @@ connect_args = {}
 if "sqlite" in DATABASE_URL:
     connect_args["check_same_thread"] = False
 
-engine = create_engine(DATABASE_URL, echo=True, connect_args=connect_args)
+sql_echo = os.getenv("SQL_ECHO", "false").lower() in ("true", "1", "yes")
+engine = create_engine(DATABASE_URL, echo=sql_echo, connect_args=connect_args)
 
 def init_db():
     SQLModel.metadata.create_all(engine)

@@ -129,6 +129,11 @@ def create_restaurant(
         "SYSADMIN %s created restaurant id=%s slug=%s",
         superadmin.email or superadmin.username, restaurant.id, restaurant.slug,
     )
+    log_service.log_event(
+        "CONFIG", "Utworzono nową restaurację",
+        {"restauracja": restaurant.name, "slug": restaurant.slug},
+        actor=superadmin, tenant_id=restaurant.id, tenant_name=restaurant.name,
+    )
     return _to_response(restaurant)
 
 
@@ -155,6 +160,13 @@ def update_restaurant_status(
     logger.info(
         "SYSADMIN %s set restaurant id=%s is_active=%s",
         superadmin.email or superadmin.username, restaurant.id, restaurant.is_active,
+    )
+    log_service.log_event(
+        "CONFIG",
+        "Odblokowano restaurację" if restaurant.is_active else "Zablokowano restaurację",
+        {"restauracja": restaurant.name, "aktywna": restaurant.is_active},
+        level="INFO" if restaurant.is_active else "WARNING",
+        actor=superadmin, tenant_id=restaurant.id, tenant_name=restaurant.name,
     )
     user_count = _count_by_tenant(session).get(restaurant.id, 0)
     manager_count = _count_by_tenant(
@@ -320,6 +332,11 @@ def reset_user_password(
         "SYSADMIN %s reset password for user %s",
         superadmin.email or superadmin.username, user.id,
     )
+    log_service.log_event(
+        "AUTH", "Zresetowano hasło użytkownika przez SuperAdmina",
+        {"uzytkownik": f"{user.full_name} ({user.username})"},
+        level="WARNING", actor=superadmin, tenant_id=user.tenant_id,
+    )
     return {"message": "Hasło zostało zmienione"}
 
 
@@ -327,6 +344,7 @@ def reset_user_password(
 def get_system_logs(
     restaurant_id: Optional[int] = Query(None, description="Filtruj po ID restauracji (0 = tylko logi systemowe bez tenanta)"),
     level: Optional[str] = Query(None, description="Filtruj po poziomie: ALL, DEBUG, INFO, WARNING, ERROR, CRITICAL"),
+    category: Optional[str] = Query(None, description="Filtruj po kategorii: ALL, SOLVER, DEFICIT, SCHEDULE, AVAILABILITY, SHIFT_SWAP, LEAVE, ATTENDANCE, AUTH, PUSH, GCAL, POS, ANOMALY, CONFIG, SYSTEM"),
     search: Optional[str] = Query(None, description="Szukana fraza w logach"),
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -335,12 +353,13 @@ def get_system_logs(
 ):
     """
     Pobiera i filtruje logi systemowe dla SuperAdmina.
-    Opcjonalnie filtruje po restauracji (restaurant_id) oraz poziomie logowania (level).
+    Opcjonalnie filtruje po restauracji (restaurant_id), poziomie logowania (level) i kategorii (category).
     """
     return log_service.get_logs(
         session=session,
         restaurant_id=restaurant_id,
         level=level,
+        category=category,
         search=search,
         limit=limit,
         offset=offset,

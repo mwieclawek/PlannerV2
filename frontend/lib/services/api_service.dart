@@ -1614,6 +1614,48 @@ class ApiService {
   Future<void> markAnnouncementRead(String announcementId) async {
     await _dio.post('/employee/announcements/$announcementId/read');
   }
+
+  // ── WFM Workforce Prediction & Live Labor Cost Simulator ───────────────────
+
+  Future<Map<String, dynamic>> getWfmPredictions(
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
+    final response = await _dio.get(
+      '/scheduler/wfm-predictions',
+      queryParameters: {
+        'start_date': startDate.toIso8601String().split('T')[0],
+        'end_date': endDate.toIso8601String().split('T')[0],
+      },
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  Future<Map<String, dynamic>> simulateLaborCost(
+    DateTime startDate,
+    DateTime endDate,
+    List<ScheduleEntry> entries,
+  ) async {
+    final items = entries
+        .map(
+          (e) => {
+            'date': e.date.toIso8601String().split('T')[0],
+            'shift_def_id': e.shiftDefId,
+            'user_id': e.userId,
+            'role_id': e.roleId,
+          },
+        )
+        .toList();
+    final response = await _dio.post(
+      '/scheduler/simulate-labor-cost',
+      data: {
+        'start_date': startDate.toIso8601String().split('T')[0],
+        'end_date': endDate.toIso8601String().split('T')[0],
+        'items': items,
+      },
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
 }
 
 

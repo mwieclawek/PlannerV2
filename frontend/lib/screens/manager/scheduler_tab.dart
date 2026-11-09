@@ -30,6 +30,10 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
   bool _isLoadingStats = false;
   int _localIdCounter = -1; // For generating temporary IDs
   bool _isFirstEdit = true; // To show info banner on first edit
+  Map<String, dynamic>? _wfmPredictions;
+  bool _isLoadingPredictions = false;
+  Map<int, double> _shiftDriftHoursMap = {};
+  double _overallDriftRatio = 1.0;
 
   static DateTime _getMonday(DateTime date) {
     return date.subtract(Duration(days: date.weekday - 1));
@@ -136,8 +140,44 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     }
   }
 
+  Future<void> _loadWfmPredictions() async {
+    setState(() => _isLoadingPredictions = true);
+    try {
+      final api = ref.read(apiServiceProvider);
+      final data = await api.getWfmPredictions(
+        _selectedWeekStart,
+        _selectedWeekEnd,
+      );
+      if (!mounted) return;
+      final simData = data['labor_cost_simulation'] as Map<String, dynamic>?;
+      final rawDriftMap =
+          simData?['shift_drift_hours_map'] as Map<String, dynamic>? ?? {};
+      final parsedDriftMap = <int, double>{};
+      for (final entry in rawDriftMap.entries) {
+        final k = int.tryParse(entry.key);
+        final v = (entry.value as num?)?.toDouble();
+        if (k != null && v != null) {
+          parsedDriftMap[k] = v;
+        }
+      }
+      final ratio =
+          (simData?['overall_drift_ratio'] as num?)?.toDouble() ?? 1.0;
+      setState(() {
+        _wfmPredictions = data;
+        _shiftDriftHoursMap = parsedDriftMap;
+        _overallDriftRatio = ratio >= 1.0 ? ratio : 1.0;
+        _isLoadingPredictions = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoadingPredictions = false);
+      }
+    }
+  }
+
   Future<void> _loadSchedule() async {
     _loadEmployeeHours();
+    _loadWfmPredictions();
     try {
       final api = ref.read(apiServiceProvider);
       final schedules = await api.getManagerSchedule(
@@ -1333,7 +1373,17 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
             ),
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+
+          // Expandable Panel: Analityka i Predykcja WFM (AI Worker)
+          _buildWfmAnalyticsPanel(context),
+
+          const SizedBox(height: 12),
+
+          // Live Bar: Symulator Kosztu Tygodnia (Live Labor Cost)
+          _buildLiveLaborCostBar(context),
+
+          const SizedBox(height: 20),
 
           // Results / Schedule Display
           if (_scheduleEntries.isNotEmpty && _shifts.isNotEmpty) ...[
@@ -1619,6 +1669,718 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  WFM Workforce Prediction & Live Labor Cost Simulator Helpers
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  double _calcShiftDurationHours(String startTime, String endTime) {
+    final startParts = startTime.split(':');
+    final endParts = endTime.split(':');
+    if (startParts.length < 2 || endParts.length < 2) return 8.0;
+    final sh = int.tryParse(startParts[0]) ?? 0;
+    final sm = int.tryParse(startParts[1]) ?? 0;
+    final eh = int.tryParse(endParts[0]) ?? 0;
+    final em = int.tryParse(endParts[1]) ?? 0;
+    int startMinutes = sh * 60 + sm;
+    int endMinutes = eh * 60 + em;
+    if (endMinutes <= startMinutes) {
+      endMinutes += 24 * 60;
+    }
+    return (endMinutes - startMinutes) / 60.0;
+  }
+
+  double _resolveEffectiveHourlyRate(
+    TeamMember? user,
+    int roleId,
+    Map<int, JobRole> roleMap,
+  ) {
+    if (user != null && user.hourlyRate != null && user.hourlyRate! > 0) {
+      return user.hourlyRate!;
+    }
+    final assignedRole = roleMap[roleId];
+    if (assignedRole != null &&
+        assignedRole.hourlyRate != null &&
+        assignedRole.hourlyRate! > 0) {
+      return assignedRole.hourlyRate!;
+    }
+    if (user != null) {
+      for (final rid in user.jobRoleIds) {
+        final r = roleMap[rid];
+        if (r != null && r.hourlyRate != null && r.hourlyRate! > 0) {
+          return r.hourlyRate!;
+        }
+      }
+    }
+    return 0.0;
+  }
+
+  Map<String, dynamic> _computeLiveLaborCostData() {
+    final userMap = {for (final u in _users) u.id: u};
+    final roleMap = {for (final r in _roles) r.id: r};
+    final shiftMap = {for (final s in _shifts) s.id: s};
+
+    double totalPlannedHours = 0.0;
+    double totalProjectedHours = 0.0;
+    double estimatedPlannedCost = 0.0;
+    double projectedCostWithDrift = 0.0;
+
+    final Map<int, Map<String, dynamic>> roleBreakdown = {
+      for (final r in _roles)
+        r.id: {
+          'role_id': r.id,
+          'role_name': r.name,
+          'color_hex': r.colorHex,
+          'planned_hours': 0.0,
+          'planned_cost': 0.0,
+          'projected_cost_with_drift': 0.0,
+          'shifts_count': 0,
+        },
+    };
+
+    const polishShortDays = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob', 'Ndz'];
+    final List<Map<String, dynamic>> dailyCosts = List.generate(7, (idx) {
+      final d = _selectedWeekStart.add(Duration(days: idx));
+      return {
+        'date': d,
+        'date_key': DateFormat('yyyy-MM-dd').format(d),
+        'day_label': '${polishShortDays[idx]} ${DateFormat('dd.MM').format(d)}',
+        'planned_hours': 0.0,
+        'planned_cost': 0.0,
+        'projected_cost_with_drift': 0.0,
+        'shifts_count': 0,
+        'is_most_expensive': false,
+      };
+    });
+    final dailyByKey = {
+      for (final item in dailyCosts) item['date_key'] as String: item,
+    };
+
+    for (final entry in _scheduleEntries) {
+      final shift = shiftMap[entry.shiftDefId];
+      final startStr = shift?.startTime ?? entry.startTime;
+      final endStr = shift?.endTime ?? entry.endTime;
+      final plannedHrs = _calcShiftDurationHours(startStr, endStr);
+
+      double driftHrs = _shiftDriftHoursMap[entry.shiftDefId] ?? 0.0;
+      if (driftHrs == 0.0 && _overallDriftRatio > 1.0) {
+        driftHrs = plannedHrs * (_overallDriftRatio - 1.0);
+      }
+      final projectedHrs = plannedHrs + driftHrs;
+
+      final user = userMap[entry.userId];
+      final rate = _resolveEffectiveHourlyRate(user, entry.roleId, roleMap);
+
+      final pCost = plannedHrs * rate;
+      final projCost = projectedHrs * rate;
+
+      totalPlannedHours += plannedHrs;
+      totalProjectedHours += projectedHrs;
+      estimatedPlannedCost += pCost;
+      projectedCostWithDrift += projCost;
+
+      final rStat = roleBreakdown.putIfAbsent(
+        entry.roleId,
+        () => {
+          'role_id': entry.roleId,
+          'role_name': entry.roleName,
+          'color_hex': '#607D8B',
+          'planned_hours': 0.0,
+          'planned_cost': 0.0,
+          'projected_cost_with_drift': 0.0,
+          'shifts_count': 0,
+        },
+      );
+      rStat['planned_hours'] = (rStat['planned_hours'] as double) + plannedHrs;
+      rStat['planned_cost'] = (rStat['planned_cost'] as double) + pCost;
+      rStat['projected_cost_with_drift'] =
+          (rStat['projected_cost_with_drift'] as double) + projCost;
+      rStat['shifts_count'] = (rStat['shifts_count'] as int) + 1;
+
+      final dKey = DateFormat('yyyy-MM-dd').format(entry.date);
+      final dStat = dailyByKey[dKey];
+      if (dStat != null) {
+        dStat['planned_hours'] =
+            (dStat['planned_hours'] as double) + plannedHrs;
+        dStat['planned_cost'] = (dStat['planned_cost'] as double) + pCost;
+        dStat['projected_cost_with_drift'] =
+            (dStat['projected_cost_with_drift'] as double) + projCost;
+        dStat['shifts_count'] = (dStat['shifts_count'] as int) + 1;
+      }
+    }
+
+    double maxDayCost = 0.0;
+    for (final dStat in dailyCosts) {
+      final c = dStat['planned_cost'] as double;
+      if (c > maxDayCost) maxDayCost = c;
+    }
+    if (maxDayCost > 0) {
+      for (final dStat in dailyCosts) {
+        final c = dStat['planned_cost'] as double;
+        if ((c - maxDayCost).abs() < 0.01) {
+          dStat['is_most_expensive'] = true;
+        }
+      }
+    }
+
+    final avgHourlyCost =
+        totalPlannedHours > 0 ? estimatedPlannedCost / totalPlannedHours : 0.0;
+
+    final sortedRoles = roleBreakdown.values.toList()
+      ..sort(
+        (a, b) => (b['planned_hours'] as double).compareTo(
+          a['planned_hours'] as double,
+        ),
+      );
+
+    return {
+      'total_planned_hours': totalPlannedHours,
+      'total_projected_hours': totalProjectedHours,
+      'estimated_planned_cost': estimatedPlannedCost,
+      'projected_cost_with_drift': projectedCostWithDrift,
+      'avg_hourly_cost': avgHourlyCost,
+      'roles': sortedRoles,
+      'daily': dailyCosts,
+    };
+  }
+
+  Widget _buildLiveLaborCostBar(BuildContext context) {
+    final sim = _computeLiveLaborCostData();
+    final totalHours = sim['total_planned_hours'] as double;
+    final plannedCost = sim['estimated_planned_cost'] as double;
+    final projectedCost = sim['projected_cost_with_drift'] as double;
+    final avgRate = sim['avg_hourly_cost'] as double;
+    final rolesList = sim['roles'] as List<Map<String, dynamic>>;
+    final dailyList = sim['daily'] as List<Map<String, dynamic>>;
+    final driftDelta = projectedCost - plannedCost;
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.indigo.shade100),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.payments_outlined, color: Colors.indigo.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Symulator Kosztu Tygodnia (Live Labor Cost)',
+                    style: GoogleFonts.outfit(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo.shade900,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.green.shade200),
+                  ),
+                  child: Text(
+                    'LIVE',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              children: [
+                _buildCostMetricBadge(
+                  label: 'Zaplanowane godziny w tygodniu',
+                  value: '${totalHours.toStringAsFixed(1)} h',
+                  icon: Icons.schedule,
+                  color: Colors.blue.shade800,
+                  bgColor: Colors.blue.shade50,
+                ),
+                _buildCostMetricBadge(
+                  label: 'Szacowany koszt grafiku (Plan)',
+                  value: '${plannedCost.toStringAsFixed(2)} PLN',
+                  icon: Icons.account_balance_wallet_outlined,
+                  color: Colors.indigo.shade800,
+                  bgColor: Colors.indigo.shade50,
+                ),
+                _buildCostMetricBadge(
+                  label: 'Prognozowany koszt z uwzględnieniem dryfu obecności',
+                  value:
+                      '${projectedCost.toStringAsFixed(2)} PLN${driftDelta > 0.01 ? " (+${driftDelta.toStringAsFixed(2)} PLN)" : ""}',
+                  icon: Icons.trending_up,
+                  color:
+                      driftDelta > 0.01
+                          ? Colors.deepOrange.shade800
+                          : Colors.teal.shade800,
+                  bgColor:
+                      driftDelta > 0.01
+                          ? Colors.deepOrange.shade50
+                          : Colors.teal.shade50,
+                ),
+                _buildCostMetricBadge(
+                  label: 'Średni koszt roboczogodziny',
+                  value: '${avgRate.toStringAsFixed(2)} PLN/h',
+                  icon: Icons.speed,
+                  color: Colors.purple.shade800,
+                  bgColor: Colors.purple.shade50,
+                ),
+              ],
+            ),
+            if (rolesList.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Podział godzin i kosztów wg ról:',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children:
+                    rolesList.map((r) {
+                      final rHours = r['planned_hours'] as double;
+                      final rCost = r['planned_cost'] as double;
+                      final rHex = (r['color_hex'] as String?) ?? '#607D8B';
+                      Color roleColor = Colors.blueGrey;
+                      try {
+                        roleColor = Color(
+                          int.parse(rHex.replaceFirst('#', '0xFF')),
+                        );
+                      } catch (_) {}
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: roleColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: roleColor.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: Text(
+                          '${r['role_name']}: ${rHours.toStringAsFixed(1)} h (${rCost.toStringAsFixed(0)} PLN)',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: roleColor,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              'Koszt w podziale na dni tygodnia (podświetlono najdroższe dni):',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children:
+                    dailyList.map((d) {
+                      final isMax = d['is_most_expensive'] == true;
+                      final dHours = d['planned_hours'] as double;
+                      final dCost = d['planned_cost'] as double;
+                      return Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              isMax
+                                  ? Colors.amber.shade100
+                                  : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color:
+                                isMax
+                                    ? Colors.deepOrange.shade400
+                                    : Colors.grey.shade300,
+                            width: isMax ? 1.8 : 1.0,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isMax) ...[
+                                  Icon(
+                                    Icons.local_fire_department,
+                                    size: 14,
+                                    color: Colors.deepOrange.shade700,
+                                  ),
+                                  const SizedBox(width: 4),
+                                ],
+                                Text(
+                                  d['day_label'] as String,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color:
+                                        isMax
+                                            ? Colors.deepOrange.shade900
+                                            : Colors.grey.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${dCost.toStringAsFixed(0)} PLN',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color:
+                                    isMax
+                                        ? Colors.deepOrange.shade900
+                                        : Colors.black87,
+                              ),
+                            ),
+                            Text(
+                              '${dHours.toStringAsFixed(1)} h',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCostMetricBadge({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+    required Color bgColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              Text(
+                value,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWfmAnalyticsPanel(BuildContext context) {
+    final bottleneckForecast =
+        _wfmPredictions?['bottleneck_forecast'] as Map<String, dynamic>?;
+    final bottlenecks =
+        (bottleneckForecast?['bottlenecks'] as List?)
+            ?.cast<Map<String, dynamic>>() ??
+        [];
+    final targetRisks =
+        (bottleneckForecast?['employee_target_risks'] as List?)
+            ?.cast<Map<String, dynamic>>()
+            .where((r) => (r['risk_level'] ?? 'LOW') != 'LOW')
+            .toList() ??
+        [];
+
+    final driftData =
+        _wfmPredictions?['attendance_drift'] as Map<String, dynamic>?;
+    final driftingShifts =
+        (driftData?['drifting_shifts'] as List?)
+            ?.cast<Map<String, dynamic>>() ??
+        [];
+    final monthlyProj =
+        driftData?['monthly_projection'] as Map<String, dynamic>?;
+
+    final stabilityData =
+        _wfmPredictions?['shift_stability'] as Map<String, dynamic>?;
+    final hotspots =
+        (stabilityData?['hotspots'] as List?)?.cast<Map<String, dynamic>>() ??
+        [];
+
+    final totalAlerts =
+        bottlenecks.length + driftingShifts.length + targetRisks.length;
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color:
+              totalAlerts > 0 ? Colors.amber.shade400 : Colors.blueGrey.shade100,
+        ),
+      ),
+      child: ExpansionTile(
+        leading: Icon(
+          Icons.psychology_outlined,
+          color:
+              totalAlerts > 0
+                  ? Colors.deepOrange.shade700
+                  : Colors.indigo.shade700,
+        ),
+        title: Text(
+          'Analityka i Predykcja WFM (AI Worker)',
+          style: GoogleFonts.outfit(
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle:
+            _isLoadingPredictions
+                ? const Text('Przeliczanie predykcji kadrowych WFM...')
+                : Text(
+                  'Wąskie gardła: ${bottlenecks.length} • Dryf zmian: ${driftingShifts.length} • Ryzyka etatowe: ${targetRisks.length}',
+                  style: GoogleFonts.inter(fontSize: 12),
+                ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          const Divider(),
+          // 1. Bottlenecks
+          Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                size: 18,
+                color: Colors.red.shade700,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '1. Wąskie gardła dyspozycyjności i urlopów (Tydzień / Miesiąc)',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (bottlenecks.isEmpty)
+            Text(
+              'Brak wykrytych wąskich gardeł obsadowych w nadchodzącym okresie.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: Colors.green.shade700,
+              ),
+            )
+          else
+            ...bottlenecks.take(8).map(
+              (b) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      b['severity'] == 'CRITICAL'
+                          ? Icons.error_outline
+                          : Icons.info_outline,
+                      size: 15,
+                      color:
+                          b['severity'] == 'CRITICAL'
+                              ? Colors.red.shade700
+                              : Colors.orange.shade800,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        b['message']?.toString() ?? '',
+                        style: GoogleFonts.inter(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+
+          // 2. Attendance Drift
+          Row(
+            children: [
+              Icon(Icons.more_time, size: 18, color: Colors.deepOrange.shade700),
+              const SizedBox(width: 6),
+              Text(
+                '2. Predykcja dryfu godzinowego i nadgodzin (Schedule vs. Attendance)',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (monthlyProj != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                'Prognoza na koniec miesiąca: Plan ${monthlyProj['planned_hours']}h (${monthlyProj['planned_cost']} PLN) → '
+                'Realne wykonanie z dryfem: ${monthlyProj['projected_actual_hours']}h (${monthlyProj['projected_actual_cost']} PLN)',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.indigo.shade900,
+                ),
+              ),
+            ),
+          if (driftingShifts.isEmpty)
+            Text(
+              'Brak zmian regularnie przekraczających planowany czas zakończenia.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: Colors.grey.shade700,
+              ),
+            )
+          else
+            ...driftingShifts.map(
+              (ds) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  '• ${ds['message']}',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.deepOrange.shade900,
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+
+          // 3. Employee Monthly Target Risks
+          Row(
+            children: [
+              Icon(
+                Icons.manage_accounts_outlined,
+                size: 18,
+                color: Colors.purple.shade700,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '3. Ryzyko niewyrobienia lub przekroczenia celów miesięcznych',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (targetRisks.isEmpty)
+            Text(
+              'Wszyscy pracownicy są na dobrej drodze do wyrobienia celów miesięcznych.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: Colors.green.shade700,
+              ),
+            )
+          else
+            ...targetRisks.map(
+              (tr) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  '• ${tr['message']}',
+                  style: GoogleFonts.inter(fontSize: 12),
+                ),
+              ),
+            ),
+          const SizedBox(height: 12),
+
+          // 4. Shift Stability / Giveaways
+          Row(
+            children: [
+              Icon(Icons.swap_horiz, size: 18, color: Colors.teal.shade700),
+              const SizedBox(width: 6),
+              Text(
+                '4. Analiza stabilności zmian (Giełda wymian / Rotacja)',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (hotspots.isEmpty)
+            Text(
+              'Brak podwyższonej rotacji na zmianach w badanym okresie.',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: Colors.grey.shade700,
+              ),
+            )
+          else
+            ...hotspots.take(5).map(
+              (hs) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  '• ${hs['message']}',
+                  style: GoogleFonts.inter(fontSize: 12),
+                ),
+              ),
+            ),
         ],
       ),
     );
