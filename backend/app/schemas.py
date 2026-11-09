@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, model_validator, ValidationInfo
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator, ValidationInfo
 from datetime import datetime, date as date_type, time
 from typing import Any, List, Optional, Union
 from uuid import UUID
@@ -49,8 +49,7 @@ class TenantResponse(TenantBase):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UserBase(BaseModel):
     username: str
@@ -100,8 +99,7 @@ class UserUpdate(BaseModel):
     hourly_rate: Optional[float] = None
     is_active: Optional[bool] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UserProfileUpdate(BaseModel):
     email: Optional[str] = None
@@ -160,8 +158,7 @@ class UserResponse(UserBase):
                 data['job_roles'] = [r.id for r in roles]
         return data
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 
@@ -183,8 +180,7 @@ class JobRoleCreate(JobRoleBase):
 class JobRoleResponse(JobRoleBase):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Shifts ---
 class ShiftDefBase(BaseModel):
@@ -248,8 +244,7 @@ class ShiftDefResponse(BaseModel):
             return [int(x) for x in v.split(',') if x.strip()]
         return v
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Availability ---
 class AvailabilityBase(BaseModel):
@@ -263,8 +258,7 @@ class AvailabilityUpdate(AvailabilityBase):
 class AvailabilityResponse(AvailabilityBase):
     user_id: UUID
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Requirements ---
 class RequirementBase(BaseModel):
@@ -300,8 +294,7 @@ class RequirementCreate(RequirementBase):
 class RequirementResponse(RequirementBase):
     id: UUID
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Scheduler ---
 class GenerateRequest(BaseModel):
@@ -414,8 +407,7 @@ class ConfigResponse(ConfigBase):
                 }
         return data
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- System Settings (Kill Switch / Maintenance Mode) ---
 class SystemSettingsResponse(BaseModel):
@@ -423,8 +415,7 @@ class SystemSettingsResponse(BaseModel):
     blocked_login_message: str
     tenant_id: Optional[int] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class SystemSettingsUpdate(BaseModel):
     is_login_enabled: Optional[bool] = None
@@ -491,8 +482,7 @@ class AttendanceResponse(AttendanceBase):
     created_at: datetime
     user_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Shift Giveaway ---
 class OfferGiveawayRequest(BaseModel):
@@ -515,8 +505,7 @@ class ShiftGiveawayResponse(BaseModel):
     start_time: Optional[str] = None
     end_time: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class GiveawaySuggestion(BaseModel):
     user_id: UUID
@@ -542,8 +531,7 @@ class ShiftAuditLogResponse(BaseModel):
     new_value: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class DashboardHomeResponse(BaseModel):
     working_today: List[ScheduleResponse]
@@ -590,8 +578,7 @@ class TableZoneResponse(BaseModel):
     sort_order: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- POS Tables ---
 
@@ -627,8 +614,7 @@ class PosTableResponse(BaseModel):
                 data.__dict__['zone_name'] = data.zone.name
         return data
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Categories ---
 
@@ -653,8 +639,7 @@ class CategoryResponse(BaseModel):
     sort_order: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Menu Items (v2) ---
 
@@ -701,8 +686,7 @@ class MenuItemResponseV2(BaseModel):
                 data.__dict__['category_name'] = data.category_rel.name
         return data
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Modifier Groups & Modifiers ---
 
@@ -719,8 +703,7 @@ class ModifierResponse(BaseModel):
     sort_order: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ModifierGroupCreate(BaseModel):
     name: str
@@ -736,8 +719,7 @@ class ModifierGroupResponse(BaseModel):
     is_active: bool
     modifiers: List[ModifierResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Orders (v2) ---
 
@@ -750,8 +732,7 @@ class OrderItemModifierResponse(BaseModel):
     modifier_name_snapshot: str
     price_snapshot: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class OrderItemCreate(BaseModel):
     menu_item_id: UUID
@@ -775,8 +756,7 @@ class OrderItemResponse(BaseModel):
     split_tag: Optional[str] = None
     modifiers: List[OrderItemModifierResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class OrderItemKDSStatusUpdate(BaseModel):
     kds_status: OrderItemKDSStatus
@@ -804,8 +784,7 @@ class OrderResponse(BaseModel):
     amount_paid: float = 0.0
     amount_due: float = 0.0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class OrderStatusUpdate(BaseModel):
     status: OrderStatus
@@ -831,8 +810,7 @@ class PaymentResponse(BaseModel):
     received_by: UUID
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class TipSummaryResponse(BaseModel):
     """Per-waiter tip summary for Smart Tips Tracker."""
@@ -852,8 +830,7 @@ class RestaurantTableResponse(BaseModel):
     name: str
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class MenuItemCreate(BaseModel):
     name: str
@@ -891,8 +868,7 @@ class MenuItemResponse(BaseModel):
                 data['category'] = val
         return data
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class KitchenOrderItemCreate(BaseModel):
     menu_item_id: UUID
@@ -908,8 +884,7 @@ class KitchenOrderItemResponse(BaseModel):
     unit_price: float
     menu_item_name: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class KitchenOrderCreate(BaseModel):
     table_id: UUID
@@ -927,8 +902,7 @@ class KitchenOrderResponse(BaseModel):
     waiter_name: Optional[str] = None
     total_amount: Optional[float] = 0.0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class KitchenOrderStatusUpdate(BaseModel):
     status: KitchenOrderStatus
@@ -949,8 +923,7 @@ class TableZoneResponse(BaseModel):
     sort_order: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ── POS Tables ─────────────────────────────────────────────────────────────────
 
@@ -977,8 +950,7 @@ class PosTableResponse(BaseModel):
     sort_order: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ── Categories ─────────────────────────────────────────────────────────────────
 
@@ -1003,8 +975,7 @@ class CategoryResponse(BaseModel):
     sort_order: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ── Menu Items v2 ──────────────────────────────────────────────────────────────
 
@@ -1041,8 +1012,7 @@ class MenuItemResponseV2(BaseModel):
     sort_order: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ── Modifier Groups ────────────────────────────────────────────────────────────
 
@@ -1059,8 +1029,7 @@ class ModifierResponse(BaseModel):
     sort_order: int
     is_active: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ModifierGroupCreate(BaseModel):
     name: str
@@ -1076,8 +1045,7 @@ class ModifierGroupResponse(BaseModel):
     is_active: bool
     modifiers: List[ModifierResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ── Orders ─────────────────────────────────────────────────────────────────────
 
@@ -1094,8 +1062,7 @@ class OrderItemModifierResponse(BaseModel):
     modifier_name_snapshot: str
     price_snapshot: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class OrderItemResponse(BaseModel):
     id: UUID
@@ -1112,8 +1079,7 @@ class OrderItemResponse(BaseModel):
     split_tag: Optional[str] = None
     modifiers: List[OrderItemModifierResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class OrderCreate(BaseModel):
     table_id: UUID
@@ -1188,8 +1154,7 @@ class OrderResponse(BaseModel):
 
         return data
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class OrderStatusUpdate(BaseModel):
     status: OrderStatus
@@ -1218,8 +1183,7 @@ class PaymentResponse(BaseModel):
     received_by: UUID
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ── Tips ───────────────────────────────────────────────────────────────────────
 
@@ -1567,8 +1531,7 @@ class ChecklistItemResponse(BaseModel):
     is_mandatory: bool
     sort_order: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ChecklistTemplateCreate(BaseModel):
@@ -1601,8 +1564,7 @@ class ChecklistTemplateResponse(BaseModel):
     created_at: datetime
     items: List[ChecklistItemResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EmployeeChecklistItemView(BaseModel):
@@ -1680,8 +1642,7 @@ class HaccpDeviceResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class HaccpLogCreate(BaseModel):
@@ -1709,8 +1670,7 @@ class HaccpLogResponse(BaseModel):
     user_name: str = ""
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

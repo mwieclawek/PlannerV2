@@ -605,7 +605,7 @@ def create_attendance(
         ).first()
         if not sched:
             raise HTTPException(status_code=404, detail="Schedule not found")
-    attendance = Attendance(**attendance_in.dict())
+    attendance = Attendance(**attendance_in.model_dump())
     session.add(attendance)
     session.commit()
     session.refresh(attendance)
@@ -617,7 +617,7 @@ def create_attendance(
     )
 
     # Ensure user relation is loaded
-    response_data = AttendanceResponse.from_orm(attendance)
+    response_data = AttendanceResponse.model_validate(attendance)
     if attendance.user:
         response_data.user_name = attendance.user.full_name
     return response_data

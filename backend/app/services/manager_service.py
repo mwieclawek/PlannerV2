@@ -335,7 +335,7 @@ class ManagerService:
         config = self.session.get(RestaurantConfig, self.tenant_id)
         if not config:
             config = self.session.exec(select(RestaurantConfig)).first()
-        data = update.dict(exclude_unset=True)
+        data = update.model_dump(exclude_unset=True)
         opening_hours_json = data.pop("opening_hours", None)
         
         if not config:
@@ -408,7 +408,7 @@ class ManagerService:
         # Actually pydantic v2 `model_dump(exclude_unset=True)` keeps explicitly set Nones if the field
         # is optional and unset wasn't true. BUT `update: UserUpdate` might receive nulls 
         # that are treated as set. Let's see:
-        data = update.dict(exclude_unset=True)
+        data = update.model_dump(exclude_unset=True)
         
         # In Pydantic, if a field is sent as null in JSON, it is "set" to None.
         # exclude_unset=True will INCLUDE it, but only if the frontend actually sent `"target_hours_per_month": null`.

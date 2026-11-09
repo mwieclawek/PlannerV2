@@ -126,7 +126,7 @@ class TestTokenValidation:
         token = create_access_token(data)
         
         with pytest.raises(JWTError):
-            jwt.decode(token, "wrong_secret_key", algorithms=[ALGORITHM])
+            jwt.decode(token, "wrong_key_for_hmac_sha256_validation_test_32b", algorithms=[ALGORITHM])
     
     def test_token_decode_invalid_algorithm(self):
         """Test that token with wrong algorithm fails"""

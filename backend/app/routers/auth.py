@@ -276,7 +276,7 @@ def update_users_me(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    data = profile_data.dict(exclude_unset=True)
+    data = profile_data.model_dump(exclude_unset=True)
     if "email" in data:
         new_email = data["email"].strip().lower() if data["email"] and data["email"].strip() else None
         if new_email:

@@ -26,14 +26,14 @@ void main() {
     when(mockApiService.getAllLeaveRequests(status: anyNamed('status'))).thenAnswer((_) async => []);
     
     final TestWidgetsFlutterBinding binding = TestWidgetsFlutterBinding.ensureInitialized();
-    binding.window.physicalSizeTestValue = const Size(1080, 1920);
-    binding.window.devicePixelRatioTestValue = 1.0;
+    binding.platformDispatcher.views.first.physicalSize = const Size(1080, 1920);
+    binding.platformDispatcher.views.first.devicePixelRatio = 1.0;
   });
 
   tearDown(() {
     final TestWidgetsFlutterBinding binding = TestWidgetsFlutterBinding.ensureInitialized();
-    binding.window.clearPhysicalSizeTestValue();
-    binding.window.clearDevicePixelRatioTestValue();
+    binding.platformDispatcher.views.first.resetPhysicalSize();
+    binding.platformDispatcher.views.first.resetDevicePixelRatio();
   });
 
   Widget createWidgetUnderTest() {

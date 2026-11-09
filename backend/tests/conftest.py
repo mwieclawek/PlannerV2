@@ -2,6 +2,7 @@ import os
 import pytest
 
 os.environ.setdefault("USE_ASYNC_WORKER", "false")
+os.environ.setdefault("JWT_SECRET_KEY", "a" * 16 + "7f3c9d1b" * 4)
 from httpx import AsyncClient, ASGITransport
 from sqlmodel import SQLModel, Session, create_engine
 from sqlmodel.pool import StaticPool
