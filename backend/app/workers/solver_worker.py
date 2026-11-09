@@ -9,6 +9,7 @@ from sqlmodel import Session
 
 from ..database import engine
 from ..models import RestaurantConfig, ShiftAuditLog
+from ..services.log_service import _resolve_actor
 from ..services.scheduler_service import SchedulerService
 from ..services.solver import SolverService
 from ..tenant_context import set_current_tenant_id
@@ -169,6 +170,7 @@ def run_solver_job(
         r_client.ping()
         job_id = str(uuid4())
         result_key = f"{REDIS_RESULT_KEY_PREFIX}{job_id}"
+        actor_id, actor_name = _resolve_actor(actor)
         payload = {
             "job_id": job_id,
             "task": "solver_generate",
@@ -176,6 +178,7 @@ def run_solver_job(
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
             "save": save,
+            "actor": {"id": actor_id, "name": actor_name} if actor is not None else None,
         }
         r_client.rpush(REDIS_JOB_QUEUE_KEY, json.dumps(payload))
         logger.info(

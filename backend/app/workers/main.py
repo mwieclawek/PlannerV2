@@ -12,6 +12,13 @@ import sys
 import time
 from typing import Any, Dict
 
+from ..services.log_service import (
+    LOG_DIR,
+    LOG_FILE,
+    SqlNoiseFilter,
+    TenantLogFilter,
+    configure_noise_levels,
+)
 from .solver_worker import (
     REDIS_JOB_QUEUE_KEY,
     REDIS_RESULT_KEY_PREFIX,
@@ -25,10 +32,27 @@ from .wfm_analytics_worker import (
     execute_wfm_analytics_sync,
 )
 
+from logging.handlers import RotatingFileHandler
+
+os.makedirs(LOG_DIR, exist_ok=True)
+_log_format = "%(asctime)s [%(levelname)s] [tenant:%(tenant_id)s] %(name)s: %(message)s"
+_formatter = logging.Formatter(_log_format)
+
+_stream_handler = logging.StreamHandler()
+_stream_handler.setFormatter(_formatter)
+_stream_handler.addFilter(TenantLogFilter())
+_stream_handler.addFilter(SqlNoiseFilter())
+
+_file_handler = RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
+_file_handler.setFormatter(_formatter)
+_file_handler.addFilter(TenantLogFilter())
+_file_handler.addFilter(SqlNoiseFilter())
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] [PLANNER-WORKER] %(name)s: %(message)s",
+    handlers=[_stream_handler, _file_handler],
 )
+configure_noise_levels()
 logger = logging.getLogger("app.workers.main")
 
 _running = True
@@ -55,6 +79,7 @@ def process_single_job(raw_payload: str) -> Dict[str, Any]:
         s_date = date.fromisoformat(data["start_date"])
         e_date = date.fromisoformat(data["end_date"])
         save = bool(data.get("save", False))
+        actor = data.get("actor")
         logger.info(
             f"Przetwarzanie zadania solver_generate ({s_date}..{e_date}) dla tenant_id={tenant_id}"
         )
@@ -65,6 +90,7 @@ def process_single_job(raw_payload: str) -> Dict[str, Any]:
             save=save,
             session=None,
             executed_via="async_worker",
+            actor=actor,
         )
 
     elif task_type == "wfm_analytics":

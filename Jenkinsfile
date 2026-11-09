@@ -123,7 +123,7 @@ pipeline {
                 script {
                     sh 'apk add --no-cache curl sed || true'
                     
-                    echo "🧹 START BAZY DEV (JEŚLI NIE DZIAŁA)..."
+                    echo "🧹 START BAZY DEV I REDIS DEV (JEŚLI NIE DZIAŁAJĄ)..."
                     sh 'docker network create plannerv2-network || true'
                     
                     sh '''
@@ -136,6 +136,16 @@ pipeline {
                             sleep 10
                         else
                             echo "✅ Baza DEV już działa. Pomijam uruchamianie."
+                        fi
+
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-redis-dev 2>/dev/null)" != "true" ]; then
+                            echo "⚡ Redis DEV nie działa. Uruchamiam..."
+                            docker rm -f plannerv2-redis-dev || true
+                            docker run -d --name plannerv2-redis-dev --network plannerv2-network \\
+                              --restart unless-stopped redis:7-alpine
+                            sleep 3
+                        else
+                            echo "✅ Redis DEV już działa. Pomijam uruchamianie."
                         fi
                     '''
                     
@@ -171,7 +181,10 @@ pipeline {
                         // lecz tworzymy kontener, kopiujemy plik klucza przez docker cp i uruchamiamy kontener.
                         sh """
                             docker create --name plannerv2-backend-dev-new --network plannerv2-network \\
+                            -v plannerv2_logs_dev:/app/logs \\
                             -e DATABASE_URL="postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db" \\
+                            -e REDIS_URL="redis://plannerv2-redis-dev:6379/0" \\
+                            -e USE_ASYNC_WORKER="true" \\
                             -e GITHUB_TOKEN="\${GH_TOKEN}" \\
                             -e JWT_SECRET_KEY="\${JWT_SECRET}" \\
                             -e MANAGER_REGISTRATION_PIN="\${MGR_PIN}" \\
@@ -185,6 +198,18 @@ pipeline {
                             docker cp "\${FIREBASE_KEY}" plannerv2-backend-dev-new:/app/firebase-admin-key.json
                             docker exec plannerv2-db-dev psql -U planner_user -d planner_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'planner_db' AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';" >/dev/null 2>&1 || true
                             docker start plannerv2-backend-dev-new
+
+                            docker stop plannerv2-worker-dev || true
+                            docker rm -f plannerv2-worker-dev || true
+                            docker run -d --name plannerv2-worker-dev --network plannerv2-network \\
+                            -v plannerv2_logs_dev:/app/logs \\
+                            -e DATABASE_URL="postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db" \\
+                            -e REDIS_URL="redis://plannerv2-redis-dev:6379/0" \\
+                            -e USE_ASYNC_WORKER="true" \\
+                            -e JWT_SECRET_KEY="\${JWT_SECRET}" \\
+                            -e ENCRYPTION_KEY="\${ENCRYPTION_KEY}" \\
+                            -e PYTHONPATH="/app/backend:/app" \\
+                            --restart unless-stopped plannerv2-backend:dev python -m app.workers.main
                         """
                     }
                     sh 'sleep 10'
@@ -316,7 +341,7 @@ pipeline {
                     echo "🚀 DEPLOY PRODUKCJI: ${env.TAG_NAME}"
                     sh 'apk add --no-cache curl || true'
                     
-                    echo "🧹 START BAZY PROD (JEŚLI NIE DZIAŁA)..."
+                    echo "🧹 START BAZY PROD I REDIS PROD (JEŚLI NIE DZIAŁAJĄ)..."
                     sh 'docker network create plannerv2-network || true'
                     
                     sh '''
@@ -328,6 +353,16 @@ pipeline {
                             sleep 10
                         else
                             echo "✅ Baza PROD już działa. Pomijam uruchamianie."
+                        fi
+
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-redis 2>/dev/null)" != "true" ]; then
+                            echo "⚡ Redis PROD nie działa. Uruchamiam..."
+                            docker rm -f plannerv2-redis || true
+                            docker run -d --name plannerv2-redis --network plannerv2-network \\
+                              --restart unless-stopped redis:7-alpine
+                            sleep 3
+                        else
+                            echo "✅ Redis PROD już działa. Pomijam uruchamianie."
                         fi
                     '''
                     
@@ -361,7 +396,10 @@ pipeline {
                     ]) {
                         sh """
                             docker create --name plannerv2-backend-new --network plannerv2-network \\
+                            -v plannerv2_logs:/app/logs \\
                             -e DATABASE_URL="postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db" \\
+                            -e REDIS_URL="redis://plannerv2-redis:6379/0" \\
+                            -e USE_ASYNC_WORKER="true" \\
                             -e GITHUB_TOKEN="\${GH_TOKEN}" \\
                             -e JWT_SECRET_KEY="\${JWT_SECRET}" \\
                             -e MANAGER_REGISTRATION_PIN="\${MGR_PIN}" \\
@@ -375,6 +413,18 @@ pipeline {
                             docker cp "\${FIREBASE_KEY}" plannerv2-backend-new:/app/firebase-admin-key.json
                             docker exec plannerv2-db psql -U planner_user -d planner_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'planner_db' AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';" >/dev/null 2>&1 || true
                             docker start plannerv2-backend-new
+
+                            docker stop plannerv2-worker || true
+                            docker rm -f plannerv2-worker || true
+                            docker run -d --name plannerv2-worker --network plannerv2-network \\
+                            -v plannerv2_logs:/app/logs \\
+                            -e DATABASE_URL="postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db" \\
+                            -e REDIS_URL="redis://plannerv2-redis:6379/0" \\
+                            -e USE_ASYNC_WORKER="true" \\
+                            -e JWT_SECRET_KEY="\${JWT_SECRET}" \\
+                            -e ENCRYPTION_KEY="\${ENCRYPTION_KEY}" \\
+                            -e PYTHONPATH="/app/backend:/app" \\
+                            --restart unless-stopped plannerv2-backend:latest python -m app.workers.main
                         """
                     }
                     sh 'sleep 10'
