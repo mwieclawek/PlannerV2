@@ -2128,6 +2128,11 @@ class ShiftAuditLogEntry {
   final String? oldValue;
   final String? newValue;
   final DateTime createdAt;
+  final String? shiftNameSnapshot;
+  final String? roleNameSnapshot;
+  final String? targetUserName;
+  final String? actorName;
+  final String? summary;
 
   ShiftAuditLogEntry({
     required this.id,
@@ -2142,6 +2147,11 @@ class ShiftAuditLogEntry {
     this.oldValue,
     this.newValue,
     required this.createdAt,
+    this.shiftNameSnapshot,
+    this.roleNameSnapshot,
+    this.targetUserName,
+    this.actorName,
+    this.summary,
   });
 
   factory ShiftAuditLogEntry.fromJson(Map<String, dynamic> json) =>
@@ -2165,6 +2175,11 @@ class ShiftAuditLogEntry {
                 ? DateTime.tryParse(json['created_at'].toString()) ??
                     DateTime.now()
                 : DateTime.now(),
+        shiftNameSnapshot: json['shift_name_snapshot']?.toString(),
+        roleNameSnapshot: json['role_name_snapshot']?.toString(),
+        targetUserName: json['target_user_name']?.toString(),
+        actorName: json['actor_name']?.toString(),
+        summary: json['summary']?.toString(),
       );
 }
 

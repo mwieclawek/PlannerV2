@@ -1008,6 +1008,15 @@ class ManagerService:
             self.session.add(target_schedule)
             self.session.add(giveaway)
 
+            user_a_name = user_a.full_name
+            user_b_name = user_b.full_name
+            actor_user = self.session.get(User, changed_by_user_id) if changed_by_user_id else None
+            actor_name = actor_user.full_name if actor_user else "Manager"
+            shift_a = self.session.get(ShiftDefinition, schedule.shift_def_id)
+            shift_b = self.session.get(ShiftDefinition, target_schedule.shift_def_id)
+            s_name_a = shift_a.name if shift_a else str(schedule.shift_def_id)
+            s_name_b = shift_b.name if shift_b else str(target_schedule.shift_def_id)
+
             self.session.add(ShiftAuditLog(
                 restaurant_id=self.tenant_id,
                 shift_id=str(schedule.id),
@@ -1015,9 +1024,13 @@ class ManagerService:
                 shift_def_id=schedule.shift_def_id,
                 date=schedule.date,
                 changed_by_user_id=changed_by_user_id,
-                action="SWAP_ASSIGNMENT",
+                action="SWAPPED",
+                shift_name_snapshot=s_name_a,
+                target_user_name=user_b_name,
+                actor_name=actor_name,
                 old_value=str(user_a_id),
-                new_value=str(user_b_id)
+                new_value=str(user_b_id),
+                summary=f"Wymiana zmian: {user_a_name} -> {user_b_name} na zmianie {s_name_a}",
             ))
             self.session.add(ShiftAuditLog(
                 restaurant_id=self.tenant_id,
@@ -1026,9 +1039,13 @@ class ManagerService:
                 shift_def_id=target_schedule.shift_def_id,
                 date=target_schedule.date,
                 changed_by_user_id=changed_by_user_id,
-                action="SWAP_ASSIGNMENT",
+                action="SWAPPED",
+                shift_name_snapshot=s_name_b,
+                target_user_name=user_a_name,
+                actor_name=actor_name,
                 old_value=str(user_b_id),
-                new_value=str(user_a_id)
+                new_value=str(user_a_id),
+                summary=f"Wymiana zmian: {user_b_name} -> {user_a_name} na zmianie {s_name_b}",
             ))
             self.session.commit()
 
@@ -1064,6 +1081,12 @@ class ManagerService:
 
         self.session.add(schedule)
         self.session.add(giveaway)
+        actor_user = self.session.get(User, changed_by_user_id) if changed_by_user_id else None
+        actor_name = actor_user.full_name if actor_user else "Manager"
+        s_obj = self.session.get(ShiftDefinition, schedule.shift_def_id)
+        s_name = s_obj.name if s_obj else str(schedule.shift_def_id)
+        old_user_obj = self.session.get(User, old_user_id)
+        old_user_name = old_user_obj.full_name if old_user_obj else str(old_user_id)
         self.session.add(ShiftAuditLog(
             restaurant_id=self.tenant_id,
             shift_id=str(schedule.id),
@@ -1071,9 +1094,13 @@ class ManagerService:
             shift_def_id=schedule.shift_def_id,
             date=schedule.date,
             changed_by_user_id=changed_by_user_id,
-            action="REASSIGN",
+            action="REASSIGNED",
+            shift_name_snapshot=s_name,
+            target_user_name=new_user_check.full_name,
+            actor_name=actor_name,
             old_value=str(old_user_id),
-            new_value=str(new_user_id)
+            new_value=str(new_user_id),
+            summary=f"Oddanie zmiany: {old_user_name} -> {new_user_check.full_name} na zmianie {s_name}",
         ))
         self.session.commit()
 

@@ -231,6 +231,13 @@ class ShiftAuditLog(SQLModel, table=True):
     new_value: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    # Snapshot & human-readable summary fields
+    shift_name_snapshot: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
+    role_name_snapshot: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
+    target_user_name: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
+    actor_name: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
+    summary: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
+
     changed_by_user: Optional[User] = Relationship()
 
     @property

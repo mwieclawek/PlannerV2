@@ -844,9 +844,37 @@ def publish_schedules(
     count = sched_service.publish_schedule(s_date, e_date, background_tasks, changed_by_user_id=current_user.id)
     return {"status": "published", "count": count}
 
+def _format_audit_log_summary(l: ShiftAuditLog, author_name: Optional[str]) -> str:
+    if l.summary:
+        return l.summary
+    action = l.action
+    target = l.target_user_name or "Pracownik"
+    shift = l.shift_name_snapshot or (f"Zmiana #{l.shift_def_id}" if l.shift_def_id else "Zmiana")
+    role = l.role_name_snapshot or ""
+    role_str = f" ({role})" if role else ""
+    if action in ("ASSIGNED", "CREATED", "ASSIGNMENT_CHANGE"):
+        return f"Dodano: {target}{role_str} na zmianę {shift}"
+    elif action in ("UNASSIGNED", "UNASSIGN", "DELETED"):
+        return f"Usunięto: {target}{role_str} ze zmiany {shift}"
+    elif action in ("SWAPPED", "SWAP_ASSIGNMENT"):
+        return f"Wymiana zmian: {target} ({shift})"
+    elif action in ("REASSIGNED", "REASSIGN"):
+        return f"Oddanie zmiany: {target} ({shift})"
+    elif action == "WEEK_PUBLISHED":
+        return l.new_value or f"Opublikowano grafik na tydzień {l.date}"
+    elif action == "CONFIRM_ATTENDANCE":
+        return f"Zatwierdzono obecność: {target}"
+    elif action == "REJECT_ATTENDANCE":
+        return f"Odrzucono obecność: {target}"
+    elif action == "UPDATE_SHIFT_HOURS":
+        return f"Zaktualizowano godziny zmiany {shift}"
+    return l.new_value or l.old_value or action
+
+
 @router.get("/shifts/{shift_id}/audit-log", response_model=List[ShiftAuditLogResponse])
+@router.get("/schedules/audit-log", response_model=List[ShiftAuditLogResponse])
 def get_shift_audit_log(
-    shift_id: str,
+    shift_id: Optional[str] = "week",
     target_date: Optional[date] = Query(None, alias="date"),
     shift_def_id: Optional[int] = Query(None),
     start_date: Optional[date] = Query(None),
@@ -857,28 +885,49 @@ def get_shift_audit_log(
     """Get audit log for a shift, schedule, slot (date + shift_def_id), or date range (tenant-filtered)"""
     slot_date = target_date
     slot_shift_def_id = shift_def_id
+    effective_shift_id = shift_id or "week"
 
-    if shift_id.startswith("slot:"):
-        parts = shift_id.split(":")
+    if effective_shift_id.startswith("slot:"):
+        parts = effective_shift_id.split(":")
         if len(parts) >= 3:
             try:
                 slot_date = date.fromisoformat(parts[1])
                 slot_shift_def_id = int(parts[2])
             except (ValueError, TypeError):
                 pass
-    elif slot_date is None or slot_shift_def_id is None:
+    elif effective_shift_id not in ("week", "all") and (slot_date is None or slot_shift_def_id is None):
         try:
-            sched_uuid = UUID(str(shift_id))
+            sched_uuid = UUID(str(effective_shift_id))
             sched_obj = session.get(Schedule, sched_uuid)
             if sched_obj is not None:
                 if slot_date is None:
                     slot_date = sched_obj.date
                 if slot_shift_def_id is None:
                     slot_shift_def_id = sched_obj.shift_def_id
+            else:
+                prior = session.exec(
+                    select(ShiftAuditLog).where(
+                        ShiftAuditLog.restaurant_id == current_user.tenant_id,
+                        (ShiftAuditLog.shift_id == str(effective_shift_id)) | (ShiftAuditLog.schedule_id == sched_uuid)
+                    )
+                ).first()
+                if prior is not None:
+                    if slot_date is None:
+                        slot_date = prior.date
+                    if slot_shift_def_id is None:
+                        slot_shift_def_id = prior.shift_def_id
         except (ValueError, TypeError):
             pass
 
     query = select(ShiftAuditLog).where(ShiftAuditLog.restaurant_id == current_user.tenant_id)
+
+    # 1. Całkowite wykluczenie wpisów dotyczących wyłącznie is_published
+    query = query.where(
+        ShiftAuditLog.action != "PUBLISH",
+        (ShiftAuditLog.old_value == None) | (~ShiftAuditLog.old_value.like("%is_published%")),
+        (ShiftAuditLog.new_value == None) | (~ShiftAuditLog.new_value.like("%is_published%")),
+    )
+
     if start_date is not None and end_date is not None:
         query = query.where(
             ShiftAuditLog.date >= start_date,
@@ -886,14 +935,15 @@ def get_shift_audit_log(
         )
     elif slot_date is not None and slot_shift_def_id is not None:
         query = query.where(
-            (ShiftAuditLog.shift_id == str(shift_id))
+            (ShiftAuditLog.shift_id == str(effective_shift_id))
             | ((ShiftAuditLog.date == slot_date) & (ShiftAuditLog.shift_def_id == slot_shift_def_id))
         )
     else:
-        query = query.where(ShiftAuditLog.shift_id == str(shift_id))
+        query = query.where(ShiftAuditLog.shift_id == str(effective_shift_id))
 
     logs = session.exec(query.order_by(ShiftAuditLog.created_at.desc())).all()
 
+    shift_names_cache: Dict[int, str] = {}
     res = []
     for l in logs:
         u_name = None
@@ -901,6 +951,17 @@ def get_shift_audit_log(
             u = session.get(User, l.changed_by_user_id)
             if u:
                 u_name = u.full_name
+
+        s_name_snap = l.shift_name_snapshot
+        if not s_name_snap and l.shift_def_id:
+            if l.shift_def_id not in shift_names_cache:
+                s_def = session.get(ShiftDefinition, l.shift_def_id)
+                shift_names_cache[l.shift_def_id] = s_def.name if s_def else f"Zmiana #{l.shift_def_id}"
+            s_name_snap = shift_names_cache.get(l.shift_def_id)
+
+        actor_disp = l.actor_name or u_name or "Manager"
+        summary_disp = _format_audit_log_summary(l, actor_disp)
+
         res.append(
             ShiftAuditLogResponse(
                 id=l.id,
@@ -914,7 +975,12 @@ def get_shift_audit_log(
                 action=l.action,
                 old_value=l.old_value,
                 new_value=l.new_value,
-                created_at=l.created_at
+                created_at=l.created_at,
+                shift_name_snapshot=s_name_snap,
+                role_name_snapshot=l.role_name_snapshot,
+                target_user_name=l.target_user_name,
+                actor_name=actor_disp,
+                summary=summary_disp,
             )
         )
     return res

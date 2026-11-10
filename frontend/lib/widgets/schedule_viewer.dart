@@ -12,6 +12,7 @@ class ScheduleViewer extends StatefulWidget {
   final Map<String, String> shiftWarnings;
   final void Function(DateTime date, int shiftId)? onEmptyCellTap;
   final void Function(ScheduleEntry entry)? onAssignmentTap;
+  final void Function(DateTime date, ShiftDefinition shift)? onSlotHistoryTap;
   final bool initialEmployeeView;
 
   const ScheduleViewer({
@@ -24,6 +25,7 @@ class ScheduleViewer extends StatefulWidget {
     this.shiftWarnings = const {},
     this.onEmptyCellTap,
     this.onAssignmentTap,
+    this.onSlotHistoryTap,
     this.initialEmployeeView = false,
   });
 
@@ -732,6 +734,25 @@ class _ScheduleViewerState extends State<ScheduleViewer> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              if (widget.onSlotHistoryTap != null)
+                                Align(
+                                  alignment: Alignment.topRight,
+                                  child: InkWell(
+                                    onTap: () => widget.onSlotHistoryTap!(day, shift),
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(bottom: 2),
+                                      child: Tooltip(
+                                        message: 'Historia zmian tego slotu',
+                                        child: Icon(
+                                          Icons.history_rounded,
+                                          size: 13,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               // Show warnings at the top of the cell
                               if (hasWarnings)
                                 ...dayWarnings.map(

@@ -457,18 +457,23 @@ class SchedulerService:
                 s.is_published = True
                 self.session.add(s)
                 published_user_ids.add(s.user_id)
-                self.session.add(ShiftAuditLog(
-                    restaurant_id=self.tenant_id,
-                    shift_id=str(s.id),
-                    schedule_id=s.id,
-                    shift_def_id=s.shift_def_id,
-                    date=s.date,
-                    changed_by_user_id=changed_by_user_id,
-                    action="PUBLISH",
-                    old_value="is_published=False",
-                    new_value="is_published=True"
-                ))
                 count += 1
+
+        actor_user = self.session.get(User, changed_by_user_id) if changed_by_user_id else None
+        actor_name = actor_user.full_name if actor_user else "Manager"
+        self.session.add(ShiftAuditLog(
+            restaurant_id=self.tenant_id,
+            shift_id=f"week:{start_date.isoformat()}:{end_date.isoformat()}",
+            schedule_id=None,
+            shift_def_id=None,
+            date=start_date,
+            changed_by_user_id=changed_by_user_id,
+            actor_name=actor_name,
+            action="WEEK_PUBLISHED",
+            old_value=None,
+            new_value=f"count={count}",
+            summary=f"Opublikowano grafik na tydzień {start_date.strftime('%d.%m.%Y')} – {end_date.strftime('%d.%m.%Y')} (opublikowane zmiany: {count})"
+        ))
                 
         # Create notifications for affected users
         if background_tasks:
@@ -537,6 +542,11 @@ class SchedulerService:
         )).first()
 
         if existing_daily:
+            old_shift_obj = self.session.get(ShiftDefinition, existing_daily.shift_def_id)
+            old_role_obj = self.session.get(JobRole, existing_daily.role_id)
+            old_shift_label = old_shift_obj.name if old_shift_obj else str(existing_daily.shift_def_id)
+            old_role_label = old_role_obj.name if old_role_obj else str(existing_daily.role_id)
+
             old_val = f"user_id={existing_daily.user_id}, role_id={existing_daily.role_id}, shift_def_id={existing_daily.shift_def_id}"
             existing_daily.shift_def_id = assign.shift_def_id
             existing_daily.role_id = assign.role_id
@@ -549,9 +559,14 @@ class SchedulerService:
                 shift_def_id=assign.shift_def_id,
                 date=assign.date,
                 changed_by_user_id=changed_by_user_id,
-                action="ASSIGNMENT_CHANGE",
+                action="ASSIGNED",
+                shift_name_snapshot=shift_label,
+                role_name_snapshot=role_label,
+                target_user_name=emp_label,
+                actor_name=emp_label if not actor_user else actor_user.full_name,
                 old_value=old_val,
-                new_value=new_val
+                new_value=new_val,
+                summary=f"Zmieniono: {emp_label} ({role_label}) na zmianę {shift_label} (poprzednio: {old_shift_label})",
             ))
             self.session.commit()
             if existing_daily.is_published:
@@ -583,6 +598,7 @@ class SchedulerService:
         )
         self.session.add(new_entry)
         self.session.flush()
+        actor_name = actor_user.full_name if actor_user else "Manager"
         self.session.add(ShiftAuditLog(
             restaurant_id=self.tenant_id,
             shift_id=str(new_entry.id),
@@ -590,9 +606,14 @@ class SchedulerService:
             shift_def_id=assign.shift_def_id,
             date=assign.date,
             changed_by_user_id=changed_by_user_id,
-            action="ASSIGNMENT_CHANGE",
+            action="ASSIGNED",
+            shift_name_snapshot=shift_label,
+            role_name_snapshot=role_label,
+            target_user_name=emp_label,
+            actor_name=actor_name,
             old_value=None,
-            new_value=f"user_id={assign.user_id}, role_id={assign.role_id}, shift_def_id={assign.shift_def_id}"
+            new_value=f"user_id={assign.user_id}, role_id={assign.role_id}, shift_def_id={assign.shift_def_id}",
+            summary=f"Dodano: {emp_label} ({role_label}) na zmianę {shift_label}",
         ))
         self.session.commit()
         self.session.refresh(new_entry)
@@ -637,8 +658,11 @@ class SchedulerService:
         was_published, user_id, sched_id, s_date = entry.is_published, entry.user_id, entry.id, entry.date
         emp_obj = self.session.get(User, user_id)
         shift_obj = self.session.get(ShiftDefinition, entry.shift_def_id)
+        role_obj = self.session.get(JobRole, entry.role_id) if entry.role_id else None
         emp_label = emp_obj.full_name if emp_obj else str(user_id)
         shift_label = shift_obj.name if shift_obj else str(entry.shift_def_id)
+        role_label = role_obj.name if role_obj else "Pracownik"
+        actor_label = actor_user.full_name if actor_user else "Manager"
 
         from ..models import Attendance, ShiftAuditLog
         prior_logs = self.session.exec(
@@ -651,6 +675,12 @@ class SchedulerService:
                 pl.shift_def_id = entry.shift_def_id
             if pl.date is None:
                 pl.date = s_date
+            if pl.shift_name_snapshot is None:
+                pl.shift_name_snapshot = shift_label
+            if pl.role_name_snapshot is None:
+                pl.role_name_snapshot = role_label
+            if pl.target_user_name is None:
+                pl.target_user_name = emp_label
             pl.schedule_id = None
             self.session.add(pl)
         self.session.add(ShiftAuditLog(
@@ -660,9 +690,14 @@ class SchedulerService:
             shift_def_id=entry.shift_def_id,
             date=s_date,
             changed_by_user_id=changed_by_user_id,
-            action="UNASSIGN",
+            action="UNASSIGNED",
+            shift_name_snapshot=shift_label,
+            role_name_snapshot=role_label,
+            target_user_name=emp_label,
+            actor_name=actor_label,
             old_value=f"user_id={user_id}, role_id={entry.role_id}, shift_def_id={entry.shift_def_id}",
-            new_value=None
+            new_value=None,
+            summary=f"Usunięto: {emp_label} ({role_label}) ze zmiany {shift_label}",
         ))
         for att in self.session.exec(select(Attendance).where(Attendance.schedule_id == sched_id)).all():
             att.schedule_id = None

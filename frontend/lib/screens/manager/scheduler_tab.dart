@@ -678,7 +678,12 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
                 label: const Text('Historia zmian'),
                 onPressed: () {
                   Navigator.pop(context);
-                  _showAuditLogDialog(entry);
+                  _showSlotAuditLogDialog(
+                    entry.date,
+                    entry.shiftDefId,
+                    entry.shiftName,
+                    scheduleId: entry.id,
+                  );
                 },
               ),
               TextButton(
@@ -703,17 +708,23 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     );
   }
 
-  Future<void> _showAuditLogDialog(ScheduleEntry entry) async {
+  Future<void> _showSlotAuditLogDialog(
+    DateTime date,
+    int shiftDefId,
+    String shiftName, {
+    String? scheduleId,
+  }) async {
+    final dateStr = DateFormat('d MMM', 'pl_PL').format(date);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            const Icon(Icons.history, size: 22),
+            const Icon(Icons.history_rounded, size: 22),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Historia: ${entry.userName} (${DateFormat('d MMM', 'pl_PL').format(entry.date)})',
+                'Historia zmiany ($dateStr – $shiftName)',
                 style: const TextStyle(fontSize: 16),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -721,87 +732,32 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           ],
         ),
         content: SizedBox(
-          width: 450,
+          width: 480,
           child: FutureBuilder<List<ShiftAuditLogEntry>>(
-            future: ref
-                .read(apiServiceProvider)
-                .getShiftAuditLog(
-                  entry.id,
-                  date: entry.date,
-                  shiftDefId: entry.shiftDefId,
-                ),
+            future: ref.read(apiServiceProvider).getShiftAuditLog(
+              scheduleId ?? 'slot:${DateFormat('yyyy-MM-dd').format(date)}:$shiftDefId',
+              date: date,
+              shiftDefId: shiftDefId,
+            ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
-                  child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()),
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
                 );
               }
               if (snapshot.hasError) {
                 return Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text('Błąd pobierania historii: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+                  child: Text(
+                    'Błąd pobierania historii: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.red),
+                  ),
                 );
               }
-              final logs = snapshot.data ?? [];
-              if (logs.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: Text('Brak wpisów w historii dla tej zmiany')),
-                );
-              }
-              return ListView.separated(
-                shrinkWrap: true,
-                itemCount: logs.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, idx) {
-                  final log = logs[idx];
-                  final action = log.action;
-                  final author = log.changedByUserName ?? 'System';
-                  final createdStr = DateFormat(
-                    'd MMM yyyy HH:mm',
-                    'pl_PL',
-                  ).format(log.createdAt);
-                  final oldVal = log.oldValue;
-                  final newVal = log.newValue;
-
-                  Color badgeColor = Colors.blue.shade100;
-                  Color textColor = Colors.blue.shade900;
-                  if (action == 'DELETED') {
-                    badgeColor = Colors.red.shade100;
-                    textColor = Colors.red.shade900;
-                  } else if (action == 'CREATED') {
-                    badgeColor = Colors.green.shade100;
-                    textColor = Colors.green.shade900;
-                  } else if (action == 'SWAPPED') {
-                    badgeColor = Colors.purple.shade100;
-                    textColor = Colors.purple.shade900;
-                  }
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(color: badgeColor, borderRadius: BorderRadius.circular(4)),
-                              child: Text(action, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: textColor)),
-                            ),
-                            const Spacer(),
-                            Text(createdStr, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text('Zmienione przez: $author', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                        if (oldVal != null || newVal != null)
-                          Text('${oldVal ?? "brak"} → ${newVal ?? "brak"}', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                      ],
-                    ),
-                  );
-                },
-              );
+              return _buildAuditLogList(snapshot.data ?? []);
             },
           ),
         ),
@@ -812,6 +768,194 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _showWeekAuditLogDialog() async {
+    final startStr = DateFormat('d MMM', 'pl_PL').format(_selectedWeekStart);
+    final endStr = DateFormat('d MMM yyyy', 'pl_PL').format(
+      _selectedWeekStart.add(const Duration(days: 6)),
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.history_rounded, size: 22),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Historia zmian tygodnia ($startStr – $endStr)',
+                style: const TextStyle(fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 520,
+          child: FutureBuilder<List<ShiftAuditLogEntry>>(
+            future: ref.read(apiServiceProvider).getShiftAuditLog(
+              'week',
+              startDate: _selectedWeekStart,
+              endDate: _selectedWeekStart.add(const Duration(days: 6)),
+            ),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+              if (snapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Błąd pobierania historii: ${snapshot.error}',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                );
+              }
+              return _buildAuditLogList(snapshot.data ?? []);
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Zamknij'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAuditLogList(List<ShiftAuditLogEntry> logs) {
+    final cleanLogs = logs.where((l) {
+      if (l.action == 'PUBLISH') return false;
+      if ((l.oldValue ?? '').contains('is_published') ||
+          (l.newValue ?? '').contains('is_published')) {
+        return false;
+      }
+      if ((l.summary ?? '').contains('is_published')) return false;
+      return true;
+    }).toList();
+
+    if (cleanLogs.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(
+          child: Text(
+            'Brak wpisów w historii dla tej zmiany',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      shrinkWrap: true,
+      itemCount: cleanLogs.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, idx) {
+        final log = cleanLogs[idx];
+        final action = log.action.toUpperCase();
+        final author = log.actorName ?? log.changedByUserName ?? 'System';
+        final createdStr = DateFormat('d MMM yyyy HH:mm', 'pl_PL').format(log.createdAt);
+
+        Color badgeColor;
+        Color textColor;
+        IconData badgeIcon;
+        String actionLabel;
+
+        if (action == 'ASSIGNED' || action == 'CREATED') {
+          badgeColor = Colors.green.shade100;
+          textColor = Colors.green.shade900;
+          badgeIcon = Icons.person_add_rounded;
+          actionLabel = 'PRZYPISANIE';
+        } else if (action == 'UNASSIGNED' || action == 'DELETED') {
+          badgeColor = Colors.red.shade100;
+          textColor = Colors.red.shade900;
+          badgeIcon = Icons.person_remove_rounded;
+          actionLabel = 'USUNIĘCIE';
+        } else if (action == 'SWAPPED' || action == 'SWAP_ASSIGNMENT') {
+          badgeColor = Colors.purple.shade100;
+          textColor = Colors.purple.shade900;
+          badgeIcon = Icons.swap_horiz_rounded;
+          actionLabel = 'WYMIANA';
+        } else if (action == 'REASSIGNED') {
+          badgeColor = Colors.indigo.shade100;
+          textColor = Colors.indigo.shade900;
+          badgeIcon = Icons.assignment_ind_rounded;
+          actionLabel = 'ODDANIE';
+        } else if (action == 'WEEK_PUBLISHED') {
+          badgeColor = Colors.teal.shade100;
+          textColor = Colors.teal.shade900;
+          badgeIcon = Icons.send_rounded;
+          actionLabel = 'PUBLIKACJA';
+        } else {
+          badgeColor = Colors.blue.shade100;
+          textColor = Colors.blue.shade900;
+          badgeIcon = Icons.info_outline_rounded;
+          actionLabel = action;
+        }
+
+        final displayText = (log.summary != null && log.summary!.isNotEmpty)
+            ? log.summary!
+            : '${log.oldValue ?? "brak"} → ${log.newValue ?? "brak"}';
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: badgeColor,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(badgeIcon, size: 12, color: textColor),
+                        const SizedBox(width: 4),
+                        Text(
+                          actionLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: textColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    createdStr,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                displayText,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Wykonał: $author',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1402,6 +1546,24 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
 
           // Results / Schedule Display
           if (_scheduleEntries.isNotEmpty && _shifts.isNotEmpty) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Grafik tygodniowy',
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.history_rounded, size: 18),
+                  label: const Text('Historia zmian tygodnia'),
+                  onPressed: _showWeekAuditLogDialog,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             ScheduleViewer(
               schedules: _scheduleEntries,
               shifts: _shifts,
@@ -1411,6 +1573,11 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
               shiftWarnings: _computeShiftWarnings(),
               onEmptyCellTap: _showAddAssignmentDialog,
               onAssignmentTap: _showEditAssignmentDialog,
+              onSlotHistoryTap: (date, shift) => _showSlotAuditLogDialog(
+                date,
+                shift.id,
+                shift.name,
+              ),
             ),
           ] else if (_lastResult != null &&
               _lastResult!['status'] != 'success') ...[

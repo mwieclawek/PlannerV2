@@ -543,6 +543,11 @@ class ShiftAuditLogResponse(BaseModel):
     old_value: Optional[str] = None
     new_value: Optional[str] = None
     created_at: datetime
+    shift_name_snapshot: Optional[str] = None
+    role_name_snapshot: Optional[str] = None
+    target_user_name: Optional[str] = None
+    actor_name: Optional[str] = None
+    summary: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
