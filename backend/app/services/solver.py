@@ -486,6 +486,11 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
                         )
                     else:
                         candidate_diagnostics = []
+                        d_obj = date.fromisoformat(d_iso)
+                        d_prev_iso = (d_obj - timedelta(days=1)).isoformat()
+                        d_next_iso = (d_obj + timedelta(days=1)).isoformat()
+                        shift_dur_h = shift_durations.get(s_id, 0.0)
+
                         for cand in candidates:
                             day_assignments = [
                                 it for it in generated_items
@@ -493,18 +498,92 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
                             ]
                             if day_assignments:
                                 assigned_s_names = [it.get("shift_name", "?") for it in day_assignments]
-                                diag = f"{cand.full_name}: zajęty na innej zmianie ({', '.join(assigned_s_names)})"
+                                diag = f"{cand.full_name}: zajęty na innej zmianie w tym dniu ({', '.join(assigned_s_names)})"
                             elif (cand.id, d_iso) in leave_days_set:
                                 diag = f"{cand.full_name}: zatwierdzony urlop"
                             else:
                                 st = avail_map.get((cand.id, d_iso, s_id), "UNKNOWN")
-                                if st not in ("AVAILABLE", "PREFERRED"):
+                                if st == "UNAVAILABLE":
+                                    diag = f"{cand.full_name}: zgłoszona niedostępność (status: NIEDOSTĘPNY)"
+                                elif st == "UNKNOWN":
+                                    diag = (
+                                        f"{cand.full_name}: brak zgłoszonej dyspozycyjności na tę zmianę "
+                                        f"(status: BRAK_WPISU / UNKNOWN - solver automatyczny wymaga deklaracji Dostępny/Preferuję)"
+                                    )
+                                elif st not in ("AVAILABLE", "PREFERRED"):
                                     diag = f"{cand.full_name}: brak dostępności ({st})"
                                 else:
-                                    diag = f"{cand.full_name}: dostępny ({st}), ale solver zoptymalizował inne kryterium (np. limit godzin)"
+                                    # Sprawdzenie clopening (odpoczynek dobowy 11h)
+                                    prev_assignments = [
+                                        it for it in generated_items
+                                        if it["user_id"] == cand.id and it["date"] == d_prev_iso
+                                    ]
+                                    clopening_prev = [
+                                        it for it in prev_assignments
+                                        if (it["shift_def_id"], s_id) in clopening_pairs
+                                    ]
+                                    next_assignments = [
+                                        it for it in generated_items
+                                        if it["user_id"] == cand.id and it["date"] == d_next_iso
+                                    ]
+                                    clopening_next = [
+                                        it for it in next_assignments
+                                        if (s_id, it["shift_def_id"]) in clopening_pairs
+                                    ]
+
+                                    cand_scheds = [it for it in generated_items if it["user_id"] == cand.id]
+                                    cand_gen_hours = sum(shift_durations.get(it["shift_def_id"], 0.0) for it in cand_scheds)
+                                    wt = payload.weekly_targets.get(str(cand.id), {})
+                                    prev_h = float(wt.get("worked_or_scheduled_hours", cand.worked_or_scheduled_hours))
+                                    tot_h = prev_h + cand_gen_hours
+                                    eff_w_h = float(wt.get("effective_weekly_target_hours", cand.effective_weekly_target_hours))
+
+                                    if clopening_prev:
+                                        p_names = [it.get("shift_name", "?") for it in clopening_prev]
+                                        diag = (
+                                            f"{cand.full_name}: dostępny ({st}), ale przypisanie naruszyłoby 11h odpoczynku dobowego "
+                                            f"(clopening ze zmianą '{', '.join(p_names)}' w dniu {d_prev_iso})"
+                                        )
+                                    elif clopening_next:
+                                        n_names = [it.get("shift_name", "?") for it in clopening_next]
+                                        diag = (
+                                            f"{cand.full_name}: dostępny ({st}), ale przypisanie naruszyłoby 11h odpoczynku dobowego "
+                                            f"(clopening ze zmianą '{', '.join(n_names)}' w dniu {d_next_iso})"
+                                        )
+                                    elif cand.target_hours_per_month is not None and tot_h >= float(cand.target_hours_per_month):
+                                        target_h = float(cand.target_hours_per_month)
+                                        diag = (
+                                            f"{cand.full_name}: dostępny ({st}), ale osiągnął miesięczny limit godzin "
+                                            f"({tot_h:.1f}h / {target_h:.1f}h, MTD: {prev_h:.1f}h + grafik: {cand_gen_hours:.1f}h). "
+                                            f"Przypisanie zmiany {shift_dur_h:.1f}h przekroczyłoby limit o {tot_h + shift_dur_h - target_h:.1f}h."
+                                        )
+                                    elif cand.target_hours_per_month is not None and (tot_h + shift_dur_h) > float(cand.target_hours_per_month):
+                                        target_h = float(cand.target_hours_per_month)
+                                        rem_h = max(0.0, target_h - tot_h)
+                                        diag = (
+                                            f"{cand.full_name}: dostępny ({st}), ale zmiana ({shift_dur_h:.1f}h) przekracza "
+                                            f"pozostały limit miesięczny ({rem_h:.1f}h wolnych z {target_h:.1f}h; łącznie byłoby {tot_h + shift_dur_h:.1f}h)."
+                                        )
+                                    elif cand.target_shifts_per_month is not None and len(cand_scheds) >= int(cand.target_shifts_per_month):
+                                        target_s = int(cand.target_shifts_per_month)
+                                        diag = (
+                                            f"{cand.full_name}: dostępny ({st}), ale osiągnął miesięczny limit zmian "
+                                            f"({len(cand_scheds)} / {target_s} zmian)."
+                                        )
+                                    elif cand_gen_hours >= eff_w_h and eff_w_h > 0:
+                                        diag = (
+                                            f"{cand.full_name}: dostępny ({st}), ale zrealizował efektywny cel tygodniowy "
+                                            f"({cand_gen_hours:.1f}h / {eff_w_h:.1f}h). Solver zoptymalizował koszt funkcji celu."
+                                        )
+                                    else:
+                                        diag = (
+                                            f"{cand.full_name}: dostępny ({st}), ale solver zoptymalizował globalną funkcję celu "
+                                            f"(zrównoważenie godzin i minimalizacja kar odchyleń)."
+                                        )
                             candidate_diagnostics.append(diag)
                             root_causes.append(diag)
                         cause_str = "; ".join(candidate_diagnostics)
+                        domain_logs.append(f"Przyczyna braku obsady ({d_iso}, {s_name}, {r_name}): {cause_str}")
                         logger.warning(
                             f"[SOLVER WORKER DEFICIT CAUSE] Analiza kandydatów ({d_iso}, {s_name}, {r_name}): "
                             f"{cause_str} [tenant:{tid}]."

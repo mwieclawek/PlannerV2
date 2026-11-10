@@ -160,7 +160,7 @@ async def _dispatch_solver_payload_amqp(
 ) -> Dict[str, Any]:
     """
     Publish `SolverJobPayload` to durable queue `wfm.solver.requests` (DeliveryMode.PERSISTENT)
-    and wait for the matching `correlation_id == payload.job_id` result on `wfm.solver.results`.
+    and wait for the matching `correlation_id == payload.job_id` result on an exclusive temporary reply queue.
     """
     import aio_pika
     from aio_pika import DeliveryMode, Message
@@ -171,14 +171,14 @@ async def _dispatch_solver_payload_amqp(
         channel = await connection.channel()
         await channel.set_qos(prefetch_count=1)
         await channel.declare_queue(SOLVER_REQUESTS_QUEUE, durable=True)
-        results_queue = await channel.declare_queue(SOLVER_RESULTS_QUEUE, durable=True)
+        reply_queue = await channel.declare_queue(exclusive=True, auto_delete=True)
 
         body_bytes = payload.model_dump_json().encode("utf-8")
         await channel.default_exchange.publish(
             Message(
                 body=body_bytes,
                 correlation_id=payload.job_id,
-                reply_to=SOLVER_RESULTS_QUEUE,
+                reply_to=reply_queue.name,
                 content_type="application/json",
                 delivery_mode=DeliveryMode.PERSISTENT,
             ),
@@ -186,21 +186,18 @@ async def _dispatch_solver_payload_amqp(
         )
         logger.info(
             f"[SOLVER WORKER] Wysłano SolverJobPayload do RabbitMQ '{SOLVER_REQUESTS_QUEUE}' "
-            f"(job_id={payload.job_id}) [tenant:{payload.tenant_id}]."
+            f"(job_id={payload.job_id}, reply_to={reply_queue.name}) [tenant:{payload.tenant_id}]."
         )
 
-        async def _consume_matching() -> Dict[str, Any]:
-            async with results_queue.iterator() as queue_iter:
-                async for msg in queue_iter:
-                    if msg.correlation_id == payload.job_id:
-                        await msg.ack()
-                        return json.loads(msg.body.decode("utf-8"))
-                    else:
-                        await msg.nack(requeue=True)
-                        await asyncio.sleep(0.05)
-            raise TimeoutError(f"Brak odpowiedzi dla job_id={payload.job_id}")
+        async def _read_reply() -> Dict[str, Any]:
+            async with reply_queue.iterator() as q_iter:
+                async for msg in q_iter:
+                    async with msg.process(requeue=False):
+                        if msg.correlation_id == payload.job_id:
+                            return json.loads(msg.body.decode("utf-8"))
+            raise TimeoutError(f"Brak odpowiedzi z {SOLVER_REQUESTS_QUEUE} dla job_id={payload.job_id}")
 
-        return await asyncio.wait_for(_consume_matching(), timeout=float(timeout_sec))
+        return await asyncio.wait_for(_read_reply(), timeout=float(timeout_sec))
 
 
 def _run_coro_sync(coro: Any) -> Any:
