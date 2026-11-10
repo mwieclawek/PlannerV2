@@ -65,6 +65,11 @@ backend/tests/
 | KDS Sync | `test_kds.py` | Monotoniczny sync batch: walidacja wag stanów, anti-ghosting VOIDED, audit log KDSEventLog |
 | KDS Pacing | `test_kds.py` | Anchor-based pacing: obliczanie delay_start_sec per-kurs |
 | KDS API | `test_kds_api.py` | Integracja POST /pos/v2/kds/sync: izolowana baza SQLite, JWT auth, pełny przepływ sync |
+| Sprint & Audit Log | `test_sprint_new_features.py` | Historia zmian grafiku oparta o sloty (`ASSIGNED`, `UNASSIGNED`, `SWAPPED`, `WEEK_PUBLISHED`), zachowanie historii po usunięciu zmiany (`ondelete=SET NULL`), brak szumu `is_published` |
+| WFM Prediction | `test_wfm_prediction_service.py` | Prognozy obłożenia WFM (`WfmPrediction`), zadania `analytics-worker` |
+| WFM Ops Modules | `test_wfm_ops_modules.py` | Checklisty operacyjne, HACCP, payroll, ogłoszenia zespołowe |
+| Google Calendar | `test_google_calendar_sync.py`, `test_google_calendar_triggers.py` | Synchronizacja OAuth 2.0, automatyczne wyzwalacze przy publikacji i wymianie zmian |
+| Multi-Tenant & Sysadmin | `test_multi_tenant.py`, `test_sysadmin.py`, `test_superadmin_security.py` | Pełna izolacja tenantów, zarządzanie restauracjami, bezpieczeństwo logów |
 
 ### Frontend (flutter test)
 

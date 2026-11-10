@@ -39,8 +39,8 @@ System wspiera wiele restauracji na pojedynczej instancji (model Tenant):
 | Moduł | Opis |
 |-------|------|
 | **Dashboard** | Podgląd dziennego grafiku, kalendarz, statystyki zespołu. |
-| **Auto-Grafik** | Inteligentny generator OR-Tools CP-SAT z trybem szkicu (Draft -> Save -> Publish), ostrzeżenia kadrowe i kodeksowe (11h odpoczynku). |
-| **Edycja grafiku** | Ręczne przypisanie/usunięcie pracowników, batch save, widok wymagań kadrowych. |
+| **Auto-Grafik** | Inteligentny generator OR-Tools CP-SAT w bezstanowym mikroserwisie `solver-worker` (AMQP RPC), tryb szkicu (Draft -> Save -> Publish), raport wyjaśniający decyzje solvera (`SolverExplanation`), predykcja popytu WFM (`WfmPrediction`), symulator kosztów pracy (*Live Labor Cost*) oraz ostrzeżenia kadrowe i kodeksowe (11h odpoczynku). |
+| **Edycja i Historia Grafiku** | Ręczne przypisanie/usunięcie pracowników, batch save, widok wymagań kadrowych, pełna **Historia zmian slotu** (`date` + `shift_def_id`) oraz **Historia zmian tygodnia** (`ShiftAuditLog`). |
 | **Zarządzanie zespołem** | Tworzenie kont, dodawanie i edycja adresów e-mail pracowników, przypisywanie ról, aktywacja/dezaktywacja, reset hasła, cele godzinowe/zmianowe. |
 | **Konfiguracja** | Role (stanowiska), definicje zmian z przypisaniem do konkretnych ról (Role-Based Shifts), wymagania kadrowe (globalne i per-datę), dane lokalu, godziny otwarcia, włączniki modułów (zamknięcie dnia, wymóg checklisty, ukrywanie kafelka tip poolingu). |
 | **Obecności** | Ewidencja czasu pracy, zatwierdzanie/odrzucanie, ręczne dodawanie, eksport PDF. |
@@ -84,7 +84,9 @@ System wspiera wiele restauracji na pojedynczej instancji (model Tenant):
 | Frontend | Flutter Web / Android / iOS, PWA (Progressive Web App) |
 | Android Compatibility | 16 KB page size support (CameraX 1.4.1 + unbundled Google Play Services ML Kit) |
 | Backend | FastAPI + SQLModel + Pydantic v2 |
-| Solver | Google OR-Tools (CP-SAT) |
+| Solver | Google OR-Tools (CP-SAT) — wyizolowany bezstanowy mikroserwis `solver-worker` (`Dockerfile.solver`) |
+| Message Broker | RabbitMQ 3 (`rabbitmq:3-management-alpine`) + `aio-pika` (AMQP RPC & Durable Queues) |
+| Analytics Worker | Dedykowany kontener `analytics-worker` (`WfmPredictionService`, prognozy obłożenia i kosztów) |
 | Database | SQLite (dev) / PostgreSQL (prod) |
 | Migracje | Alembic (z testami integralności grafu rewizji) |
 | Auth | JWT (PyJWT) + pbkdf2_sha256 + Dual-Login |
@@ -149,8 +151,15 @@ PlannerV2/
 │   │       ├── kds_service.py      # KDS: monotonic sync + pacing engine
 │   │       ├── manager_service.py  # Logika biznesowa managera
 │   │       ├── employee_service.py # Logika biznesowa pracownika
-│   │       ├── scheduler_service.py# Operacje na grafiku
+│   │       ├── scheduler_service.py# Operacje na grafiku i audyt slotów (ShiftAuditLog)
+│   │       ├── rabbitmq_service.py # Klient AMQP (aio-pika, kolejki trwałe, RPC)
+│   │       ├── wfm_prediction_service.py # Prognozy obłożenia i analityka WFM
 │   │       └── push_service.py     # Firebase Cloud Messaging
+│   │   └── workers/
+│   │       ├── solver_worker.py    # Bezstanowy worker CP-SAT (Pure-Compute JSON)
+│   │       └── wfm_analytics_worker.py # Worker analityczny i predykcyjny WFM
+│   ├── Dockerfile                  # Obraz głównego API oraz analytics-worker
+│   ├── Dockerfile.solver           # Lekki, bezstanowy obraz dla solver-worker
 │   ├── alembic/                    # Migracje bazy danych
 │   ├── tests/                      # Testy (pytest)
 │   ├── seed_test_data.py           # Generator danych testowych
@@ -230,6 +239,8 @@ PlannerV2/
 | `GET/POST/DELETE` | `/manager/giveaways` | Giełda zmian (zarządzanie) |
 | `GET/POST` | `/manager/leave-requests` | Wnioski urlopowe (przeglądanie + zatwierdzanie) |
 | `GET` | `/manager/leave-requests/calendar` | Kalendarz urlopów |
+| `GET` | `/manager/shifts/{shift_id}/audit-log` | Historia zmian dla slotu (`date` + `shift_def_id`), zmiany lub tygodnia (`start_date` – `end_date`) |
+| `GET` | `/manager/schedules/audit-log` | Zbiorcza historia operacji na grafiku w wybranym zakresie dat |
 
 ### Employee (`/employee`)
 
@@ -306,6 +317,10 @@ PlannerV2/
 | `GOOGLE_APPLICATION_CREDENTIALS` | Ścieżka do Firebase service account JSON | Opcjonalna |
 | `GITHUB_TOKEN` | Token do tworzenia Issues | Opcjonalna |
 | `GITHUB_REPO` | Repozytorium do Issues (format: `owner/repo`) | Opcjonalna |
+| `RABBITMQ_URL` | Adres brokera AMQP (np. `amqp://planner:planner_secret@rabbitmq:5672/`) | Wymagana dla workerów |
+| `RABBITMQ_DEFAULT_USER` | Domyślny użytkownik RabbitMQ (`planner`) | Opcjonalna |
+| `RABBITMQ_DEFAULT_PASS` | Domyślne hasło RabbitMQ (`planner_secret`) | Opcjonalna |
+| `USE_ASYNC_WORKER` | Aktywacja asynchronicznego zlecania zadań przez RabbitMQ (`true`/`false`) | Opcjonalna |
 
 Dla frontendu Web dopuszczalna jest flaga kompilacji:
 `--dart-define=FCM_VAPID_KEY=twoj_klucz_vapid` (lub pobieranie z konfiguracji domyślnej).
@@ -317,7 +332,12 @@ Dla frontendu Web dopuszczalna jest flaga kompilacji:
 Aplikacja wykorzystuje Jenkins do automatycznych wdrożeń:
 
 - **DEV**: Wdrażany automatycznie z gałęzi `main`.
-- **PROD**: Wdrażany automatycznie po utworzeniu taga wersji (np. `v2.2.1`).
+- **PROD**: Wdrażany automatycznie po utworzeniu taga wersji (np. `v2.2.3`).
+- **Monitoring Kolejek RabbitMQ**: Panel administracyjny RabbitMQ Management jest zbindowany na serwerze lokalnie (`127.0.0.1:15672:15672`). Dostęp przez tunel SSH:
+  ```bash
+  ssh -L 15672:localhost:15672 root@<adres-serwera>
+  # Otwórz w przeglądarce: http://localhost:15672 (login: planner / hasło: planner_secret)
+  ```
 
 ```yaml
 services:

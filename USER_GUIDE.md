@@ -149,7 +149,17 @@ Definiują liczbę pracowników na danej zmianie dla konkretnej roli.
 - Kliknij **„+ Dodaj"** w komórce, aby ręcznie przypisać pracownika.
 - Kliknij na przypisanego pracownika, aby go usunąć lub zmienić obsadę.
 - **Zapisz zmiany**: Zapisuje grafik w bazie danych jako wersję roboczą.
-- **Opublikuj**: Publikuje grafik dla zespołu. Pracownicy natychmiast widzą swoje zmiany i otrzymują powiadomienie Push / Web Push.
+- **Opublikuj**: Publikuje grafik dla zespołu. Pracownicy natychmiast widzą swoje zmiany i otrzymują powiadomienie Push / Web Push. Publikacja zapisuje jeden zbiorczy wpis w historii zmian tygodnia.
+
+#### Historia Zmian Grafiku (Slot i Tydzień)
+System przechowuje pełny ślad audytowy dla każdego slotu zmiany (`Data` + `Definicja zmiany`), niezależnie od tego, ile razy pracownicy byli przypisywani lub usuwani z danej zmiany:
+- **Historia pojedynczego slotu**: Kliknij ikonę zegara historii w prawym górnym rogu komórki zmiany na siatce grafiku (lub przycisk „Historia zmian” w oknie edycji przypisania). Otworzy się okno **„Historia zmiany ({Data} – {Nazwa zmiany})”** prezentujące wszystkie przypisania (`PRZYPISANIE`), usunięcia (`USUNIĘCIE`), wymiany (`WYMIANA`) oraz przejęcia z giełdy (`ODDANIE`) na tej zmianie wraz z wykonawcą i znacznikiem czasu.
+- **Historia zmian tygodnia**: Kliknij przycisk **„Historia zmian tygodnia”** znajdujący się bezpośrednio nad siatką grafiku, aby wyświetlić chronologiczny dziennik wszystkich operacji wykonanych na grafiku w wybranym tygodniu (w tym zbiorcze potwierdzenia publikacji grafiku `PUBLIKACJA`).
+
+#### Analityka WFM, Symulator Kosztu i Wyjaśnienia Solvera
+- **Analityka i Predykcja WFM**: Rozwijany panel nad grafikiem prezentujący prognozowane obłożenie gości oraz przychody na poszczególne dni tygodnia wyliczane przez `analytics-worker`.
+- **Symulator Kosztu Tygodnia (Live Labor Cost)**: Pasek aktualizujący na żywo sumę zaplanowanych godzin i szacowany koszt pracy w miarę ręcznych modyfikacji grafiku.
+- **Raport „Jak to działa?” (`SolverExplanation`)**: Szczegółowe podsumowanie decyzji podjętych przez solver CP-SAT oraz analiza przyczyn ewentualnych braków kadrowych (Root Cause Analysis).
 
 ---
 

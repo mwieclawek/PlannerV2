@@ -31,15 +31,21 @@ backend/
 │       ├── kds_service.py      # KDS: monotonic sync + pacing engine
 │       ├── manager_service.py  # Logika biznesowa managera
 │       ├── employee_service.py # Logika biznesowa pracownika
-│       ├── scheduler_service.py # Operacje na grafiku
+│       ├── scheduler_service.py # Operacje na grafiku i audyt slotów (ShiftAuditLog)
+│       ├── rabbitmq_service.py  # Klient AMQP (aio-pika, kolejki trwałe, RPC)
+│       ├── wfm_prediction_service.py # Prognozy obłożenia i analityka WFM
 │       └── push_service.py     # Firebase Cloud Messaging (Android, iOS, Web)
+│   └── workers/
+│       ├── solver_worker.py    # Bezstanowy mikroserwis CP-SAT (Pure-Compute JSON)
+│       └── wfm_analytics_worker.py # Worker analityczny i predykcyjny WFM
 ├── alembic/                    # Migracje bazy danych
-├── tests/                      # Zestaw testów automatycznych (pytest)
+├── tests/                      # Zestaw testów automatycznych (287 testów pytest)
 ├── seed_test_data.py           # Generator danych testowych
 ├── reset_db_alembic.py         # Reset bazy + migracje
 ├── requirements.txt
 ├── alembic.ini
-└── Dockerfile
+├── Dockerfile                  # Obraz głównego API oraz analytics-worker
+└── Dockerfile.solver           # Lekki, bezstanowy obraz dla solver-worker
 ```
 
 ## Uruchamianie

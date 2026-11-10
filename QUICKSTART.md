@@ -119,6 +119,9 @@ docker-compose up -d
 Aplikacja będzie dostępna pod: http://localhost (port 80)
 - Nginx serwuje frontend z regułami no-cache dla service workerów i proxy'uje `/api` do backendu
 - PostgreSQL używany jest jako baza danych
+- **RabbitMQ (`rabbitmq:3-management-alpine`)** obsługuje kolejki zadań AMQP (`wfm.solver.requests`, `wfm.solver.results`, `wfm.analytics.tasks`), a panel administracyjny Management UI dostępny jest bezpiecznie na `127.0.0.1:15672` (przez tunel SSH: `ssh -L 15672:localhost:15672 root@<host>`, login: `planner` / `planner_secret`)
+- **Bezstanowy `solver-worker` (`Dockerfile.solver`)** wykonuje obliczenia harmonogramu OR-Tools CP-SAT w izolowanym kontenerze (możliwość skalowania: `docker compose up -d --scale solver-worker=3`)
+- **Dedykowany `analytics-worker`** przelicza prognozy obłożenia i analitykę WFM w tle
 - Migracje Alembic uruchamiają się automatycznie przy starcie kontenerów
 
 ## Zmienne Środowiskowe

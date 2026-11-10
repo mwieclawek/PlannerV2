@@ -21,7 +21,12 @@ backend/tests/
 ├── test_solver_edge_cases.py      # Przypadki brzegowe solvera
 ├── test_pdf_export.py             # Generowanie raportu PDF z obecności
 ├── test_kds.py                    # KDS: silnik pacingu, monotoniczny sync batch, anti-ghosting
-└── test_kds_api.py                # Integracja endpointu /pos/v2/kds/sync
+├── test_kds_api.py                # Integracja endpointu /pos/v2/kds/sync
+├── test_sprint_new_features.py    # Historia zmian grafiku per slot (ShiftAuditLog), wymiany, audyt
+├── test_wfm_prediction_service.py # Prognozowanie popytu i analityka WFM
+├── test_wfm_ops_modules.py        # Moduły operacyjne WFM (HACCP, checklisty, payroll)
+├── test_google_calendar_sync.py   # Synchronizacja z Google Calendar
+└── test_alembic_migrations.py     # Walidacja spójności drzewa migracji Alembic (287 testów łącznie)
 ```
 
 ## Uruchamianie

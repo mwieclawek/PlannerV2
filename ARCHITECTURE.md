@@ -60,6 +60,10 @@ graph TD
     end
 
     SERVICES -- "FCM Push" --> FCM["Firebase Cloud Messaging"]
+    SERVICES -- "AMQP RPC / Tasks (aio-pika)" --> RABBITMQ["RabbitMQ 3 (AMQP Broker)\n- wfm.solver.requests\n- wfm.solver.results\n- wfm.analytics.tasks"]
+    RABBITMQ -- "Pure-Compute JSON (QoS=1)" --> SOLVER_WORKER["solver-worker (Stateless Container)\n- Dockerfile.solver\n- OR-Tools CP-SAT\n- Zero DB Dependencies"]
+    RABBITMQ -- "Async Tasks (QoS=1)" --> ANALYTICS_WORKER["analytics-worker\n- WfmPredictionService\n- Demand & Cost Analytics"]
+    ANALYTICS_WORKER --> ORM
     ORM --> DB["SQLite (dev) / PostgreSQL (prod)"]
 ```
 
@@ -327,6 +331,36 @@ erDiagram
     Order ||--o{ OrderItem : "line items"
     Order ||--o{ Payment : "payments"
     OrderItem ||--o{ KDSEventLog : "audit trail"
+    ShiftDefinition ||--o{ ShiftAuditLog : "slot history"
+    Schedule ||--o{ ShiftAuditLog : "optional ref (SET NULL)"
+
+    ShiftAuditLog {
+        int id PK
+        int restaurant_id FK
+        string shift_id
+        UUID schedule_id FK "nullable (ondelete=SET NULL)"
+        int shift_def_id FK "slot shift definition"
+        date date "slot date"
+        UUID changed_by_user_id FK
+        string action "ASSIGNED / UNASSIGNED / SWAPPED / REASSIGNED / WEEK_PUBLISHED"
+        string shift_name_snapshot
+        string role_name_snapshot
+        string target_user_name
+        string actor_name
+        string summary
+        datetime created_at
+    }
+
+    WfmPrediction {
+        int id PK
+        int restaurant_id FK
+        date target_date
+        int predicted_guests
+        float predicted_revenue
+        float confidence_score
+        string weather_factor
+        datetime generated_at
+    }
 ```
 
 ## Warstwa Serwisów
@@ -341,6 +375,40 @@ erDiagram
 | `PosService` | CRUD stref/stołów/kategorii/menu/modyfikatorów, zarządzanie zamówieniami i płatnościami, snapshotowanie cen |
 | `KDSService` | **Monotoniczny sync batch** (walidacja wag stanów, anti-ghosting, audit log), **Pacing Engine** (anchor-based course staggering, `delay_start_sec`) |
 | `PushService` | Firebase Cloud Messaging — wysyłka powiadomień push na urządzenia mobilne, fallback na mock w dev |
+| `RabbitMQService` | Asynchroniczny klient AMQP (`aio-pika`): publikacja zadań optymalizacyjnych i analitycznych, obsługa bezstanowego RPC z ekskluzywną kolejką zwrotną (`reply_to` + `correlation_id`) |
+| `WfmPredictionService` | Prognozowanie popytu i obłożenia lokalu (`WfmPrediction`), symulacja kosztów pracy (*Live Labor Cost*) oraz analityka WFM |
+| `solver_worker` | **Bezstanowy mikroserwis obliczeniowy** (`Dockerfile.solver`): odbiera ładunek JSON z `wfm.solver.requests`, uruchamia OR-Tools CP-SAT i zwraca wynik JSON bez dostępu do bazy danych |
+| `wfm_analytics_worker` | **Dedykowany worker analityczny**: konsumuje zadania z `wfm.analytics.tasks`, przelicza predykcje popytu oraz statystyki WFM w tle |
+
+## Architektura Kolejkowania RabbitMQ (AMQP) i Rozdzielenia Workerów
+
+System wykorzystuje broker **RabbitMQ (`rabbitmq:3-management-alpine`)** do odciążenia głównego procesu API FastAPI od ciężkich obliczeń kombinatorycznych oraz zadań analitycznych:
+
+1. **Trwałe Kolejki AMQP (`durable=True`, `DeliveryMode.PERSISTENT`)**:
+   - `wfm.solver.requests`: kolejka wejściowa zadań optymalizacji grafiku dla `solver-worker`.
+   - `wfm.solver.results`: kolejka wyników optymalizacji oraz obsługa bezpośrednich odpowiedzi RPC (`reply_to`).
+   - `wfm.analytics.tasks`: kolejka zadań predykcyjnych i analitycznych dla `analytics-worker`.
+2. **Niezawodność (QoS & Manual ACK)**:
+   - Workery konfigurują `prefetch_count=1`, dzięki czemu pojedyncza instancja pobiera naraz wyłącznie jedno zadanie obliczeniowe, co pozwala na liniowe skalowanie poziome (`docker compose up --scale solver-worker=3`).
+   - Potwierdzenie wykonania (`ACK` za pomocą `message.process()`) następuje dopiero po pełnym zakończeniu obliczeń. W razie restartu lub awarii kontenera w trakcie pracy solvera wiadomość automatycznie wraca do kolejki i zostaje podjęta przez kolejną instancję.
+3. **Kontrakt Pure-Compute (`solver-worker`)**:
+   - Kontener budowany z `backend/Dockerfile.solver` jest w 100% bezstanowy — nie posiada sterowników bazy danych (`psycopg`, `sqlmodel`, `alembic`) ani dostępu do sieci bazodanowej.
+   - Cały kontekst problemu (pracownicy, role, zmiany, dostępności, godziny MTD, wymagania kadrowe) przekazywany jest w ustrukturyzowanym ładunku JSON, a wynik (przypisania, ostrzeżenia, `SolverExplanation`, diagnostyka Root Cause Analysis) wraca w ułamku sekundy przez dedykowaną kolejkę zwrotną RPC.
+4. **Panel Administracyjny RabbitMQ Management**:
+   - Port `15672` zbindowany jest lokalnie do `127.0.0.1:15672:15672`, co umożliwia bezpieczny wgląd w kolejki przez tunel SSH (`ssh -L 15672:localhost:15672 root@<host>`).
+
+## Historia Zmian Grafiku oparta o Sloty (`ShiftAuditLog`)
+
+Rejestr audytu operacji na grafiku (`ShiftAuditLog`) śledzi cykl życia każdego **slotu zmiany** (`date` + `shift_def_id`), a nie wyłącznie pojedynczego rekordu przypisania:
+- **Odporność na usunięcia (`ondelete="SET NULL"`)**: Usunięcie pracownika ze zmiany kasuje rekord `Schedule`, lecz zachowuje wszystkie wpisy historyczne dla danego slotu (`date`, `shift_def_id`) wraz z migawkami nazw (`shift_name_snapshot`, `role_name_snapshot`, `target_user_name`, `actor_name`, `summary`).
+- **Brak szumu technicznego**: Publikacja grafiku tygodniowego nie generuje pojedynczych wpisów `is_published: false -> true` dla każdej zmiany, lecz zapisuje jeden zbiorczy wpis `action="WEEK_PUBLISHED"` (`"Opublikowano grafik na tydzień ..."`).
+- **Typy operacji w historii**:
+  - `ASSIGNED`: przypisanie pracownika z określoną rolą na zmianę.
+  - `UNASSIGNED`: usunięcie pracownika ze zmiany.
+  - `SWAPPED`: bezpośrednia wymiana zmian między pracownikami.
+  - `REASSIGNED`: przejęcie zmiany z giełdy zmian.
+  - `WEEK_PUBLISHED`: publikacja harmonogramu na dany tydzień.
+- **Widoki w UI**: Manager może otworzyć zarówno **„Historię zmiany ({Data} – {Nazwa zmiany})”** klikając ikonę historii bezpośrednio na komórce slotu, jak i **„Historię zmian tygodnia”** prezentującą chronologiczny dziennik wszystkich operacji w wybranym tygodniu.
 
 ## Przepływ Generowania Grafiku
 
@@ -474,6 +542,14 @@ Dla zapewnienia spójnego doświadczenia użytkownika i bezpieczeństwa danych:
 - **Google OAuth 2.0**: Klucze przechowywane jako zmienne środowiskowe
 
 ## Wdrożenie (Produkcja)
+
+Architektura kontenerowa obejmuje 6 niezależnych serwisów w sieci `plannerv2-network`:
+- `db` (`postgres:15`): główna baza danych PostgreSQL.
+- `rabbitmq` (`rabbitmq:3-management-alpine`): broker komunikatów AMQP (port `5672` wewnętrznie oraz `127.0.0.1:15672:15672` dla Management UI przez tunel SSH).
+- `backend` (`./backend/Dockerfile`): serwer API FastAPI z automatycznymi migracjami Alembic na starcie.
+- `solver-worker` (`./backend/Dockerfile.solver`): bezstanowy mikroserwis obliczeniowy OR-Tools CP-SAT (`python -m app.workers.solver_worker`).
+- `analytics-worker` (`./backend/Dockerfile`): dedykowany worker analityczny i predykcyjny WFM (`python -m app.workers.wfm_analytics_worker`).
+- `nginx` (`nginx:alpine`): serwer reverse proxy i plików statycznych Flutter Web PWA.
 
 ```yaml
 # docker-compose.yml

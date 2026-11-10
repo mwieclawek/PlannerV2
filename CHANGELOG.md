@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.2.3] - 2026-11-10
+
+### Added
+- **Architektura Mikroserwisowa Workerów oparta o RabbitMQ (AMQP)**:
+  - Migracja brokera zadań z Redisa/ARQ na **RabbitMQ (`rabbitmq:3-management-alpine`)** z asynchronicznym klientem `aio-pika`.
+  - Trwałe kolejki wiadomości (`durable=True`, `DeliveryMode.PERSISTENT`) z kontrolą przepływu `prefetch_count=1` (QoS) oraz ręcznym potwierdzaniem wykonania (`manual ACK`):
+    - `wfm.solver.requests` – kolejka zadań optymalizacyjnych dla `solver-worker`.
+    - `wfm.solver.results` – kolejka wyników optymalizacji grafiku.
+    - `wfm.analytics.tasks` – kolejka zadań analitycznych i predykcyjnych dla `analytics-worker`.
+  - Sub-sekundowa komunikacja RPC pomiędzy API a `solver-worker` z wykorzystaniem ekskluzywnej kolejki zwrotnej (`reply_to` + `correlation_id`).
+  - Mapowanie portu panelu administracyjnego RabbitMQ Management (`127.0.0.1:15672:15672`) w `docker-compose.yml` oraz `Jenkinsfile` umożliwiające bezpośredni dostęp przez tunel SSH (`ssh -L 15672:localhost:15672`).
+- **Bezstanowy Mikroserwis Obliczeniowy `solver-worker` (`backend/Dockerfile.solver`)**:
+  - Pełna izolacja silnika OR-Tools CP-SAT od bazy danych SQL i modeli ORM (kontrakt *Pure-Compute*: `JSON-In -> OR-Tools CP-SAT -> JSON-Out`).
+  - Dedykowany, lekki obraz kontenera `Dockerfile.solver` zawierający wyłącznie zależności obliczeniowe (`ortools`, `aio-pika`, `pydantic`), pozwalający na niezależny deployment oraz horyzontalne skalowanie (`docker compose up --scale solver-worker=3`).
+- **Dedykowany `analytics-worker` i Predykcja Popytu WFM (`WfmPredictionService`)**:
+  - Wydzielony proces workera analitycznego (`app.workers.wfm_analytics_worker`) realizujący prognozy obłożenia (`WfmPrediction`), kalkulacje kosztów pracy oraz cykliczne zadania analityczne w tle.
+  - Modele i widoki raportu wyjaśniającego decyzje optymalizatora (`SolverExplanation`) oraz symulatora kosztów pracy na żywo (*Live Labor Cost*).
+- **Nowa Historia Zmian Grafiku (`ShiftAuditLog`) oparta o Sloty (`date` + `shift_def_id`)**:
+  - Rozbudowa modelu `ShiftAuditLog` oraz migracja Alembic (`20261110_shiftauditlog_details.py`) o pola migawkowe: `shift_name_snapshot`, `role_name_snapshot`, `target_user_name`, `actor_name` oraz czytelne podsumowanie `summary`.
+  - Zachowanie pełnej historii slotu po usunięciu przypisania pracownika (`schedule_id` jako `Optional[UUID]` z `ondelete="SET NULL"`).
+  - Zastąpienie pojedynczych wpisów zmiany flagi `is_published: false -> true` jednym zbiorczym wpisem publikacji tygodnia (`action="WEEK_PUBLISHED"`, `summary="Opublikowano grafik na tydzień ..."`).
+  - Odpytywanie historii po slocie (`date` + `shift_def_id` lub `slot:YYYY-MM-DD:shift_def_id`) oraz dla całego tygodnia (`start_date` – `end_date`) z automatycznym odfiltrowaniem historycznego szumu `is_published`.
+  - Nowy interfejs historii zmian we frontendzie Flutter (`scheduler_tab.dart`, `schedule_viewer.dart`):
+    - Ikona zegara historii w prawym górnym rogu każdego slotu zmiany otwierająca okno **„Historia zmiany ({Data} – {Nazwa zmiany})”**.
+    - Przycisk **„Historia zmian tygodnia”** nad siatką grafiku prezentujący chronologiczny rejestr wszystkich operacji z danego tygodnia.
+    - Kolorystyczne oznaczenia akcji: `PRZYPISANIE` (zielony), `USUNIĘCIE` (czerwony), `WYMIANA` (fioletowy), `ODDANIE` (indygo), `PUBLIKACJA` (morski).
+
+### Changed
+- **Wygaszenie modułu POS/KDS we frontendzie**:
+  - Domyślne wyłączenie modułu POS/KDS (`posEnabled = false`) w `module_provider.dart`, ukrycie tras i zakładek POS/KDS w panelach managera i pracownika oraz dodanie plików `.cursorignore` i `.aiignore`.
+
 ## [v2.2.2] - 2026-10-23
 
 ### Added

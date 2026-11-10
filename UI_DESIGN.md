@@ -120,7 +120,9 @@ Pasek nawigacyjny z zakładkami:
 - Wymagania kadrowe per dzień / zmiana / rola
 - Tryb szkicu (Draft): generowanie bez natychmiastowego zapisu
 - Ostrzeżenia o 11-godzinnym odpoczynku dobowym oraz brakach kadrowych
-- Przyciski akcji: Generuj, Zapisz, Opublikuj
+- Przyciski akcji: Generuj, Zapisz, Opublikuj, **Historia zmian tygodnia**
+- **Historia zmiany (per slot)**: Ikona `Icons.history_rounded` w prawym górnym rogu każdej komórki zmiany otwierająca modal **„Historia zmiany ({Data} – {Nazwa zmiany})”** z kolorystycznymi badge'ami operacji (`PRZYPISANIE` – zielony, `USUNIĘCIE` – czerwony, `WYMIANA` – fioletowy, `ODDANIE` – indygo, `PUBLIKACJA` – morski)
+- **Panele analityczne**: Rozwijany panel „Analityka i Predykcja WFM”, pasek „Symulator Kosztu Tygodnia (Live Labor Cost)” oraz sekcja wyjaśniająca „Jak to działa?” (`SolverExplanation`)
 
 #### Team Tab (Zespół)
 - Lista pracowników z avatarami i rolami
