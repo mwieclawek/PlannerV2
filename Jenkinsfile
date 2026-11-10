@@ -208,7 +208,7 @@ pipeline {
                             docker run -d --name plannerv2-solver-worker-dev --network plannerv2-network \\
                             -e RABBITMQ_URL="amqp://planner:planner_secret@plannerv2-rabbitmq-dev:5672/" \\
                             -e USE_ASYNC_WORKER="true" \\
-                            -e PYTHONPATH="/app" \\
+                            -e PYTHONPATH="/app/backend:/app" \\
                             --cpus="1.0" --memory="1g" \\
                             --restart unless-stopped plannerv2-solver-worker:dev python -m app.workers.solver_worker
 
@@ -434,7 +434,7 @@ pipeline {
                             docker run -d --name plannerv2-solver-worker --network plannerv2-network \\
                             -e RABBITMQ_URL="amqp://planner:planner_secret@plannerv2-rabbitmq:5672/" \\
                             -e USE_ASYNC_WORKER="true" \\
-                            -e PYTHONPATH="/app" \\
+                            -e PYTHONPATH="/app/backend:/app" \\
                             --cpus="1.0" --memory="1g" \\
                             --restart unless-stopped plannerv2-solver-worker:latest python -m app.workers.solver_worker
 
