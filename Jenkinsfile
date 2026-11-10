@@ -11,6 +11,7 @@ pipeline {
         stage('Checkout') {
             agent any
             steps {
+                deleteDir()
                 checkout scm
                 stash includes: '**/*', name: 'source'
             }
@@ -27,6 +28,7 @@ pipeline {
                         }
                     }
                     steps {
+                        deleteDir()
                         unstash 'source'
                         sh '''
                             pip install -r backend/requirements.txt
@@ -59,6 +61,7 @@ pipeline {
                         }
                     }
                     steps {
+                        deleteDir()
                         unstash 'source'
                         dir('frontend') {
                             sh 'flutter pub get'
@@ -79,6 +82,7 @@ pipeline {
                 }
             }
             steps {
+                deleteDir()
                 unstash 'source'
                 script {
                     def flutterEnv = "dev"
@@ -118,6 +122,7 @@ pipeline {
                 }
             }
             steps {
+                deleteDir()
                 unstash 'source'
                 unstash 'flutter-web'
                 script {
@@ -347,6 +352,7 @@ pipeline {
                 }
             }
             steps {
+                deleteDir()
                 unstash 'source'
                 unstash 'flutter-web'
                 script {
