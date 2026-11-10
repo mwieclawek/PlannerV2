@@ -1,0 +1,26 @@
+# Lightweight, stateless Pure-Compute Dockerfile for solver-worker (OR-Tools CP-SAT + RabbitMQ AMQP)
+# Does NOT install SQLModel, PostgreSQL drivers, FastAPI, ReportLab, or Firebase SDK.
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install only pure-compute & AMQP dependencies required by solver-worker
+RUN pip install --no-cache-dir \
+    ortools \
+    pydantic \
+    aio-pika \
+    tzdata
+
+# Create minimal package structure without database.py or models.py
+RUN mkdir -p backend/app/services backend/app/workers
+
+COPY app/__init__.py backend/app/__init__.py
+COPY app/services/solver.py backend/app/services/solver.py
+COPY app/workers/__init__.py backend/app/workers/__init__.py
+COPY app/workers/solver_worker.py backend/app/workers/solver_worker.py
+
+ENV PYTHONPATH=/app/backend:/app
+ENV PYTHONUNBUFFERED=1
+ENV USE_ASYNC_WORKER=true
+
+CMD ["python", "-m", "app.workers.solver_worker"]

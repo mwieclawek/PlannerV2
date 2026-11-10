@@ -522,3 +522,159 @@ class TestWFMWorkersAndEndpoints:
         sim_data = sim_res.json()
         assert sim_data["total_planned_hours"] == pytest.approx(8.0)
         assert sim_data["estimated_planned_cost"] == pytest.approx(256.0)
+
+    def test_pure_compute_solver_job_payload_contract_without_db_session(self):
+        """
+        Verify ZADANIE 2 & 3:
+        1. `SolverJobPayload` JSON-In -> `solve_from_payload` / `process_solver_payload_message` -> JSON-Out
+           works 100% statelessly without any database session (`session=None`).
+        2. `app.services.solver` and `app.workers.solver_worker` have zero top-level imports of
+           `sqlmodel`, `database`, or `models`.
+        3. RabbitMQ queue names (`wfm.solver.requests`, `wfm.solver.results`, `wfm.analytics.tasks`) are configured.
+        """
+        import ast
+        import json
+        from pathlib import Path
+        from uuid import uuid4
+
+        from app.services.solver import (
+            SolverAvailabilityItem,
+            SolverEmployeeItem,
+            SolverJobPayload,
+            SolverLeaveDayItem,
+            SolverRequirementItem,
+            SolverRoleItem,
+            SolverShiftItem,
+            solve_from_payload,
+        )
+        from app.workers.solver_worker import (
+            SOLVER_REQUESTS_QUEUE,
+            SOLVER_RESULTS_QUEUE,
+            process_solver_payload_message,
+        )
+        from app.workers.wfm_analytics_worker import ANALYTICS_TASKS_QUEUE
+
+        assert SOLVER_REQUESTS_QUEUE == "wfm.solver.requests"
+        assert SOLVER_RESULTS_QUEUE == "wfm.solver.results"
+        assert ANALYTICS_TASKS_QUEUE == "wfm.analytics.tasks"
+
+        # Verify AST of solver.py and solver_worker.py has no top-level DB imports
+        backend_root = Path(__file__).resolve().parent.parent
+        for rel_path in ("app/services/solver.py", "app/workers/solver_worker.py"):
+            src = (backend_root / rel_path).read_text(encoding="utf-8")
+            tree = ast.parse(src)
+            top_level_imports = []
+            for node in tree.body:
+                if isinstance(node, ast.Import):
+                    top_level_imports.extend(alias.name for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    top_level_imports.append(node.module)
+            forbidden = {"sqlmodel", "database", "models", "app.database", "app.models"}
+            for mod_name in top_level_imports:
+                assert not any(f in mod_name for f in forbidden), (
+                    f"{rel_path} has forbidden top-level DB import: {mod_name}"
+                )
+
+        # Build a pure JSON SolverJobPayload without touching any DB session
+        emp_a_id = str(uuid4())
+        emp_b_id = str(uuid4())
+        payload = SolverJobPayload(
+            job_id="test-job-pure-compute-001",
+            tenant_id=99,
+            start_date="2026-11-09",
+            end_date="2026-11-10",
+            save=False,
+            shifts=[
+                SolverShiftItem(
+                    id=1,
+                    name="Zmiana Ranna",
+                    start_time="08:00:00",
+                    end_time="16:00:00",
+                    applicable_days=[0, 1, 2, 3, 4, 5, 6],
+                )
+            ],
+            roles=[SolverRoleItem(id=10, name="Kelner")],
+            employees=[
+                SolverEmployeeItem(
+                    id=emp_a_id,
+                    full_name="Jan Kowalski",
+                    role_ids=[10],
+                    target_hours_per_month=160.0,
+                    target_shifts_per_month=20,
+                    worked_or_scheduled_hours=40.0,
+                    remaining_monthly_target=120.0,
+                    effective_weekly_target_hours=16.0,
+                    effective_weekly_target_minutes=960,
+                    scarcity_ratio=1.1,
+                ),
+                SolverEmployeeItem(
+                    id=emp_b_id,
+                    full_name="Anna Nowak (Urlop)",
+                    role_ids=[10],
+                    target_hours_per_month=160.0,
+                    target_shifts_per_month=20,
+                    worked_or_scheduled_hours=40.0,
+                    remaining_monthly_target=120.0,
+                    effective_weekly_target_hours=8.0,
+                    effective_weekly_target_minutes=480,
+                    scarcity_ratio=0.5,
+                ),
+            ],
+            requirements=[
+                SolverRequirementItem(date="2026-11-09", shift_def_id=1, role_id=10, min_count=1),
+                SolverRequirementItem(date="2026-11-10", shift_def_id=1, role_id=10, min_count=1),
+            ],
+            availabilities=[
+                SolverAvailabilityItem(
+                    user_id=emp_a_id, date="2026-11-09", shift_def_id=1, status="PREFERRED"
+                ),
+                SolverAvailabilityItem(
+                    user_id=emp_a_id, date="2026-11-10", shift_def_id=1, status="AVAILABLE"
+                ),
+                SolverAvailabilityItem(
+                    user_id=emp_b_id, date="2026-11-09", shift_def_id=1, status="AVAILABLE"
+                ),
+                SolverAvailabilityItem(
+                    user_id=emp_b_id, date="2026-11-10", shift_def_id=1, status="AVAILABLE"
+                ),
+            ],
+            leave_days=[
+                # Anna Nowak is on approved leave on both days -> only Jan Kowalski can be assigned
+                SolverLeaveDayItem(user_id=emp_b_id, date="2026-11-09"),
+                SolverLeaveDayItem(user_id=emp_b_id, date="2026-11-10"),
+            ],
+            weekly_targets={
+                emp_a_id: {
+                    "worked_or_scheduled_hours": 40.0,
+                    "remaining_monthly_target": 120.0,
+                    "effective_weekly_target_hours": 16.0,
+                    "effective_weekly_target_minutes": 960,
+                    "scarcity_ratio": 1.1,
+                },
+                emp_b_id: {
+                    "worked_or_scheduled_hours": 40.0,
+                    "remaining_monthly_target": 120.0,
+                    "effective_weekly_target_hours": 8.0,
+                    "effective_weekly_target_minutes": 480,
+                    "scarcity_ratio": 0.5,
+                },
+            },
+        )
+
+        # Serialize to JSON bytes (simulating RabbitMQ message body) and deserialize in worker handler
+        raw_json_bytes = payload.model_dump_json().encode("utf-8")
+        result_dict = process_solver_payload_message(raw_json_bytes)
+
+        # Verify pure JSON output serializability
+        serialized_out = json.dumps(result_dict)
+        parsed_out = json.loads(serialized_out)
+
+        assert parsed_out["job_id"] == "test-job-pure-compute-001"
+        assert parsed_out["status"] == "success"
+        assert parsed_out["count"] == 2
+        assert len(parsed_out["schedules"]) == 2
+        assert all(s["user_id"] == emp_a_id for s in parsed_out["schedules"])
+        assert parsed_out["solver_explanation"]["executed_via"] == "async_worker"
+        assert parsed_out["solver_explanation"]["coverage_pct"] == pytest.approx(100.0)
+        assert parsed_out["solver_explanation"]["total_assigned_slots"] == 2
+

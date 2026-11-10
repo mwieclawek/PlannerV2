@@ -13,9 +13,22 @@ services:
     networks:
       - plannerv2-network
 
-  redis:
-    image: redis:7-alpine
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
     restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "127.0.0.1:15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:-planner}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:-planner_secret}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - plannerv2-network
 
@@ -23,11 +36,13 @@ services:
     build: ./backend
     restart: unless-stopped
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://${RABBITMQ_DEFAULT_USER:-planner}:${RABBITMQ_DEFAULT_PASS:-planner_secret}@rabbitmq:5672/}
       - USE_ASYNC_WORKER=${USE_ASYNC_WORKER:-true}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
@@ -38,16 +53,39 @@ services:
     networks:
       - plannerv2-network
 
-  planner-worker:
-    build: ./backend
-    command: python -m app.workers.main
+  solver-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.solver
+    command: python -m app.workers.solver_worker
     restart: unless-stopped
     depends_on:
-      - db
-      - redis
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://${RABBITMQ_DEFAULT_USER:-planner}:${RABBITMQ_DEFAULT_PASS:-planner_secret}@rabbitmq:5672/}
+      - USE_ASYNC_WORKER=true
+      - PYTHONPATH=/app/backend:/app
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    networks:
+      - plannerv2-network
+
+  analytics-worker:
+    build: ./backend
+    command: python -m app.workers.wfm_analytics_worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://${RABBITMQ_DEFAULT_USER:-planner}:${RABBITMQ_DEFAULT_PASS:-planner_secret}@rabbitmq:5672/}
       - USE_ASYNC_WORKER=true
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
@@ -74,7 +112,7 @@ services:
 
 volumes:
   postgres_data:
-
+  rabbitmq_data:
 
 networks:
   plannerv2-network:

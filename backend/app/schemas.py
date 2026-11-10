@@ -297,6 +297,16 @@ class RequirementResponse(RequirementBase):
     model_config = ConfigDict(from_attributes=True)
 
 # --- Scheduler ---
+from .services.solver import (
+    SolverAvailabilityItem,
+    SolverEmployeeItem,
+    SolverJobPayload,
+    SolverLeaveDayItem,
+    SolverRequirementItem,
+    SolverRoleItem,
+    SolverShiftItem,
+)
+
 class GenerateRequest(BaseModel):
     start_date: date_type
     end_date: date_type

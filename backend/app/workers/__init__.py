@@ -1,7 +1,10 @@
 """
-Isolated Worker Service package for PlannerV2 (WFM CP-SAT Solver & WFM Analytics/Prediction).
-Supports asynchronous execution via Redis/ARQ when USE_ASYNC_WORKER=true,
-and synchronous in-process fallback when USE_ASYNC_WORKER=false (e.g. in pytest).
+Isolated Worker Service package for PlannerV2:
+- `solver-worker` (`python -m app.workers.solver_worker`): Stateless Pure-Compute OR-Tools CP-SAT microservice
+  communicating exclusively over RabbitMQ AMQP (`wfm.solver.requests` -> `wfm.solver.results`).
+- `analytics-worker` (`python -m app.workers.wfm_analytics_worker`): WFM Analytics & Prediction worker
+  communicating over RabbitMQ AMQP (`wfm.analytics.tasks`).
+- Supports synchronous in-process fallback when `USE_ASYNC_WORKER=false` (default in `pytest`).
 """
 import os
 

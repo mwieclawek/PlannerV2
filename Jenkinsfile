@@ -123,7 +123,7 @@ pipeline {
                 script {
                     sh 'apk add --no-cache curl sed || true'
                     
-                    echo "🧹 START BAZY DEV I REDIS DEV (JEŚLI NIE DZIAŁAJĄ)..."
+                    echo "🧹 START BAZY DEV I RABBITMQ DEV (JEŚLI NIE DZIAŁAJĄ)..."
                     sh 'docker network create plannerv2-network || true'
                     
                     sh '''
@@ -138,14 +138,16 @@ pipeline {
                             echo "✅ Baza DEV już działa. Pomijam uruchamianie."
                         fi
 
-                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-redis-dev 2>/dev/null)" != "true" ]; then
-                            echo "⚡ Redis DEV nie działa. Uruchamiam..."
-                            docker rm -f plannerv2-redis-dev || true
-                            docker run -d --name plannerv2-redis-dev --network plannerv2-network \\
-                              --restart unless-stopped redis:7-alpine
-                            sleep 3
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-rabbitmq-dev 2>/dev/null)" != "true" ]; then
+                            echo "🐇 RabbitMQ DEV nie działa. Uruchamiam..."
+                            docker rm -f plannerv2-rabbitmq-dev plannerv2-redis-dev || true
+                            docker run -d --name plannerv2-rabbitmq-dev --network plannerv2-network \\
+                              -e RABBITMQ_DEFAULT_USER=planner -e RABBITMQ_DEFAULT_PASS=planner_secret \\
+                              -v plannerv2_rabbitmq_data_dev:/var/lib/rabbitmq \\
+                              --restart unless-stopped rabbitmq:3-management-alpine
+                            sleep 6
                         else
-                            echo "✅ Redis DEV już działa. Pomijam uruchamianie."
+                            echo "✅ RabbitMQ DEV już działa. Pomijam uruchamianie."
                         fi
                     '''
                     
@@ -162,8 +164,9 @@ pipeline {
                         fi
                     '''
                     
-                    echo "🐍 Budowa i uruchamianie nowego Backend DEV (Blue-Green)..."
+                    echo "🐍 Budowa i uruchamianie nowego Backend DEV oraz Workerów DEV (Blue-Green)..."
                     sh 'docker build -t plannerv2-backend:dev ./backend'
+                    sh 'docker build -f ./backend/Dockerfile.solver -t plannerv2-solver-worker:dev ./backend'
                     
                     sh 'docker stop plannerv2-backend-dev-new || true'
                     sh 'docker rm -f plannerv2-backend-dev-new || true'
@@ -183,7 +186,7 @@ pipeline {
                             docker create --name plannerv2-backend-dev-new --network plannerv2-network \\
                             -v plannerv2_logs_dev:/app/logs \\
                             -e DATABASE_URL="postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db" \\
-                            -e REDIS_URL="redis://plannerv2-redis-dev:6379/0" \\
+                            -e RABBITMQ_URL="amqp://planner:planner_secret@plannerv2-rabbitmq-dev:5672/" \\
                             -e USE_ASYNC_WORKER="true" \\
                             -e GITHUB_TOKEN="\${GH_TOKEN}" \\
                             -e JWT_SECRET_KEY="\${JWT_SECRET}" \\
@@ -199,17 +202,25 @@ pipeline {
                             docker exec plannerv2-db-dev psql -U planner_user -d planner_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'planner_db' AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';" >/dev/null 2>&1 || true
                             docker start plannerv2-backend-dev-new
 
-                            docker stop plannerv2-worker-dev || true
-                            docker rm -f plannerv2-worker-dev || true
-                            docker run -d --name plannerv2-worker-dev --network plannerv2-network \\
+                            docker stop plannerv2-worker-dev plannerv2-solver-worker-dev plannerv2-analytics-worker-dev || true
+                            docker rm -f plannerv2-worker-dev plannerv2-solver-worker-dev plannerv2-analytics-worker-dev || true
+
+                            docker run -d --name plannerv2-solver-worker-dev --network plannerv2-network \\
+                            -e RABBITMQ_URL="amqp://planner:planner_secret@plannerv2-rabbitmq-dev:5672/" \\
+                            -e USE_ASYNC_WORKER="true" \\
+                            -e PYTHONPATH="/app" \\
+                            --cpus="1.0" --memory="1g" \\
+                            --restart unless-stopped plannerv2-solver-worker:dev python -m app.workers.solver_worker
+
+                            docker run -d --name plannerv2-analytics-worker-dev --network plannerv2-network \\
                             -v plannerv2_logs_dev:/app/logs \\
                             -e DATABASE_URL="postgresql://planner_user:planner_password@plannerv2-db-dev:5432/planner_db" \\
-                            -e REDIS_URL="redis://plannerv2-redis-dev:6379/0" \\
+                            -e RABBITMQ_URL="amqp://planner:planner_secret@plannerv2-rabbitmq-dev:5672/" \\
                             -e USE_ASYNC_WORKER="true" \\
                             -e JWT_SECRET_KEY="\${JWT_SECRET}" \\
                             -e ENCRYPTION_KEY="\${ENCRYPTION_KEY}" \\
                             -e PYTHONPATH="/app/backend:/app" \\
-                            --restart unless-stopped plannerv2-backend:dev python -m app.workers.main
+                            --restart unless-stopped plannerv2-backend:dev python -m app.workers.wfm_analytics_worker
                         """
                     }
                     sh 'sleep 10'
@@ -341,7 +352,7 @@ pipeline {
                     echo "🚀 DEPLOY PRODUKCJI: ${env.TAG_NAME}"
                     sh 'apk add --no-cache curl || true'
                     
-                    echo "🧹 START BAZY PROD I REDIS PROD (JEŚLI NIE DZIAŁAJĄ)..."
+                    echo "🧹 START BAZY PROD I RABBITMQ PROD (JEŚLI NIE DZIAŁAJĄ)..."
                     sh 'docker network create plannerv2-network || true'
                     
                     sh '''
@@ -355,14 +366,16 @@ pipeline {
                             echo "✅ Baza PROD już działa. Pomijam uruchamianie."
                         fi
 
-                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-redis 2>/dev/null)" != "true" ]; then
-                            echo "⚡ Redis PROD nie działa. Uruchamiam..."
-                            docker rm -f plannerv2-redis || true
-                            docker run -d --name plannerv2-redis --network plannerv2-network \\
-                              --restart unless-stopped redis:7-alpine
-                            sleep 3
+                        if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-rabbitmq 2>/dev/null)" != "true" ]; then
+                            echo "🐇 RabbitMQ PROD nie działa. Uruchamiam..."
+                            docker rm -f plannerv2-rabbitmq plannerv2-redis || true
+                            docker run -d --name plannerv2-rabbitmq --network plannerv2-network \\
+                              -e RABBITMQ_DEFAULT_USER=planner -e RABBITMQ_DEFAULT_PASS=planner_secret \\
+                              -v plannerv2_rabbitmq_data:/var/lib/rabbitmq \\
+                              --restart unless-stopped rabbitmq:3-management-alpine
+                            sleep 6
                         else
-                            echo "✅ Redis PROD już działa. Pomijam uruchamianie."
+                            echo "✅ RabbitMQ PROD już działa. Pomijam uruchamianie."
                         fi
                     '''
                     
@@ -379,8 +392,9 @@ pipeline {
                         fi
                     '''
                     
-                    echo "🐍 Budowa i uruchamianie nowego Backend PROD (Blue-Green)..."
+                    echo "🐍 Budowa i uruchamianie nowego Backend PROD oraz Workerów PROD (Blue-Green)..."
                     sh 'docker build -t plannerv2-backend:latest ./backend'
+                    sh 'docker build -f ./backend/Dockerfile.solver -t plannerv2-solver-worker:latest ./backend'
                     
                     sh 'docker stop plannerv2-backend-new || true'
                     sh 'docker rm -f plannerv2-backend-new || true'
@@ -398,7 +412,7 @@ pipeline {
                             docker create --name plannerv2-backend-new --network plannerv2-network \\
                             -v plannerv2_logs:/app/logs \\
                             -e DATABASE_URL="postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db" \\
-                            -e REDIS_URL="redis://plannerv2-redis:6379/0" \\
+                            -e RABBITMQ_URL="amqp://planner:planner_secret@plannerv2-rabbitmq:5672/" \\
                             -e USE_ASYNC_WORKER="true" \\
                             -e GITHUB_TOKEN="\${GH_TOKEN}" \\
                             -e JWT_SECRET_KEY="\${JWT_SECRET}" \\
@@ -414,17 +428,25 @@ pipeline {
                             docker exec plannerv2-db psql -U planner_user -d planner_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'planner_db' AND pid <> pg_backend_pid() AND state LIKE 'idle in transaction%';" >/dev/null 2>&1 || true
                             docker start plannerv2-backend-new
 
-                            docker stop plannerv2-worker || true
-                            docker rm -f plannerv2-worker || true
-                            docker run -d --name plannerv2-worker --network plannerv2-network \\
+                            docker stop plannerv2-worker plannerv2-solver-worker plannerv2-analytics-worker || true
+                            docker rm -f plannerv2-worker plannerv2-solver-worker plannerv2-analytics-worker || true
+
+                            docker run -d --name plannerv2-solver-worker --network plannerv2-network \\
+                            -e RABBITMQ_URL="amqp://planner:planner_secret@plannerv2-rabbitmq:5672/" \\
+                            -e USE_ASYNC_WORKER="true" \\
+                            -e PYTHONPATH="/app" \\
+                            --cpus="1.0" --memory="1g" \\
+                            --restart unless-stopped plannerv2-solver-worker:latest python -m app.workers.solver_worker
+
+                            docker run -d --name plannerv2-analytics-worker --network plannerv2-network \\
                             -v plannerv2_logs:/app/logs \\
                             -e DATABASE_URL="postgresql://planner_user:planner_password@plannerv2-db:5432/planner_db" \\
-                            -e REDIS_URL="redis://plannerv2-redis:6379/0" \\
+                            -e RABBITMQ_URL="amqp://planner:planner_secret@plannerv2-rabbitmq:5672/" \\
                             -e USE_ASYNC_WORKER="true" \\
                             -e JWT_SECRET_KEY="\${JWT_SECRET}" \\
                             -e ENCRYPTION_KEY="\${ENCRYPTION_KEY}" \\
                             -e PYTHONPATH="/app/backend:/app" \\
-                            --restart unless-stopped plannerv2-backend:latest python -m app.workers.main
+                            --restart unless-stopped plannerv2-backend:latest python -m app.workers.wfm_analytics_worker
                         """
                     }
                     sh 'sleep 10'

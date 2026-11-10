@@ -683,3 +683,401 @@ class SchedulerService:
             tenant_id=self.tenant_id,
         )
         return {"status": "deleted"}
+
+    def build_solver_job_payload(
+        self,
+        start_date: date,
+        end_date: date,
+        save: bool = False,
+        weekly_targets: Optional[Dict[Any, Dict[str, Any]]] = None,
+        job_id: Optional[str] = None,
+    ) -> Any:
+        """
+        Pobiera z bazy PostgreSQL komplet danych potrzebnych do optymalizacji grafiku
+        i buduje samowystarczalny obiekt `SolverJobPayload` dla bezstanowego `solver-worker`.
+        """
+        from uuid import uuid4
+        from ..models import StaffingRequirement
+        from .solver import (
+            SolverAvailabilityItem,
+            SolverEmployeeItem,
+            SolverJobPayload,
+            SolverLeaveDayItem,
+            SolverRequirementItem,
+            SolverRoleItem,
+            SolverShiftItem,
+        )
+
+        tid = self.tenant_id
+        emp_q = select(User).where(User.is_active == True)
+        shift_q = select(ShiftDefinition)
+        role_q = select(JobRole)
+        if tid is not None:
+            emp_q = emp_q.where(User.tenant_id == tid)
+            shift_q = shift_q.where(ShiftDefinition.tenant_id == tid)
+            role_q = role_q.where(JobRole.tenant_id == tid)
+
+        employees = list(self.session.exec(emp_q).all())
+        shifts = list(self.session.exec(shift_q).all())
+        roles = list(self.session.exec(role_q).all())
+        tenant_shift_ids = {s.id for s in shifts}
+        emp_ids = {e.id for e in employees}
+
+        if weekly_targets is None:
+            weekly_targets = self.compute_weekly_targets(
+                start_date, end_date, employees=employees, shifts=shifts
+            )
+
+        # Normalize weekly_targets keys to string UUIDs for JSON serialization
+        serialized_wt: Dict[str, Dict[str, Any]] = {}
+        for k, v in weekly_targets.items():
+            row_copy = dict(v)
+            if "user_id" in row_copy:
+                row_copy["user_id"] = str(row_copy["user_id"])
+            serialized_wt[str(k)] = row_copy
+
+        delta = end_date - start_date
+        days = [start_date + timedelta(days=i) for i in range(delta.days + 1)]
+
+        # Operational availabilities
+        availabilities = self.session.exec(
+            select(Availability).where(
+                Availability.date >= start_date,
+                Availability.date <= end_date,
+            )
+        ).all()
+        if tid is not None:
+            availabilities = [a for a in availabilities if a.user_id in emp_ids]
+
+        avail_items: List[SolverAvailabilityItem] = []
+        for a in availabilities:
+            val = str(a.status.value) if hasattr(a.status, "value") else str(a.status)
+            avail_items.append(
+                SolverAvailabilityItem(
+                    user_id=str(a.user_id),
+                    date=a.date.isoformat(),
+                    shift_def_id=a.shift_def_id,
+                    status=val,
+                )
+            )
+
+        # Approved leaves in [start_date, end_date]
+        approved_leaves = self.session.exec(
+            select(LeaveRequest).where(
+                LeaveRequest.status == LeaveStatus.APPROVED,
+                LeaveRequest.start_date <= end_date,
+                LeaveRequest.end_date >= start_date,
+            )
+        ).all()
+        if tid is not None:
+            approved_leaves = [lr for lr in approved_leaves if lr.user_id in emp_ids]
+
+        leave_items: List[SolverLeaveDayItem] = []
+        seen_leaves: Set[Tuple[str, str]] = set()
+        for lr in approved_leaves:
+            cur = max(start_date, lr.start_date)
+            end_lr = min(end_date, lr.end_date)
+            while cur <= end_lr:
+                key_l = (str(lr.user_id), cur.isoformat())
+                if key_l not in seen_leaves:
+                    seen_leaves.add(key_l)
+                    leave_items.append(SolverLeaveDayItem(user_id=key_l[0], date=key_l[1]))
+                cur += timedelta(days=1)
+
+        # Staffing requirements (global + specific overrides)
+        specific_reqs = self.session.exec(
+            select(StaffingRequirement).where(
+                StaffingRequirement.date >= start_date,
+                StaffingRequirement.date <= end_date,
+            )
+        ).all()
+        if tid is not None:
+            specific_reqs = [r for r in specific_reqs if r.shift_def_id in tenant_shift_ids]
+
+        global_reqs = self.session.exec(
+            select(StaffingRequirement).where(StaffingRequirement.day_of_week != None)
+        ).all()
+        if tid is not None:
+            global_reqs = [r for r in global_reqs if r.shift_def_id in tenant_shift_ids]
+
+        req_map: Dict[Tuple[str, int, int], int] = {}
+        for d in days:
+            dow = d.weekday()
+            d_iso = d.isoformat()
+            for r in global_reqs:
+                if r.day_of_week == dow:
+                    req_map[(d_iso, r.shift_def_id, r.role_id)] = r.min_count
+        for r in specific_reqs:
+            if r.date:
+                req_map[(r.date.isoformat(), r.shift_def_id, r.role_id)] = r.min_count
+
+        req_items: List[SolverRequirementItem] = [
+            SolverRequirementItem(
+                date=d_iso,
+                shift_def_id=s_id,
+                role_id=r_id,
+                min_count=min_cnt,
+            )
+            for (d_iso, s_id, r_id), min_cnt in req_map.items()
+        ]
+
+        shift_items: List[SolverShiftItem] = []
+        for s in shifts:
+            if hasattr(s, "days") and s.days:
+                app_days = [link.day_of_week for link in s.days]
+            else:
+                app_days = list(range(7))
+            shift_items.append(
+                SolverShiftItem(
+                    id=s.id,
+                    name=s.name,
+                    start_time=s.start_time.strftime("%H:%M:%S"),
+                    end_time=s.end_time.strftime("%H:%M:%S"),
+                    applicable_days=app_days,
+                )
+            )
+
+        role_items: List[SolverRoleItem] = [
+            SolverRoleItem(id=r.id, name=r.name) for r in roles
+        ]
+
+        emp_items: List[SolverEmployeeItem] = []
+        for e in employees:
+            wt = serialized_wt.get(str(e.id), {})
+            worked_h = float(wt.get("worked_or_scheduled_hours", 0.0))
+            rem_h = float(
+                wt.get(
+                    "remaining_monthly_target",
+                    max(0.0, float(e.target_hours_per_month) - worked_h)
+                    if e.target_hours_per_month is not None
+                    else 0.0,
+                )
+            )
+            eff_h = float(wt.get("effective_weekly_target_hours", rem_h))
+            eff_min = int(wt.get("effective_weekly_target_minutes", int(round(eff_h * 60))))
+            scarcity = float(wt.get("scarcity_ratio", 0.0))
+            emp_items.append(
+                SolverEmployeeItem(
+                    id=str(e.id),
+                    full_name=e.full_name,
+                    role_ids=[ur.id for ur in getattr(e, "job_roles", [])],
+                    target_hours_per_month=float(e.target_hours_per_month)
+                    if e.target_hours_per_month is not None
+                    else None,
+                    target_shifts_per_month=e.target_shifts_per_month,
+                    worked_or_scheduled_hours=worked_h,
+                    remaining_monthly_target=rem_h,
+                    effective_weekly_target_hours=eff_h,
+                    effective_weekly_target_minutes=eff_min,
+                    scarcity_ratio=scarcity,
+                )
+            )
+
+        return SolverJobPayload(
+            job_id=job_id or str(uuid4()),
+            tenant_id=tid,
+            start_date=start_date.isoformat(),
+            end_date=end_date.isoformat(),
+            save=save,
+            shifts=shift_items,
+            roles=role_items,
+            employees=emp_items,
+            requirements=req_items,
+            availabilities=avail_items,
+            leave_days=leave_items,
+            weekly_targets=serialized_wt,
+        )
+
+    def finalize_solver_result(
+        self,
+        raw_result: Dict[str, Any],
+        start_date: date,
+        end_date: date,
+        save: bool = False,
+        actor: Any = None,
+    ) -> Dict[str, Any]:
+        """
+        Przetwarza wynik JSON zwrócony przez `solve_from_payload` (lub z kolejki RabbitMQ `wfm.solver.results`):
+        - emituje zdarzenia biznesowe `log_event` (SOLVER / DEFICIT),
+        - opcjonalnie zapisuje wygenerowane wpisy `Schedule` w bazie (gdy `save=True`),
+        - hydratuje typy (`UUID`, `date`, `time`) w liście `schedules`.
+        """
+        from .solver import _parse_time_str
+
+        tid = self.tenant_id
+        status_str = raw_result.get("status", "infeasible")
+        explanation = raw_result.get("solver_explanation", {})
+        status_name = explanation.get("solver_status", status_str.upper())
+        solve_duration = float(explanation.get("solve_duration_sec", 0.0))
+        warnings = raw_result.get("warnings", [])
+
+        if status_str == "success":
+            deficit_details = explanation.get("deficit_details", {})
+            employee_summary_log = explanation.get("employee_summary_log", {})
+
+            if warnings:
+                log_event(
+                    "DEFICIT",
+                    f"Wykryto braki kadrowe przy generowaniu grafiku ({len(warnings)} pozycji)",
+                    deficit_details,
+                    level="WARNING",
+                    actor=actor or "System / Solver",
+                    tenant_id=tid,
+                )
+
+            raw_schedules = raw_result.get("schedules", [])
+            log_event(
+                "SOLVER",
+                f"Wygenerowano grafik pracy ({start_date} – {end_date})",
+                {
+                    "zakres": f"{start_date} - {end_date}",
+                    "status": status_name,
+                    "czas_wykonania_s": round(solve_duration, 2),
+                    "przypisane_zmiany": len(raw_schedules),
+                    "liczba_deficytow": len(warnings),
+                    "pracownicy": employee_summary_log,
+                },
+                level="INFO" if not warnings else "WARNING",
+                actor=actor or "System / Solver",
+                tenant_id=tid,
+            )
+
+            enriched_schedules: List[Dict[str, Any]] = []
+            if save:
+                from ..models import ShiftAuditLog
+
+                statements = select(Schedule).where(
+                    Schedule.date >= start_date, Schedule.date <= end_date
+                )
+                results = self.session.exec(statements).all()
+                res_ids = [r.id for r in results]
+                if res_ids:
+                    for al in self.session.exec(
+                        select(ShiftAuditLog).where(ShiftAuditLog.schedule_id.in_(res_ids))
+                    ).all():
+                        al.schedule_id = None
+                        self.session.add(al)
+                for res in results:
+                    self.session.delete(res)
+
+                persisted_rows: List[ Tuple[Schedule, Dict[str, Any]] ] = []
+                for item in raw_schedules:
+                    d_val = (
+                        date.fromisoformat(item["date"])
+                        if isinstance(item["date"], str)
+                        else item["date"]
+                    )
+                    u_val = (
+                        UUID(str(item["user_id"]))
+                        if not isinstance(item["user_id"], UUID)
+                        else item["user_id"]
+                    )
+                    sc = Schedule(
+                        date=d_val,
+                        shift_def_id=int(item["shift_def_id"]),
+                        user_id=u_val,
+                        role_id=int(item["role_id"]),
+                        is_published=bool(item.get("is_published", False)),
+                    )
+                    self.session.add(sc)
+                    persisted_rows.append((sc, item))
+
+                self.session.commit()
+                logger.info(
+                    f"[SOLVER WORKER] Zapisano do bazy {len(persisted_rows)} wpisów grafiku dla zakresu {start_date} - {end_date} [tenant:{tid}]."
+                )
+
+                for sc, item in persisted_rows:
+                    enriched_schedules.append({
+                        "id": sc.id,
+                        "date": sc.date,
+                        "shift_def_id": sc.shift_def_id,
+                        "user_id": sc.user_id,
+                        "role_id": sc.role_id,
+                        "is_published": sc.is_published,
+                        "user_name": item.get("user_name", "Unknown"),
+                        "role_name": item.get("role_name", "Unknown"),
+                        "shift_name": item.get("shift_name", "Unknown"),
+                        "start_time": _parse_time_str(item["start_time"])
+                        if item.get("start_time")
+                        else None,
+                        "end_time": _parse_time_str(item["end_time"])
+                        if item.get("end_time")
+                        else None,
+                    })
+            else:
+                for item in raw_schedules:
+                    d_val = (
+                        date.fromisoformat(item["date"])
+                        if isinstance(item["date"], str)
+                        else item["date"]
+                    )
+                    u_val = (
+                        UUID(str(item["user_id"]))
+                        if not isinstance(item["user_id"], UUID)
+                        else item["user_id"]
+                    )
+                    id_val = (
+                        UUID(str(item["id"]))
+                        if item.get("id") and not isinstance(item["id"], UUID)
+                        else item.get("id")
+                    )
+                    enriched_schedules.append({
+                        "id": id_val,
+                        "date": d_val,
+                        "shift_def_id": int(item["shift_def_id"]),
+                        "user_id": u_val,
+                        "role_id": int(item["role_id"]),
+                        "is_published": bool(item.get("is_published", False)),
+                        "user_name": item.get("user_name", "Unknown"),
+                        "role_name": item.get("role_name", "Unknown"),
+                        "shift_name": item.get("shift_name", "Unknown"),
+                        "start_time": _parse_time_str(item["start_time"])
+                        if item.get("start_time")
+                        else None,
+                        "end_time": _parse_time_str(item["end_time"])
+                        if item.get("end_time")
+                        else None,
+                    })
+
+            clean_explanation = {
+                k: v
+                for k, v in explanation.items()
+                if k not in ("deficit_details", "employee_summary_log")
+            }
+            return {
+                "status": "success",
+                "count": len(enriched_schedules),
+                "schedules": enriched_schedules,
+                "warnings": warnings,
+                "weekly_targets": raw_result.get("weekly_targets", {}),
+                "solver_explanation": clean_explanation,
+            }
+        else:
+            log_event(
+                "SOLVER",
+                f"Solver nie znalazł dopuszczalnego grafiku ({start_date} – {end_date})",
+                {
+                    "zakres": f"{start_date} - {end_date}",
+                    "status": status_name,
+                    "czas_wykonania_s": round(solve_duration, 2),
+                    "przypisane_zmiany": 0,
+                    "liczba_deficytow": 0,
+                },
+                level="ERROR",
+                actor=actor or "System / Solver",
+                tenant_id=tid,
+            )
+            clean_explanation = {
+                k: v
+                for k, v in explanation.items()
+                if k not in ("deficit_details", "employee_summary_log")
+            }
+            return {
+                "status": "infeasible",
+                "count": 0,
+                "warnings": [],
+                "weekly_targets": raw_result.get("weekly_targets", {}),
+                "solver_explanation": clean_explanation,
+            }
+
