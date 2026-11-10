@@ -868,6 +868,8 @@ def _format_audit_log_summary(l: ShiftAuditLog, author_name: Optional[str]) -> s
         return f"Odrzucono obecność: {target}"
     elif action == "UPDATE_SHIFT_HOURS":
         return f"Zaktualizowano godziny zmiany {shift}"
+    elif action == "SOLVER_CP_SAT_RUN":
+        return "Automatyczne wygenerowanie szkicu grafiku (AI Solver)"
     return l.new_value or l.old_value or action
 
 

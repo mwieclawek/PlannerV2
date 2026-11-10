@@ -461,6 +461,61 @@ class TestShiftSwapAndAuditLog:
             assert l["shift_def_id"] == shift_definition.id
             assert l["date"] == str(today)
 
+        # 4. Batch save (UI workflow: add assignment via save_batch -> remove via save_batch)
+        batch_day = date.today() + timedelta(days=11)
+        save_add_res = await client.post(
+            "/scheduler/save_batch",
+            headers=auth_headers,
+            json={
+                "start_date": str(batch_day),
+                "end_date": str(batch_day),
+                "items": [{
+                    "date": str(batch_day),
+                    "shift_def_id": shift_definition.id,
+                    "user_id": str(user.id),
+                    "role_id": job_role.id,
+                }],
+            },
+        )
+        assert save_add_res.status_code == 200
+        assert save_add_res.json()["count"] == 1
+
+        slot_after_batch_add = await client.get(
+            f"/manager/shifts/slot:{batch_day}:{shift_definition.id}/audit-log",
+            params={"date": str(batch_day), "shift_def_id": shift_definition.id},
+            headers=auth_headers,
+        )
+        assert slot_after_batch_add.status_code == 200
+        batch_add_logs = slot_after_batch_add.json()
+        assert len(batch_add_logs) == 1
+        assert batch_add_logs[0]["action"] == "ASSIGNED"
+        assert "Dodano:" in batch_add_logs[0]["summary"]
+
+        # Remove via save_batch (empty items for that day)
+        save_rem_res = await client.post(
+            "/scheduler/save_batch",
+            headers=auth_headers,
+            json={
+                "start_date": str(batch_day),
+                "end_date": str(batch_day),
+                "items": [],
+            },
+        )
+        assert save_rem_res.status_code == 200
+        assert save_rem_res.json()["count"] == 0
+
+        slot_after_batch_rem = await client.get(
+            f"/manager/shifts/slot:{batch_day}:{shift_definition.id}/audit-log",
+            params={"date": str(batch_day), "shift_def_id": shift_definition.id},
+            headers=auth_headers,
+        )
+        assert slot_after_batch_rem.status_code == 200
+        batch_rem_logs = slot_after_batch_rem.json()
+        rem_actions = [l["action"] for l in batch_rem_logs]
+        assert "ASSIGNED" in rem_actions
+        assert "UNASSIGNED" in rem_actions
+        assert any("Usunięto:" in (l.get("summary") or "") for l in batch_rem_logs)
+
     async def test_audit_log_tenant_isolation(
         self, client: AsyncClient, session: Session, auth_headers: dict, test_tenant
     ):

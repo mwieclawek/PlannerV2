@@ -114,8 +114,9 @@ class SchedulerService:
             if found != role_ids:
                 raise HTTPException(status_code=404, detail="Role not found")
 
-    def save_batch(self, batch: BatchSaveRequest, background_tasks=None) -> int:
+    def save_batch(self, batch: BatchSaveRequest, background_tasks=None, changed_by_user_id: Optional[UUID] = None) -> int:
         self._validate_batch_refs(batch.items)
+        from ..models import Attendance, ShiftAuditLog
         # 1. Clear existing in range
         statements = select(Schedule).join(User, Schedule.user_id == User.id).where(
             Schedule.date >= batch.start_date, 
@@ -123,13 +124,59 @@ class SchedulerService:
             User.tenant_id == self.tenant_id
         )
         existing = self.session.exec(statements).all()
+
+        all_user_ids = {e.user_id for e in existing} | {i.user_id for i in batch.items}
+        all_shift_ids = {e.shift_def_id for e in existing} | {i.shift_def_id for i in batch.items}
+        all_role_ids = {e.role_id for e in existing if e.role_id} | {i.role_id for i in batch.items if i.role_id}
+        users_by_id = (
+            {u.id: u for u in self.session.exec(select(User).where(User.id.in_(all_user_ids))).all()}
+            if all_user_ids else {}
+        )
+        shifts_by_id = (
+            {s.id: s for s in self.session.exec(select(ShiftDefinition).where(ShiftDefinition.id.in_(all_shift_ids))).all()}
+            if all_shift_ids else {}
+        )
+        roles_by_id = (
+            {r.id: r for r in self.session.exec(select(JobRole).where(JobRole.id.in_(all_role_ids))).all()}
+            if all_role_ids else {}
+        )
+        actor_user = self.session.get(User, changed_by_user_id) if changed_by_user_id else None
+        actor_label = actor_user.full_name if actor_user else "Manager"
+
+        existing_by_key = {(e.date, e.shift_def_id, e.user_id): e for e in existing}
+        new_by_key = {(i.date, i.shift_def_id, i.user_id): i for i in batch.items}
+
+        # Log UNASSIGNED for entries present in existing but removed in batch.items
+        for key, old_sched in existing_by_key.items():
+            if key not in new_by_key:
+                emp_obj = users_by_id.get(old_sched.user_id)
+                shift_obj = shifts_by_id.get(old_sched.shift_def_id)
+                role_obj = roles_by_id.get(old_sched.role_id) if old_sched.role_id else None
+                emp_label = emp_obj.full_name if emp_obj else str(old_sched.user_id)
+                shift_label = shift_obj.name if shift_obj else str(old_sched.shift_def_id)
+                role_label = role_obj.name if role_obj else "Pracownik"
+                self.session.add(ShiftAuditLog(
+                    restaurant_id=self.tenant_id,
+                    shift_id=str(old_sched.id),
+                    schedule_id=None,
+                    shift_def_id=old_sched.shift_def_id,
+                    date=old_sched.date,
+                    changed_by_user_id=changed_by_user_id,
+                    action="UNASSIGNED",
+                    shift_name_snapshot=shift_label,
+                    role_name_snapshot=role_label,
+                    target_user_name=emp_label,
+                    actor_name=actor_label,
+                    old_value=f"user_id={old_sched.user_id}, role_id={old_sched.role_id}, shift_def_id={old_sched.shift_def_id}",
+                    new_value=None,
+                    summary=f"Usunięto: {emp_label} ({role_label}) ze zmiany {shift_label}",
+                ))
         
         # Handle linked Attendance and ShiftAuditLog records (set schedule_id to None) to avoid FK violation
         existing_ids = [e.id for e in existing]
         existing_map = {e.id: e for e in existing}
         existing_str_map = {str(e.id): e for e in existing}
         if existing_ids:
-            from ..models import Attendance, ShiftAuditLog
             linked_attendances = self.session.exec(
                 select(Attendance).where(Attendance.schedule_id.in_(existing_ids))
             ).all()
@@ -166,6 +213,7 @@ class SchedulerService:
         # 2. Add new items
         count = 0
         new_entries = []
+        created_pairs = []
         is_published = getattr(batch, 'is_published', False)
         for item in batch.items:
             new_sched = Schedule(
@@ -176,8 +224,59 @@ class SchedulerService:
                 is_published=is_published
             )
             self.session.add(new_sched)
+            created_pairs.append((new_sched, item))
             new_entries.append((new_sched.id, new_sched.user_id, is_published))
             count += 1
+
+        self.session.flush()
+
+        # Log ASSIGNED for newly added or role-changed entries
+        for new_sched, item in created_pairs:
+            key = (item.date, item.shift_def_id, item.user_id)
+            emp_obj = users_by_id.get(new_sched.user_id)
+            shift_obj = shifts_by_id.get(new_sched.shift_def_id)
+            role_obj = roles_by_id.get(new_sched.role_id) if new_sched.role_id else None
+            emp_label = emp_obj.full_name if emp_obj else str(new_sched.user_id)
+            shift_label = shift_obj.name if shift_obj else str(new_sched.shift_def_id)
+            role_label = role_obj.name if role_obj else "Pracownik"
+
+            if key not in existing_by_key:
+                self.session.add(ShiftAuditLog(
+                    restaurant_id=self.tenant_id,
+                    shift_id=str(new_sched.id),
+                    schedule_id=new_sched.id,
+                    shift_def_id=new_sched.shift_def_id,
+                    date=new_sched.date,
+                    changed_by_user_id=changed_by_user_id,
+                    action="ASSIGNED",
+                    shift_name_snapshot=shift_label,
+                    role_name_snapshot=role_label,
+                    target_user_name=emp_label,
+                    actor_name=actor_label,
+                    old_value=None,
+                    new_value=f"user_id={new_sched.user_id}, role_id={new_sched.role_id}, shift_def_id={new_sched.shift_def_id}",
+                    summary=f"Dodano: {emp_label} ({role_label}) na zmianę {shift_label}",
+                ))
+            elif existing_by_key[key].role_id != item.role_id:
+                old_sched = existing_by_key[key]
+                old_role_obj = roles_by_id.get(old_sched.role_id) if old_sched.role_id else None
+                old_role_label = old_role_obj.name if old_role_obj else str(old_sched.role_id)
+                self.session.add(ShiftAuditLog(
+                    restaurant_id=self.tenant_id,
+                    shift_id=str(new_sched.id),
+                    schedule_id=new_sched.id,
+                    shift_def_id=new_sched.shift_def_id,
+                    date=new_sched.date,
+                    changed_by_user_id=changed_by_user_id,
+                    action="ASSIGNED",
+                    shift_name_snapshot=shift_label,
+                    role_name_snapshot=role_label,
+                    target_user_name=emp_label,
+                    actor_name=actor_label,
+                    old_value=f"user_id={old_sched.user_id}, role_id={old_sched.role_id}, shift_def_id={old_sched.shift_def_id}",
+                    new_value=f"user_id={new_sched.user_id}, role_id={new_sched.role_id}, shift_def_id={new_sched.shift_def_id}",
+                    summary=f"Zmieniono: {emp_label} ({role_label}) na zmianę {shift_label} (poprzednio rola: {old_role_label})",
+                ))
         
         self.session.commit()
 

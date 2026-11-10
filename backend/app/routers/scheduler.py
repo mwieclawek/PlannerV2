@@ -98,9 +98,9 @@ def save_batch_schedule(
     batch: BatchSaveRequest,
     background_tasks: BackgroundTasks,
     service: SchedulerService = Depends(get_scheduler_service),
-    _: User = Depends(get_manager_user)
+    current_user: User = Depends(get_manager_user)
 ):
-    count = service.save_batch(batch, background_tasks)
+    count = service.save_batch(batch, background_tasks, changed_by_user_id=current_user.id)
     return {"status": "saved", "count": count}
 
 @router.get("/list", response_model=List[ScheduleResponse])
@@ -108,7 +108,7 @@ def list_schedules(
     start_date: date,
     end_date: date,
     service: SchedulerService = Depends(get_scheduler_service),
-    _: User = Depends(get_manager_user)
+    current_user: User = Depends(get_manager_user)
 ):
     return service.get_schedule_list(start_date, end_date)
 

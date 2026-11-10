@@ -714,7 +714,14 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
     String shiftName, {
     String? scheduleId,
   }) async {
+    if (_hasUnsavedChanges) {
+      await _saveChanges();
+    }
+    if (!mounted) return;
     final dateStr = DateFormat('d MMM', 'pl_PL').format(date);
+    final effectiveId = (scheduleId != null && !scheduleId.startsWith('local_'))
+        ? scheduleId
+        : 'slot:${DateFormat('yyyy-MM-dd').format(date)}:$shiftDefId';
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -735,7 +742,7 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           width: 480,
           child: FutureBuilder<List<ShiftAuditLogEntry>>(
             future: ref.read(apiServiceProvider).getShiftAuditLog(
-              scheduleId ?? 'slot:${DateFormat('yyyy-MM-dd').format(date)}:$shiftDefId',
+              effectiveId,
               date: date,
               shiftDefId: shiftDefId,
             ),
@@ -772,6 +779,10 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
   }
 
   Future<void> _showWeekAuditLogDialog() async {
+    if (_hasUnsavedChanges) {
+      await _saveChanges();
+    }
+    if (!mounted) return;
     final startStr = DateFormat('d MMM', 'pl_PL').format(_selectedWeekStart);
     final endStr = DateFormat('d MMM yyyy', 'pl_PL').format(
       _selectedWeekStart.add(const Duration(days: 6)),
@@ -895,6 +906,11 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           textColor = Colors.teal.shade900;
           badgeIcon = Icons.send_rounded;
           actionLabel = 'PUBLIKACJA';
+        } else if (action == 'SOLVER_CP_SAT_RUN') {
+          badgeColor = Colors.amber.shade100;
+          textColor = Colors.amber.shade900;
+          badgeIcon = Icons.auto_awesome_rounded;
+          actionLabel = 'AUTO-SOLVER';
         } else {
           badgeColor = Colors.blue.shade100;
           textColor = Colors.blue.shade900;
@@ -902,9 +918,15 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
           actionLabel = action;
         }
 
-        final displayText = (log.summary != null && log.summary!.isNotEmpty)
+        final rawText = (log.summary != null && log.summary!.isNotEmpty)
             ? log.summary!
             : '${log.oldValue ?? "brak"} → ${log.newValue ?? "brak"}';
+        final slotDatePrefix = (log.date != null &&
+                action != 'WEEK_PUBLISHED' &&
+                action != 'SOLVER_CP_SAT_RUN')
+            ? '${DateFormat('EEE, d MMM', 'pl_PL').format(log.date!)} • '
+            : '';
+        final displayText = '$slotDatePrefix$rawText';
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
