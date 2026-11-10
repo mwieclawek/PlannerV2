@@ -141,9 +141,10 @@ pipeline {
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-rabbitmq-dev 2>/dev/null)" != "true" ]; then
                             echo "🐇 RabbitMQ DEV nie działa. Uruchamiam..."
                             docker rm -f plannerv2-rabbitmq-dev plannerv2-redis-dev || true
-                            docker run -d --name plannerv2-rabbitmq-dev --network plannerv2-network \\
-                              -e RABBITMQ_DEFAULT_USER=planner -e RABBITMQ_DEFAULT_PASS=planner_secret \\
-                              -v plannerv2_rabbitmq_data_dev:/var/lib/rabbitmq \\
+                            docker run -d --name plannerv2-rabbitmq-dev --network plannerv2-network \
+                              -p 127.0.0.1:15672:15672 \
+                              -e RABBITMQ_DEFAULT_USER=planner -e RABBITMQ_DEFAULT_PASS=planner_secret \
+                              -v plannerv2_rabbitmq_data_dev:/var/lib/rabbitmq \
                               --restart unless-stopped rabbitmq:3-management-alpine
                             sleep 6
                         else
@@ -369,9 +370,10 @@ pipeline {
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-rabbitmq 2>/dev/null)" != "true" ]; then
                             echo "🐇 RabbitMQ PROD nie działa. Uruchamiam..."
                             docker rm -f plannerv2-rabbitmq plannerv2-redis || true
-                            docker run -d --name plannerv2-rabbitmq --network plannerv2-network \\
-                              -e RABBITMQ_DEFAULT_USER=planner -e RABBITMQ_DEFAULT_PASS=planner_secret \\
-                              -v plannerv2_rabbitmq_data:/var/lib/rabbitmq \\
+                            docker run -d --name plannerv2-rabbitmq --network plannerv2-network \
+                              -p 127.0.0.1:15672:15672 \
+                              -e RABBITMQ_DEFAULT_USER=planner -e RABBITMQ_DEFAULT_PASS=planner_secret \
+                              -v plannerv2_rabbitmq_data:/var/lib/rabbitmq \
                               --restart unless-stopped rabbitmq:3-management-alpine
                             sleep 6
                         else
