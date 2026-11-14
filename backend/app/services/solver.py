@@ -92,6 +92,50 @@ def _parse_time_str(val: Union[str, time]) -> time:
     return time(int(parts[0]), 0)
 
 
+def _classify_bottleneck_reason(root_causes: List[str], has_candidates: bool) -> str:
+    if not has_candidates:
+        return "NO_EMPLOYEES_WITH_ROLE"
+    joined = " ".join(root_causes).lower()
+    if "niedostępny" in joined or "urlop" in joined or "brak dostępnych" in joined:
+        return "NO_AVAILABLE_EMPLOYEES"
+    if "odpoczynku 11h" in joined or "clopening" in joined:
+        return "REST_11H_CONFLICT"
+    if "limit godzin" in joined or "limit zmian" in joined or "cel tygodniowy" in joined:
+        return "HOURS_LIMIT_REACHED"
+    if "zajęty na innej zmianie" in joined:
+        return "ALREADY_ASSIGNED_SAME_DAY"
+    return "SOLVER_OPTIMIZATION_TRADEOFF"
+
+
+def _build_bottleneck_entry(
+    d_iso: str,
+    s_id: int,
+    s_name: str,
+    r_id: int,
+    r_name: str,
+    required: int,
+    assigned: int,
+    root_causes: List[str],
+    has_candidates: bool,
+) -> Dict[str, Any]:
+    missing = max(0, required - assigned)
+    reason_code = _classify_bottleneck_reason(root_causes, has_candidates)
+    cause_summary = "; ".join(root_causes) if root_causes else "Brak szczegółowej diagnozy"
+    return {
+        "date": d_iso,
+        "shift_def_id": s_id,
+        "shift_name": s_name,
+        "role_id": r_id,
+        "role_name": r_name,
+        "required": required,
+        "assigned": assigned,
+        "missing": missing,
+        "reason_code": reason_code,
+        "reasons": root_causes,
+        "summary": f"Brak {missing} prac. na zmianę '{s_name}' ({r_name}) w dniu {d_iso}: {cause_summary}",
+    }
+
+
 def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], str]) -> Dict[str, Any]:
     """
     100% bezstanowa funkcja Pure-Compute:
@@ -404,6 +448,8 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
     solver_start_ts = perf_time.perf_counter()
     status = solver.Solve(model)
     solve_duration = perf_time.perf_counter() - solver_start_ts
+    wall_time_sec = round(float(solver.WallTime()), 4)
+    user_time_sec = round(float(solver.UserTime()), 4)
     status_name = solver.StatusName(status)
 
     shift_map = {s.id: s for s in shifts}
@@ -681,16 +727,47 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
             if total_required_slots > 0
             else 100.0
         )
+        bottlenecks: List[Dict[str, Any]] = [
+            _build_bottleneck_entry(
+                d_iso=d_exp["date"],
+                s_id=d_exp["shift_def_id"],
+                s_name=d_exp["shift_name"],
+                r_id=d_exp["role_id"],
+                r_name=d_exp["role_name"],
+                required=d_exp["required"],
+                assigned=d_exp["assigned"],
+                root_causes=d_exp.get("root_causes", []),
+                has_candidates=any(d_exp["role_id"] in u.role_ids for u in employees),
+            )
+            for d_exp in deficit_explanations
+        ]
+        objective_val = round(float(solver.ObjectiveValue()), 2)
+        best_bound_val = round(float(solver.BestObjectiveBound()), 2)
         solver_explanation = {
             "solver_status": status_name,
             "solve_duration_sec": round(solve_duration, 4),
             "variables_count": len(work),
             "objective_terms_count": len(objective_terms),
-            "objective_value": round(float(solver.ObjectiveValue()), 2),
+            "wall_time_sec": wall_time_sec,
+            "user_time_sec": user_time_sec,
+            "objective_value": objective_val,
+            "best_objective_bound": best_bound_val,
             "total_required_slots": total_required_slots,
             "total_assigned_slots": len(generated_items),
             "coverage_pct": coverage_pct,
             "deficit_explanations": deficit_explanations,
+            "bottlenecks": bottlenecks,
+            "telemetry": {
+                "solver_status": status_name,
+                "wall_time_sec": wall_time_sec,
+                "user_time_sec": user_time_sec,
+                "solve_duration_sec": round(solve_duration, 4),
+                "objective_value": objective_val,
+                "best_objective_bound": best_bound_val,
+                "variables_count": len(work),
+                "objective_terms_count": len(objective_terms),
+                "bottlenecks_count": len(bottlenecks),
+            },
             "deficit_details": deficit_details,
             "employee_summary_log": employee_summary,
             "employee_summaries": employee_summaries,
@@ -713,6 +790,40 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
             f"w {solve_duration:.2f}s dla okresu {start_date} - {end_date}."
         )
         logger.error(f"[SOLVER WORKER ANOMALY] {err_msg} [tenant:{tid}].")
+        infeasible_bottlenecks: List[Dict[str, Any]] = []
+        for (d_iso, s_id, r_id), required in req_map.items():
+            if required <= 0:
+                continue
+            sh_obj = shift_map.get(s_id)
+            rl_obj = role_map.get(r_id)
+            s_name = sh_obj.name if sh_obj else f"ID:{s_id}"
+            r_name = rl_obj.name if rl_obj else f"ID:{r_id}"
+            candidates = [u for u in employees if r_id in u.role_ids]
+            if not candidates:
+                infeasible_bottlenecks.append(
+                    _build_bottleneck_entry(
+                        d_iso, s_id, s_name, r_id, r_name, required, 0,
+                        [f"Żaden aktywny pracownik nie posiada roli '{r_name}'!"],
+                        has_candidates=False,
+                    )
+                )
+            else:
+                avail_cands = [
+                    u for u in candidates
+                    if (u.id, d_iso) not in leave_days_set
+                    and avail_map.get((u.id, d_iso, s_id), "UNKNOWN") != "UNAVAILABLE"
+                ]
+                if len(avail_cands) < required:
+                    infeasible_bottlenecks.append(
+                        _build_bottleneck_entry(
+                            d_iso, s_id, s_name, r_id, r_name, required, 0,
+                            [
+                                f"Dostępnych {len(avail_cands)} z {len(candidates)} pracowników z rolą '{r_name}' "
+                                f"(wymagano {required})."
+                            ],
+                            has_candidates=True,
+                        )
+                    )
         return {
             "job_id": payload.job_id,
             "status": "infeasible",
@@ -725,11 +836,26 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
                 "solve_duration_sec": round(solve_duration, 4),
                 "variables_count": len(work),
                 "objective_terms_count": len(objective_terms),
+                "wall_time_sec": wall_time_sec,
+                "user_time_sec": user_time_sec,
                 "objective_value": 0.0,
+                "best_objective_bound": 0.0,
                 "total_required_slots": total_required_slots,
                 "total_assigned_slots": 0,
                 "coverage_pct": 0.0,
                 "deficit_explanations": [],
+                "bottlenecks": infeasible_bottlenecks,
+                "telemetry": {
+                    "solver_status": status_name,
+                    "wall_time_sec": wall_time_sec,
+                    "user_time_sec": user_time_sec,
+                    "solve_duration_sec": round(solve_duration, 4),
+                    "objective_value": 0.0,
+                    "best_objective_bound": 0.0,
+                    "variables_count": len(work),
+                    "objective_terms_count": len(objective_terms),
+                    "bottlenecks_count": len(infeasible_bottlenecks),
+                },
                 "deficit_details": {},
                 "employee_summary_log": {},
                 "employee_summaries": [],
