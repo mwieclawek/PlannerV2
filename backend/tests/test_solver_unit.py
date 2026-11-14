@@ -11,6 +11,16 @@ from app.models import (
     StaffingRequirement, Schedule, RoleSystem, AvailabilityStatus,
     UserJobRoleLink
 )
+from app.contracts.wfm import (
+    SolverAvailabilityItem,
+    SolverEmployeeItem,
+    SolverInputDTO,
+    SolverRequirementItem,
+    SolverResultDTO,
+    SolverRoleItem,
+    SolverShiftItem,
+)
+from app.services.scheduler_service import SchedulerService
 from app.services.solver import SolverService
 from app.auth_utils import get_password_hash
 
@@ -20,10 +30,10 @@ class TestSolverBasic:
     
     def test_solve_empty_data(self, session: Session):
         """Test solver with no employees, shifts, or roles"""
-        service = SolverService(session)
+        service = SchedulerService(session)
         today = date.today()
         
-        result = service.solve(today, today, save=False)
+        result = service.solve_schedule(today, today, save=False)
         
         assert result["status"] in ["success", "infeasible"]
         assert result["count"] == 0
@@ -45,10 +55,10 @@ class TestSolverBasic:
         session.add(link)
         session.commit()
         
-        service = SolverService(session)
+        service = SchedulerService(session)
         today = date.today()
         
-        result = service.solve(today, today, save=False)
+        result = service.solve_schedule(today, today, save=False)
         
         # Without requirements, solver should produce 0 assignments
         assert result["status"] == "success"
@@ -92,8 +102,8 @@ class TestSolverBasic:
         ))
         session.commit()
         
-        service = SolverService(session)
-        result = service.solve(today, today, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, today, save=False)
         
         assert result["status"] == "success"
         assert result["count"] == 1
@@ -140,8 +150,8 @@ class TestSolverConstraints:
         session.add(req)
         session.commit()
         
-        service = SolverService(session)
-        result = service.solve(today, today, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, today, save=False)
         
         # Should not assign unavailable employee
         assert result["count"] == 0
@@ -192,8 +202,8 @@ class TestSolverConstraints:
         session.add(req)
         session.commit()
 
-        service = SolverService(session)
-        result = service.solve(today, today, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, today, save=False)
 
         # The solver MUST only assign the available user, ignoring the unavailable one 
         # despite the high staffing requirement.
@@ -240,8 +250,8 @@ class TestSolverConstraints:
         session.add(Availability(user_id=user.id, date=today, shift_def_id=shift2.id, status=AvailabilityStatus.AVAILABLE))
         session.commit()
         
-        service = SolverService(session)
-        result = service.solve(today, today, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, today, save=False)
         
         # With split shifts allowed, employee should get both
         user_assignments = [s for s in result.get("schedules", []) if str(s["user_id"]) == str(user.id)]
@@ -271,8 +281,8 @@ class TestSolverConstraints:
         session.add(Availability(user_id=user.id, date=today, shift_def_id=shift2.id, status=AvailabilityStatus.AVAILABLE))
         session.commit()
         
-        service = SolverService(session)
-        result = service.solve(today, today, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, today, save=False)
         
         # Should be allowed (15m overlap <= 30m)
         assert len([s for s in result.get("schedules", []) if str(s["user_id"]) == str(user.id)]) == 2
@@ -296,8 +306,8 @@ class TestSolverConstraints:
         session.add(StaffingRequirement(date=today, shift_def_id=shift2.id, role_id=job_role.id, min_count=1))
         session.commit()
         
-        service = SolverService(session)
-        result = service.solve(today, today, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, today, save=False)
         
         # Should NOT be allowed (60m overlap > 30m)
         assert len([s for s in result.get("schedules", []) if str(s["user_id"]) == str(user.id)]) <= 1
@@ -321,8 +331,8 @@ class TestSolverConstraints:
         session.add(StaffingRequirement(date=today, shift_def_id=shift2.id, role_id=job_role.id, min_count=1))
         session.commit()
         
-        service = SolverService(session)
-        result = service.solve(today, today, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, today, save=False)
         
         # Should NOT be allowed (31m overlap > 30m)
         assert len([s for s in result.get("schedules", []) if str(s["user_id"]) == str(user.id)]) <= 1
@@ -359,8 +369,8 @@ class TestSolverConstraints:
         session.add(Availability(user_id=user.id, date=tomorrow, shift_def_id=shift1.id, status=AvailabilityStatus.AVAILABLE))
         session.commit()
         
-        service = SolverService(session)
-        result = service.solve(today, tomorrow, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, tomorrow, save=False)
         
         # Should only assign 1 day (8 hours), as 2 days (16 hours) exceeds 10.
         assert result["count"] == 1 
@@ -395,8 +405,8 @@ class TestSolverConstraints:
         session.add(req)
         session.commit()
         
-        service = SolverService(session)
-        result = service.solve(today, today, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, today, save=False)
         
         # User should not be assigned since they don't have role2
         user_for_role2 = [s for s in result.get("schedules", []) if s.role_id == role2.id]
@@ -450,8 +460,8 @@ class TestSolverPreferences:
         session.add(req)
         session.commit()
         
-        service = SolverService(session)
-        result = service.solve(today, today, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, today, save=False)
         
         if result["count"] == 1:
             assigned = result["schedules"][0]
@@ -477,8 +487,8 @@ class TestSolverWarnings:
         session.add(req)
         session.commit()
         
-        service = SolverService(session)
-        result = service.solve(today, today, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, today, save=False)
         
         assert "warnings" in result
         assert len(result["warnings"]) > 0
@@ -511,8 +521,8 @@ class TestSolverSave:
         session.add(req)
         session.commit()
         
-        service = SolverService(session)
-        result = service.solve(today, today, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, today, save=False)
         
         # Check database is empty
         from sqlmodel import select
@@ -556,8 +566,8 @@ class TestSolverEdgeCases:
         session.add(Availability(user_id=user.id, date=tomorrow, shift_def_id=shift_definition.id, status=AvailabilityStatus.AVAILABLE))
         session.commit()
         
-        service = SolverService(session)
-        result = service.solve(today, tomorrow, save=False)
+        service = SchedulerService(session)
+        result = service.solve_schedule(today, tomorrow, save=False)
         
         assert result["status"] == "success"
         # Should have 2 assignments (1 per day)
@@ -565,10 +575,10 @@ class TestSolverEdgeCases:
     
     def test_solve_past_dates(self, session: Session):
         """Test solving for past dates"""
-        service = SolverService(session)
+        service = SchedulerService(session)
         past = date.today() - timedelta(days=30)
         
-        result = service.solve(past, past, save=False)
+        result = service.solve_schedule(past, past, save=False)
         
         # Should still work (just won't find data)
         assert result["status"] in ["success", "infeasible"]
@@ -697,8 +707,8 @@ class TestSolverEdgeCases:
         )
 
         # 2. Run Solver for Week 1 with weekly_targets
-        solver = SolverService(session)
-        result = solver.solve(
+        solver = SchedulerService(session)
+        result = solver.solve_schedule(
             w1_start,
             w1_end,
             save=False,
@@ -720,6 +730,41 @@ class TestSolverEdgeCases:
         assert hours_b >= 24.0, f"Expected Employee B to get at least 24h in Week 1, got {hours_b}h"
         # Employee A gets at least 40h (5-6 shifts) in Week 1
         assert hours_a >= 40.0, f"Expected Employee A to get at least 40h in Week 1, got {hours_a}h"
+
+
+    def test_pure_solver_input_dto_to_result_dto(self):
+        """Pure Domain Engine test: SolverService.solve(SolverInputDTO) -> SolverResultDTO without DB."""
+        target_day = date(2026, 11, 16).isoformat()
+        input_dto = SolverInputDTO(
+            start_date=target_day,
+            end_date=target_day,
+            shifts=[SolverShiftItem(id=1, name="Dzienna", start_time="08:00", end_time="16:00")],
+            roles=[SolverRoleItem(id=10, name="Kelner")],
+            employees=[
+                SolverEmployeeItem(
+                    id="emp-1",
+                    full_name="Jan Kowalski",
+                    role_ids=[10],
+                    target_hours_per_month=160.0,
+                )
+            ],
+            requirements=[
+                SolverRequirementItem(date=target_day, shift_def_id=1, role_id=10, min_count=2)
+            ],
+            availabilities=[
+                SolverAvailabilityItem(user_id="emp-1", date=target_day, shift_def_id=1, status="PREFERRED")
+            ],
+        )
+
+        result = SolverService.solve(input_dto)
+
+        assert isinstance(result, SolverResultDTO)
+        assert result.status == "success"
+        assert result.count == 1
+        assert result.schedules[0].user_id == "emp-1"
+        assert any(d.category == "ASSIGNED" and d.user_id == "emp-1" for d in result.decisions)
+        assert any(d.category == "DEFICIT" and d.details.get("missing") == 1 for d in result.decisions)
+        assert any(d.category == "EMPLOYEE_SUMMARY" and d.user_id == "emp-1" for d in result.decisions)
 
 
 if __name__ == "__main__":

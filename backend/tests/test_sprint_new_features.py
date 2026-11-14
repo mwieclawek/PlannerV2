@@ -113,7 +113,7 @@ class TestSolverClopeningAvoidance:
     """Feature 2: Labor law compliance - 11h daily rest soft penalty"""
 
     async def test_solver_penalizes_clopening(self, session: Session, test_tenant):
-        from app.services.solver import SolverService
+        from app.services.scheduler_service import SchedulerService
         from app.models import Availability, AvailabilityStatus, StaffingRequirement
 
         tenant_id = test_tenant.id
@@ -178,8 +178,8 @@ class TestSolverClopeningAvoidance:
         session.commit()
 
         # Run solver
-        solver = SolverService(session, tenant_id=tenant_id)
-        res = solver.solve(d1, d2, save=False)
+        solver = SchedulerService(session, tenant_id=tenant_id)
+        res = solver.solve_schedule(d1, d2, save=False)
 
         assert res["status"] == "success"
         schedules = res["schedules"]

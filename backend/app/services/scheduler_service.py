@@ -832,10 +832,10 @@ class SchedulerService:
         """
         from uuid import uuid4
         from ..models import StaffingRequirement
-        from .solver import (
+        from ..contracts.wfm import (
             SolverAvailabilityItem,
             SolverEmployeeItem,
-            SolverJobPayload,
+            SolverInputDTO as SolverJobPayload,
             SolverLeaveDayItem,
             SolverRequirementItem,
             SolverRoleItem,
@@ -1214,4 +1214,34 @@ class SchedulerService:
                 "weekly_targets": raw_result.get("weekly_targets", {}),
                 "solver_explanation": clean_explanation,
             }
+
+    def solve_schedule(
+        self,
+        start_date: date,
+        end_date: date,
+        save: bool = True,
+        weekly_targets: Optional[Dict[Any, Dict[str, Any]]] = None,
+        actor: Any = None,
+    ) -> Dict[str, Any]:
+        """
+        Orkiestracja uruchomienia bezstanowego silnika solvera:
+        pobiera dane z DB -> buduje `SolverInputDTO` -> wywołuje `SolverService.solve(dto)` ->
+        zapisuje wyniki i logi w DB przez `finalize_solver_result(...)`.
+        """
+        from .solver import SolverService
+
+        input_dto = self.build_solver_job_payload(
+            start_date=start_date,
+            end_date=end_date,
+            save=save,
+            weekly_targets=weekly_targets,
+        )
+        result_dto = SolverService.solve(input_dto)
+        return self.finalize_solver_result(
+            result_dto.model_dump(mode="json"),
+            start_date=start_date,
+            end_date=end_date,
+            save=save,
+            actor=actor,
+        )
 

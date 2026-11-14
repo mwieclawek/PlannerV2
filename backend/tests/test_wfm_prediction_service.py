@@ -24,7 +24,7 @@ from app.models import (
 )
 from app.services.wfm_prediction_service import WFMPredictionService
 from app.workers.solver_worker import run_solver_job
-from app.workers.wfm_analytics_worker import run_wfm_analytics_job
+from app.workers.wfm_analytics_worker import build_wfm_prediction_input, run_wfm_analytics_job
 
 
 class TestWFMPredictionServiceUnit:
@@ -115,8 +115,13 @@ class TestWFMPredictionServiceUnit:
             )
         session.commit()
 
-        svc = WFMPredictionService(session, tenant_id=test_tenant.id)
-        report = svc.forecast_bottlenecks(start_date=week_start, end_date=week_start + timedelta(days=6))
+        input_dto = build_wfm_prediction_input(
+            session,
+            tenant_id=test_tenant.id,
+            start_date=week_start,
+            end_date=week_start + timedelta(days=6),
+        )
+        report = WFMPredictionService.forecast_bottlenecks(input_dto)
 
         bottlenecks = report["bottlenecks"]
         assert len(bottlenecks) >= 1
@@ -207,8 +212,15 @@ class TestWFMPredictionServiceUnit:
             )
         session.commit()
 
-        svc = WFMPredictionService(session, tenant_id=test_tenant.id)
-        drift = svc.predict_attendance_drift(reference_date=ref_date, lookback_weeks=6)
+        input_dto = build_wfm_prediction_input(
+            session,
+            tenant_id=test_tenant.id,
+            start_date=ref_date,
+            end_date=ref_date,
+            reference_date=ref_date,
+            lookback_weeks_drift=6,
+        )
+        drift = WFMPredictionService.predict_attendance_drift(input_dto)
 
         assert drift["matched_records_count"] == 6
         assert drift["avg_drift_minutes_per_shift"] == pytest.approx(45.0, abs=0.1)
@@ -278,8 +290,14 @@ class TestWFMPredictionServiceUnit:
                 )
         session.commit()
 
-        svc = WFMPredictionService(session, tenant_id=test_tenant.id)
-        stability = svc.analyze_shift_stability(reference_date=date(2026, 11, 9))
+        input_dto = build_wfm_prediction_input(
+            session,
+            tenant_id=test_tenant.id,
+            start_date=date(2026, 11, 9),
+            end_date=date(2026, 11, 15),
+            reference_date=date(2026, 11, 9),
+        )
+        stability = WFMPredictionService.analyze_shift_stability(input_dto)
 
         assert stability["total_giveaways"] == 2
         assert len(stability["hotspots"]) == 1
@@ -388,13 +406,15 @@ class TestWFMPredictionServiceUnit:
             },
         ]
 
-        svc = WFMPredictionService(session, tenant_id=test_tenant.id)
-        sim = svc.simulate_labor_cost(
+        input_dto = build_wfm_prediction_input(
+            session,
+            tenant_id=test_tenant.id,
             start_date=week_start,
             end_date=week_end,
             draft_entries=draft_entries,
             reference_date=week_start,
         )
+        sim = WFMPredictionService.simulate_labor_cost(input_dto)
 
         # Total planned hours: 3 shifts * 8h = 24.0h
         assert sim["total_planned_hours"] == pytest.approx(24.0)

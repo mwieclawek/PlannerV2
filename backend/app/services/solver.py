@@ -5,9 +5,6 @@ import time as perf_time
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from uuid import UUID, uuid4
 
-from ortools.sat.python import cp_model
-from pydantic import BaseModel, Field
-
 logger = logging.getLogger(__name__)
 
 # Wagi odcinkowo-liniowej (piecewise-linear) funkcji kary za odchylenie od efektywnego celu tygodniowego (za każdą minutę)
@@ -17,68 +14,21 @@ W_DEV_3 = 8 * W_DEV_1       # > 10h (> 600 min)
 URGENCY_SCALE = 1200        # waga premii za rzadkość dyspozycyjności (scarcity_ratio * URGENCY_SCALE)
 
 
-class SolverShiftItem(BaseModel):
-    id: int
-    name: str
-    start_time: str  # "HH:MM" lub "HH:MM:SS"
-    end_time: str    # "HH:MM" lub "HH:MM:SS"
-    applicable_days: List[int] = Field(default_factory=lambda: [0, 1, 2, 3, 4, 5, 6])
-
-
-class SolverRoleItem(BaseModel):
-    id: int
-    name: str
-
-
-class SolverEmployeeItem(BaseModel):
-    id: str
-    full_name: str
-    role_ids: List[int] = Field(default_factory=list)
-    target_hours_per_month: Optional[float] = None
-    target_shifts_per_month: Optional[int] = None
-    worked_or_scheduled_hours: float = 0.0
-    remaining_monthly_target: float = 0.0
-    effective_weekly_target_hours: float = 0.0
-    effective_weekly_target_minutes: int = 0
-    scarcity_ratio: float = 0.0
-
-
-class SolverRequirementItem(BaseModel):
-    date: str  # ISO "YYYY-MM-DD"
-    shift_def_id: int
-    role_id: int
-    min_count: int
-
-
-class SolverAvailabilityItem(BaseModel):
-    user_id: str
-    date: str  # ISO "YYYY-MM-DD"
-    shift_def_id: int
-    status: str  # "AVAILABLE", "PREFERRED", "UNAVAILABLE", "UNKNOWN"
-
-
-class SolverLeaveDayItem(BaseModel):
-    user_id: str
-    date: str  # ISO "YYYY-MM-DD"
-
-
-class SolverJobPayload(BaseModel):
-    """
-    Samowystarczalny kontrakt Pure-Compute (JSON-In -> OR-Tools CP-SAT -> JSON-Out)
-    dla bezstanowego mikroserwisu `solver-worker` (zero połączeń z bazą PostgreSQL).
-    """
-    job_id: str = Field(default_factory=lambda: str(uuid4()))
-    tenant_id: Optional[int] = None
-    start_date: str  # ISO "YYYY-MM-DD"
-    end_date: str    # ISO "YYYY-MM-DD"
-    save: bool = False
-    shifts: List[SolverShiftItem] = Field(default_factory=list)
-    roles: List[SolverRoleItem] = Field(default_factory=list)
-    employees: List[SolverEmployeeItem] = Field(default_factory=list)
-    requirements: List[SolverRequirementItem] = Field(default_factory=list)
-    availabilities: List[SolverAvailabilityItem] = Field(default_factory=list)
-    leave_days: List[SolverLeaveDayItem] = Field(default_factory=list)
-    weekly_targets: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+from ..contracts.wfm import (
+    DecisionExplanationDTO,
+    SolverAssignmentDTO,
+    SolverAvailabilityItem,
+    SolverEmployeeItem,
+    SolverExplanationDTO,
+    SolverInputDTO,
+    SolverJobPayload,
+    SolverLeaveDayItem,
+    SolverRequirementItem,
+    SolverResultDTO,
+    SolverRoleItem,
+    SolverShiftItem,
+    SolverWeightsDTO,
+)
 
 
 def _parse_time_str(val: Union[str, time]) -> time:
@@ -92,17 +42,17 @@ def _parse_time_str(val: Union[str, time]) -> time:
     return time(int(parts[0]), 0)
 
 
-def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], str]) -> Dict[str, Any]:
+def solve_to_dto(payload_input: Union[SolverInputDTO, Dict[str, Any], str]) -> SolverResultDTO:
     """
     100% bezstanowa funkcja Pure-Compute:
-    przyjmuje `SolverJobPayload` (obiekt Pydantic, dict lub JSON string),
-    uruchamia solver OR-Tools CP-SAT i zwraca kompletny słownik JSON z wygenerowanymi przypisaniami
-    oraz raportem `solver_explanation` — bez jakiejkolwiek sesji bazodanowej.
+    przyjmuje `SolverInputDTO` (obiekt Pydantic, dict lub JSON string),
+    uruchamia solver OR-Tools CP-SAT i zwraca ścisły kontrakt `SolverResultDTO`
+    z wygenerowanymi przypisaniami oraz listą `DecisionExplanationDTO` — bez sesji DB.
     """
     if isinstance(payload_input, str):
-        payload = SolverJobPayload.model_validate_json(payload_input)
+        payload = SolverInputDTO.model_validate_json(payload_input)
     elif isinstance(payload_input, dict):
-        payload = SolverJobPayload.model_validate(payload_input)
+        payload = SolverInputDTO.model_validate(payload_input)
     else:
         payload = payload_input
 
@@ -187,6 +137,7 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
                 clopening_pairs.append((s1.id, s2.id))
 
     # Build CP-SAT Model
+    from ortools.sat.python import cp_model
     model = cp_model.CpModel()
     work: Dict[Tuple[str, str, int, int], Any] = {}
 
@@ -272,10 +223,11 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
                         employee_vars.append(var)
                         employee_minutes_coeffs.append(shift_minutes[s.id])
 
+        weights = payload.weights
         if e.target_shifts_per_month is not None:
             excess_shifts_var = model.NewIntVar(0, len(employee_vars), f"excess_shifts_{e.id}")
             model.Add(sum(employee_vars) - int(e.target_shifts_per_month) <= excess_shifts_var)
-            objective_terms.append(excess_shifts_var * -2000)
+            objective_terms.append(excess_shifts_var * -weights.excess_shifts_penalty)
 
         if e.target_hours_per_month is not None and employee_vars:
             wt = payload.weekly_targets.get(str(e.id), {})
@@ -303,7 +255,7 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
             # Silna kara za przekroczenie pozostałego limitu miesięcznego (-1000 za minutę)
             excess_monthly_var = model.NewIntVar(0, max_week_min, f"excess_hours_{e.id}")
             model.Add(worked_minutes_expr - remaining_monthly_min <= excess_monthly_var)
-            objective_terms.append(excess_monthly_var * -1000)
+            objective_terms.append(excess_monthly_var * -weights.excess_monthly_minutes_penalty)
 
             # Trójprogowa odcinkowo-liniowa (piecewise-linear) funkcja kary względem effective_weekly_target_minutes:
             under_tier1 = model.NewIntVar(0, 240, f"under_t1_{e.id}")
@@ -320,28 +272,29 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
                 == eff_target_min
             )
 
-            objective_terms.append((under_tier1 + over_tier1) * -W_DEV_1)
-            objective_terms.append((under_tier2 + over_tier2) * -W_DEV_2)
-            objective_terms.append((under_tier3 + over_tier3) * -W_DEV_3)
+            objective_terms.append((under_tier1 + over_tier1) * -weights.w_dev_1)
+            objective_terms.append((under_tier2 + over_tier2) * -weights.w_dev_2)
+            objective_terms.append((under_tier3 + over_tier3) * -weights.w_dev_3)
 
+    weights = payload.weights
     emp_by_id: Dict[str, SolverEmployeeItem] = {e.id: e for e in employees}
 
     # 1. Preferences, Slot Filling Reward & Scarcity / Urgency Priority Weight
     for (e_id, d_iso, s_id, r_id), w_var in work.items():
         status = avail_map.get((e_id, d_iso, s_id), "UNKNOWN")
-        objective_terms.append(w_var * 50000)
+        objective_terms.append(w_var * weights.slot_fill_reward)
 
         if status == "PREFERRED":
-            objective_terms.append(w_var * 2000)
+            objective_terms.append(w_var * weights.preferred_bonus)
         elif status == "AVAILABLE":
-            objective_terms.append(w_var * 500)
+            objective_terms.append(w_var * weights.available_bonus)
 
         wt = payload.weekly_targets.get(str(e_id), {})
         emp_obj = emp_by_id.get(e_id)
         scarcity_ratio = float(
             wt.get("scarcity_ratio", emp_obj.scarcity_ratio if emp_obj else 0.0)
         )
-        urgency_bonus = int(round(scarcity_ratio * URGENCY_SCALE))
+        urgency_bonus = int(round(scarcity_ratio * weights.urgency_scale))
         if urgency_bonus > 0:
             objective_terms.append(w_var * urgency_bonus)
 
@@ -361,7 +314,7 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
                 model.Add(shifts_worked >= 1).OnlyEnforceIf(is_working)
                 model.Add(shifts_worked == 0).OnlyEnforceIf(is_working.Not())
 
-                penalty_weight = 50
+                penalty_weight = weights.split_shift_penalty
                 objective_terms.append(shifts_worked * (-penalty_weight))
                 objective_terms.append(is_working * penalty_weight)
 
@@ -389,16 +342,16 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
                 if vars_s1 and vars_s2:
                     violation_var = model.NewBoolVar(f"clopening_{e.id}_{d_curr_iso}_{s1_id}_{s2_id}")
                     model.Add(violation_var >= sum(vars_s1) + sum(vars_s2) - 1)
-                    objective_terms.append(violation_var * -25000)
+                    objective_terms.append(violation_var * -weights.clopening_penalty)
 
     model.Maximize(sum(objective_terms))
 
     # Solve CP-SAT
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 10.0
+    solver.parameters.max_time_in_seconds = float(weights.max_solve_time_sec)
     logger.info(
         f"[SOLVER WORKER] Rozpoczynanie obliczeń CP-SAT: utworzono {len(work)} zmiennych, "
-        f"{len(objective_terms)} składników celu (limit: 10s) [tenant:{tid}]."
+        f"{len(objective_terms)} składników celu (limit: {weights.max_solve_time_sec}s) [tenant:{tid}]."
     )
 
     solver_start_ts = perf_time.perf_counter()
@@ -681,108 +634,164 @@ def solve_from_payload(payload_input: Union[SolverJobPayload, Dict[str, Any], st
             if total_required_slots > 0
             else 100.0
         )
-        solver_explanation = {
-            "solver_status": status_name,
-            "solve_duration_sec": round(solve_duration, 4),
-            "variables_count": len(work),
-            "objective_terms_count": len(objective_terms),
-            "objective_value": round(float(solver.ObjectiveValue()), 2),
-            "total_required_slots": total_required_slots,
-            "total_assigned_slots": len(generated_items),
-            "coverage_pct": coverage_pct,
-            "deficit_explanations": deficit_explanations,
-            "deficit_details": deficit_details,
-            "employee_summary_log": employee_summary,
-            "employee_summaries": employee_summaries,
-            "rest_violations": rest_violations,
-            "domain_logs": domain_logs,
-        }
 
-        return {
-            "job_id": payload.job_id,
-            "status": "success",
-            "count": len(generated_items),
-            "schedules": generated_items,
-            "warnings": warnings,
-            "weekly_targets": payload.weekly_targets,
-            "solver_explanation": solver_explanation,
-        }
+        decisions: List[DecisionExplanationDTO] = []
+        for item in generated_items:
+            av_st = avail_map.get((item["user_id"], item["date"], item["shift_def_id"]), "UNKNOWN")
+            decisions.append(
+                DecisionExplanationDTO(
+                    category="ASSIGNED",
+                    date=item["date"],
+                    shift_def_id=item["shift_def_id"],
+                    shift_name=item.get("shift_name"),
+                    role_id=item["role_id"],
+                    role_name=item.get("role_name"),
+                    user_id=item["user_id"],
+                    user_name=item.get("user_name"),
+                    message=(
+                        f"Przypisano {item.get('user_name')} ({item.get('role_name')}) "
+                        f"na zmianę {item.get('shift_name')} ({item['date']}), dyspozycyjność={av_st}."
+                    ),
+                    details={"availability_status": av_st},
+                )
+            )
+        for de in deficit_explanations:
+            decisions.append(
+                DecisionExplanationDTO(
+                    category="DEFICIT",
+                    date=de["date"],
+                    shift_def_id=de["shift_def_id"],
+                    shift_name=de["shift_name"],
+                    role_id=de["role_id"],
+                    role_name=de["role_name"],
+                    message=(
+                        f"Niedobór {de['missing']} os. ({de['assigned']}/{de['required']}) "
+                        f"na zmianie {de['shift_name']} ({de['role_name']}) w dniu {de['date']}."
+                    ),
+                    details={
+                        "required": de["required"],
+                        "assigned": de["assigned"],
+                        "missing": de["missing"],
+                        "root_causes": de["root_causes"],
+                    },
+                )
+            )
+        for rv in rest_violations:
+            decisions.append(
+                DecisionExplanationDTO(
+                    category="REST_VIOLATION",
+                    date=rv["date_to"],
+                    user_id=rv["user_id"],
+                    user_name=rv["user_name"],
+                    message=(
+                        f"Naruszenie 11h odpoczynku: {rv['user_name']} "
+                        f"({rv['date_from']} {rv['shift_from']} -> {rv['date_to']} {rv['shift_to']})."
+                    ),
+                    details=rv,
+                )
+            )
+        for es in employee_summaries:
+            decisions.append(
+                DecisionExplanationDTO(
+                    category="EMPLOYEE_SUMMARY",
+                    user_id=es["user_id"],
+                    user_name=es["user_name"],
+                    message=(
+                        f"{es['user_name']}: {es['assigned_shifts']} zmian ({es['assigned_hours']}h), "
+                        f"cel tygodniowy={es['effective_weekly_target_hours']}h, "
+                        f"miesiąc={es['total_month_hours']}h."
+                    ),
+                    details=es,
+                )
+            )
+
+        solver_explanation = SolverExplanationDTO(
+            solver_status=status_name,
+            solve_duration_sec=round(solve_duration, 4),
+            variables_count=len(work),
+            objective_terms_count=len(objective_terms),
+            objective_value=round(float(solver.ObjectiveValue()), 2),
+            total_required_slots=total_required_slots,
+            total_assigned_slots=len(generated_items),
+            coverage_pct=coverage_pct,
+            deficit_explanations=deficit_explanations,
+            deficit_details=deficit_details,
+            employee_summary_log=employee_summary,
+            employee_summaries=employee_summaries,
+            rest_violations=rest_violations,
+            domain_logs=domain_logs,
+            decisions=decisions,
+        )
+
+        return SolverResultDTO(
+            job_id=payload.job_id,
+            status="success",
+            count=len(generated_items),
+            schedules=[SolverAssignmentDTO.model_validate(it) for it in generated_items],
+            warnings=warnings,
+            weekly_targets=payload.weekly_targets,
+            decisions=decisions,
+            solver_explanation=solver_explanation,
+        )
     else:
         err_msg = (
             f"Solver nie znalazł dopuszczalnego grafiku (status={status_name}) "
             f"w {solve_duration:.2f}s dla okresu {start_date} - {end_date}."
         )
         logger.error(f"[SOLVER WORKER ANOMALY] {err_msg} [tenant:{tid}].")
-        return {
-            "job_id": payload.job_id,
-            "status": "infeasible",
-            "count": 0,
-            "schedules": [],
-            "warnings": [],
-            "weekly_targets": payload.weekly_targets,
-            "solver_explanation": {
-                "solver_status": status_name,
-                "solve_duration_sec": round(solve_duration, 4),
-                "variables_count": len(work),
-                "objective_terms_count": len(objective_terms),
-                "objective_value": 0.0,
-                "total_required_slots": total_required_slots,
-                "total_assigned_slots": 0,
-                "coverage_pct": 0.0,
-                "deficit_explanations": [],
-                "deficit_details": {},
-                "employee_summary_log": {},
-                "employee_summaries": [],
-                "rest_violations": [],
-                "domain_logs": [err_msg],
-            },
-        }
+        infeasible_decision = DecisionExplanationDTO(
+            category="INFEASIBLE",
+            message=err_msg,
+            details={"solver_status": status_name, "solve_duration_sec": round(solve_duration, 4)},
+        )
+        return SolverResultDTO(
+            job_id=payload.job_id,
+            status="infeasible",
+            count=0,
+            schedules=[],
+            warnings=[],
+            weekly_targets=payload.weekly_targets,
+            decisions=[infeasible_decision],
+            solver_explanation=SolverExplanationDTO(
+                solver_status=status_name,
+                solve_duration_sec=round(solve_duration, 4),
+                variables_count=len(work),
+                objective_terms_count=len(objective_terms),
+                objective_value=0.0,
+                total_required_slots=total_required_slots,
+                total_assigned_slots=0,
+                coverage_pct=0.0,
+                deficit_explanations=[],
+                deficit_details={},
+                employee_summary_log={},
+                employee_summaries=[],
+                rest_violations=[],
+                domain_logs=[err_msg],
+                decisions=[infeasible_decision],
+            ),
+        )
+
+
+def solve_from_payload(payload_input: Union[SolverInputDTO, Dict[str, Any], str]) -> Dict[str, Any]:
+    """
+    Wrapper JSON kompatybilności wstecznej dla kolejki RabbitMQ i workerów:
+    przyjmuje `SolverInputDTO` / dict / JSON string i zwraca serializowalny słownik `SolverResultDTO`.
+    """
+    return solve_to_dto(payload_input).model_dump(mode="json")
 
 
 class SolverService:
     """
-    Fasada silnika OR-Tools CP-SAT:
-    - W trybie Pure-Compute (`solve_payload` lub `session=None`) działa całkowicie bez bazy danych.
-    - W trybie kompatybilności z backendem (`solve(start_date, end_date, ...)`) deleguje pobranie danych
-      i zapis wyników do `SchedulerService`, a obliczenia wykonuje przez `solve_from_payload(payload)`.
+    100% bezstanowa fasada silnika domenowego OR-Tools CP-SAT (Pure Domain Engine).
+    Nie wykonuje żadnych operacji na bazie danych (`Session`).
     """
 
-    def __init__(self, session: Any = None, tenant_id: Optional[int] = None):
-        self.session = session
-        self.tenant_id = tenant_id
+    @staticmethod
+    def solve(input_dto: Union[SolverInputDTO, Dict[str, Any], str]) -> SolverResultDTO:
+        """Pure-compute entrypoint przyjmujący `SolverInputDTO` i zwracający `SolverResultDTO`."""
+        return solve_to_dto(input_dto)
 
     @staticmethod
-    def solve_payload(payload: Union[SolverJobPayload, Dict[str, Any], str]) -> Dict[str, Any]:
+    def solve_payload(payload: Union[SolverInputDTO, Dict[str, Any], str]) -> Dict[str, Any]:
         """Pure-compute entrypoint (`JSON-In -> OR-Tools CP-SAT -> JSON-Out`)."""
         return solve_from_payload(payload)
-
-    def solve(
-        self,
-        start_date: date,
-        end_date: date,
-        save: bool = True,
-        weekly_targets: Optional[Dict[Any, Dict[str, Any]]] = None,
-        actor: Any = None,
-    ) -> Dict[str, Any]:
-        if self.session is None:
-            raise RuntimeError(
-                "SolverService.solve(start_date, end_date) requires a database session; "
-                "use solve_from_payload(payload) or SolverService.solve_payload(payload) for stateless execution."
-            )
-        from .scheduler_service import SchedulerService
-
-        sched_svc = SchedulerService(self.session, tenant_id=self.tenant_id)
-        payload = sched_svc.build_solver_job_payload(
-            start_date=start_date,
-            end_date=end_date,
-            save=save,
-            weekly_targets=weekly_targets,
-        )
-        raw_result = solve_from_payload(payload)
-        return sched_svc.finalize_solver_result(
-            raw_result,
-            start_date=start_date,
-            end_date=end_date,
-            save=save,
-            actor=actor,
-        )

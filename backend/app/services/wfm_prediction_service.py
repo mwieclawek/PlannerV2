@@ -5,25 +5,13 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlmodel import Session, select
-
-from ..models import (
-    Attendance,
-    AttendanceStatus,
-    Availability,
-    AvailabilityStatus,
-    DailyCloseout,
-    JobRole,
-    LeaveRequest,
-    LeaveStatus,
-    RoleSystem,
-    Schedule,
-    ShiftDefinition,
-    ShiftGiveaway,
-    StaffingRequirement,
-    User,
+from ..contracts.wfm import (
+    WfmEmployeeDTO,
+    WfmPredictionInputDTO,
+    WfmPredictionOutputDTO,
+    WfmRoleDTO,
+    WfmScheduleItemDTO,
 )
-from .operations_service import OperationsService
 
 logger = logging.getLogger(__name__)
 
@@ -40,28 +28,10 @@ POLISH_DAY_NAMES = [
 
 class WFMPredictionService:
     """
-    WFM Workforce Prediction & Live Labor Cost Simulation Service.
-    Operates strictly on WFM / HR domain tables:
-    Schedule, Availability, Attendance, LeaveRequest, ShiftGiveaway, StaffingRequirement,
-    ShiftDefinition, JobRole, User, and Payroll rates.
+    100% bezstanowy silnik domenowy WFM Workforce Prediction & Live Labor Cost Simulation (Pure Domain Engine).
+    Operuje wyłącznie na kontraktach `WfmPredictionInputDTO` -> `WfmPredictionOutputDTO`,
+    bez jakiegokolwiek dostępu do sesji bazy danych (`Session`) ani modeli ORM.
     """
-
-    def __init__(self, session: Session, tenant_id: Optional[int] = None):
-        self.session = session
-        if tenant_id is None:
-            from ..tenant_context import get_current_tenant_id
-
-            tid = get_current_tenant_id()
-            if tid is None:
-                from ..models import RestaurantConfig
-
-                first_rest = session.exec(select(RestaurantConfig)).first()
-                if first_rest:
-                    tid = first_rest.id
-            self.tenant_id = tid
-        else:
-            self.tenant_id = tenant_id
-        self.ops_service = OperationsService(session, self.tenant_id) if self.tenant_id is not None else None
 
     @staticmethod
     def _calc_shift_duration_hours(start_t: time, end_t: time, ref_date: Optional[date] = None) -> float:
@@ -97,98 +67,70 @@ class WFMPredictionService:
         ref = datetime.combine(date(2026, 1, 1), t) + timedelta(minutes=round(delta_minutes))
         return ref.strftime("%H:%M")
 
-    def resolve_hourly_rate(self, user: Optional[User], role_id: Optional[int] = None, role_map: Optional[Dict[int, JobRole]] = None) -> float:
+    @staticmethod
+    def resolve_hourly_rate(
+        user: Optional[WfmEmployeeDTO],
+        role_id: Optional[int] = None,
+        role_map: Optional[Dict[int, WfmRoleDTO]] = None,
+    ) -> float:
         if user is not None and user.hourly_rate is not None and user.hourly_rate > 0:
             return float(user.hourly_rate)
-        if role_id is not None:
-            role = role_map.get(role_id) if role_map else self.session.get(JobRole, role_id)
+        if role_id is not None and role_map is not None:
+            role = role_map.get(role_id)
             if role and role.hourly_rate is not None and role.hourly_rate > 0:
                 return float(role.hourly_rate)
         if user is not None:
             if user.hourly_rate is not None:
                 return float(user.hourly_rate)
-            for r in getattr(user, "job_roles", []) or []:
-                if r.hourly_rate is not None and r.hourly_rate > 0:
-                    return float(r.hourly_rate)
+            for rate in user.role_hourly_rates:
+                if rate is not None and rate > 0:
+                    return float(rate)
+            if role_map is not None:
+                for rid in user.role_ids:
+                    r = role_map.get(rid)
+                    if r and r.hourly_rate is not None and r.hourly_rate > 0:
+                        return float(r.hourly_rate)
         return 0.0
 
     # ═══════════════════════════════════════════════════════════════════════════
     #  1. Bottleneck Forecast (Availability, Leaves & Monthly Target Pool)
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def forecast_bottlenecks(
-        self,
-        start_date: date,
-        end_date: Optional[date] = None,
-        include_rest_of_month: bool = True,
-    ) -> Dict[str, Any]:
-        week_end = end_date or (start_date + timedelta(days=6))
+    @classmethod
+    def forecast_bottlenecks(cls, input_dto: WfmPredictionInputDTO) -> Dict[str, Any]:
+        start_date = input_dto.start_date
+        week_end = input_dto.end_date or (start_date + timedelta(days=6))
         last_day_num = monthrange(start_date.year, start_date.month)[1]
         month_start = date(start_date.year, start_date.month, 1)
         month_end = date(start_date.year, start_date.month, last_day_num)
+        horizon_end = max(week_end, month_end) if input_dto.include_rest_of_month else week_end
 
-        horizon_end = max(week_end, month_end) if include_rest_of_month else week_end
-
-        emp_q = select(User).where(User.is_active == True, User.role_system == RoleSystem.EMPLOYEE)
-        shift_q = select(ShiftDefinition)
-        role_q = select(JobRole)
-        if self.tenant_id is not None:
-            emp_q = emp_q.where(User.tenant_id == self.tenant_id)
-            shift_q = shift_q.where(ShiftDefinition.tenant_id == self.tenant_id)
-            role_q = role_q.where(JobRole.tenant_id == self.tenant_id)
-
-        employees = list(self.session.exec(emp_q).all())
-        shifts = list(self.session.exec(shift_q).all())
-        roles = list(self.session.exec(role_q).all())
+        employees = [
+            e for e in input_dto.employees
+            if e.is_active and e.role_system == "EMPLOYEE"
+        ]
+        shifts = input_dto.shifts
+        roles = input_dto.roles
 
         emp_ids = {e.id for e in employees}
-        shift_ids = {s.id for s in shifts if s.id is not None}
-        shift_map = {s.id: s for s in shifts if s.id is not None}
-        role_map = {r.id: r for r in roles if r.id is not None}
+        shift_ids = {s.id for s in shifts}
+        shift_map = {s.id: s for s in shifts}
+        role_map = {r.id: r for r in roles}
 
         shift_durations = {
-            s.id: self._calc_shift_duration_hours(s.start_time, s.end_time)
+            s.id: cls._calc_shift_duration_hours(s.start_time, s.end_time)
             for s in shifts
-            if s.id is not None
         }
 
-        # Monthly schedules to compute already scheduled hours per employee
         sched_start = min(month_start, start_date)
         sched_end = max(month_end, horizon_end)
-        all_month_schedules = list(
-            self.session.exec(
-                select(Schedule).where(
-                    Schedule.date >= sched_start,
-                    Schedule.date <= sched_end,
-                )
-            ).all()
-        )
-        if self.tenant_id is not None:
-            all_month_schedules = [s for s in all_month_schedules if s.user_id in emp_ids]
-
         scheduled_hours_by_user: Dict[UUID, float] = defaultdict(float)
-        for sch in all_month_schedules:
-            if month_start <= sch.date <= month_end:
+        for sch in input_dto.schedules:
+            if sch.user_id not in emp_ids:
+                continue
+            if sched_start <= sch.date <= sched_end and month_start <= sch.date <= month_end:
                 dur = shift_durations.get(sch.shift_def_id, 0.0)
                 scheduled_hours_by_user[sch.user_id] += dur
-
-        # Staffing requirements
-        specific_reqs = list(
-            self.session.exec(
-                select(StaffingRequirement).where(
-                    StaffingRequirement.date >= start_date,
-                    StaffingRequirement.date <= horizon_end,
-                )
-            ).all()
-        )
-        global_reqs = list(
-            self.session.exec(
-                select(StaffingRequirement).where(StaffingRequirement.day_of_week != None)
-            ).all()
-        )
-        if self.tenant_id is not None:
-            specific_reqs = [r for r in specific_reqs if r.shift_def_id in shift_ids]
-            global_reqs = [r for r in global_reqs if r.shift_def_id in shift_ids]
 
         days_in_horizon = [
             start_date + timedelta(days=i)
@@ -196,6 +138,11 @@ class WFMPredictionService:
         ]
 
         req_map: Dict[Tuple[date, int, int], int] = {}
+        global_reqs = [r for r in input_dto.requirements if r.day_of_week is not None and r.shift_def_id in shift_ids]
+        specific_reqs = [
+            r for r in input_dto.requirements
+            if r.date is not None and start_date <= r.date <= horizon_end and r.shift_def_id in shift_ids
+        ]
         for d in days_in_horizon:
             dow = d.weekday()
             for gr in global_reqs:
@@ -205,44 +152,27 @@ class WFMPredictionService:
             if sr.date is not None:
                 req_map[(sr.date, sr.shift_def_id, sr.role_id)] = sr.min_count
 
-        # Availabilities in horizon
-        availabilities = list(
-            self.session.exec(
-                select(Availability).where(
-                    Availability.date >= start_date,
-                    Availability.date <= horizon_end,
-                )
-            ).all()
-        )
-        if self.tenant_id is not None:
-            availabilities = [a for a in availabilities if a.user_id in emp_ids]
-
         avail_map: Dict[Tuple[UUID, date, int], str] = {}
         slot_has_explicit_available: Dict[Tuple[date, int], bool] = defaultdict(bool)
         slot_has_explicit_unavailable: Dict[Tuple[date, int], bool] = defaultdict(bool)
-        for av in availabilities:
-            st = av.status.value if hasattr(av.status, "value") else str(av.status)
+        for av in input_dto.availabilities:
+            if av.user_id not in emp_ids:
+                continue
+            if not (start_date <= av.date <= horizon_end):
+                continue
+            st = str(av.status)
             avail_map[(av.user_id, av.date, av.shift_def_id)] = st
             if st in ("AVAILABLE", "PREFERRED"):
                 slot_has_explicit_available[(av.date, av.shift_def_id)] = True
             elif st == "UNAVAILABLE":
                 slot_has_explicit_unavailable[(av.date, av.shift_def_id)] = True
 
-        # Approved LeaveRequests overlapping horizon
-        leaves = list(
-            self.session.exec(
-                select(LeaveRequest).where(
-                    LeaveRequest.status == LeaveStatus.APPROVED,
-                    LeaveRequest.end_date >= start_date,
-                    LeaveRequest.start_date <= horizon_end,
-                )
-            ).all()
-        )
-        if self.tenant_id is not None:
-            leaves = [lr for lr in leaves if lr.user_id in emp_ids]
-
         leave_by_user_date: Dict[Tuple[UUID, date], bool] = {}
-        for lr in leaves:
+        for lr in input_dto.leave_requests:
+            if lr.user_id not in emp_ids or lr.status != "APPROVED":
+                continue
+            if lr.end_date < start_date or lr.start_date > horizon_end:
+                continue
             cur = max(start_date, lr.start_date)
             end_l = min(horizon_end, lr.end_date)
             while cur <= end_l:
@@ -259,19 +189,15 @@ class WFMPredictionService:
             if not shift or not role:
                 continue
 
-            if hasattr(shift, "days") and shift.days:
-                applicable_days = [link.day_of_week for link in shift.days]
-                if d.weekday() not in applicable_days:
-                    continue
+            if shift.applicable_days and d.weekday() not in shift.applicable_days:
+                continue
 
-            role_candidates = [
-                e for e in employees if any(ur.id == r_id for ur in (e.job_roles or []))
-            ]
+            role_candidates = [e for e in employees if r_id in e.role_ids]
 
             on_leave_users: List[str] = []
             unavailable_users: List[str] = []
-            available_users: List[User] = []
-            available_within_target_users: List[User] = []
+            available_users: List[WfmEmployeeDTO] = []
+            available_within_target_users: List[WfmEmployeeDTO] = []
 
             has_avail_for_slot = slot_has_explicit_available[(d, s_id)]
             has_unavail_for_slot = slot_has_explicit_unavailable[(d, s_id)]
@@ -291,10 +217,6 @@ class WFMPredictionService:
                 elif st in ("AVAILABLE", "PREFERRED"):
                     is_avail = True
                 else:
-                    # No explicit availability record for this candidate on (d, s_id):
-                    # If some candidates explicitly registered AVAILABLE and nobody registered UNAVAILABLE/LEAVE,
-                    # treat missing record as not submitted (unavailable).
-                    # Otherwise (e.g. negative-only availability or leave-based check), treat as available.
                     if has_avail_for_slot and not has_unavail_for_slot and not any_leave_on_day:
                         unavailable_users.append(cand.full_name)
                         is_avail = False
@@ -356,7 +278,6 @@ class WFMPredictionService:
                     "message": msg,
                 })
 
-        # Calculate employee monthly target risks
         employee_target_risks: List[Dict[str, Any]] = []
         days_remaining_in_month = [
             d for d in days_in_horizon if month_start <= d <= month_end
@@ -367,23 +288,19 @@ class WFMPredictionService:
             target_hrs = emp.target_hours_per_month
             rem_hrs = round(max(0.0, float(target_hrs) - sched_hrs), 2) if target_hrs is not None else 0.0
 
-            # Max potential hours employee can still work in remaining days of month
             potential_remaining_hours = 0.0
             leave_days_cnt = 0
             for d in days_remaining_in_month:
                 if leave_by_user_date.get((emp.id, d), False):
                     leave_days_cnt += 1
                     continue
-                # Find max shift duration on day d where employee isn't UNAVAILABLE
-                day_Avail_durs = []
+                day_avail_durs = []
                 for s in shifts:
-                    if s.id is None:
-                        continue
                     st = avail_map.get((emp.id, d, s.id))
                     if st != "UNAVAILABLE":
-                        day_Avail_durs.append(shift_durations.get(s.id, 0.0))
-                if day_Avail_durs:
-                    potential_remaining_hours += max(day_Avail_durs)
+                        day_avail_durs.append(shift_durations.get(s.id, 0.0))
+                if day_avail_durs:
+                    potential_remaining_hours += max(day_avail_durs)
 
             risk_level = "LOW"
             risk_msg = None
@@ -433,61 +350,39 @@ class WFMPredictionService:
     #  2. Schedule vs. Attendance Drift Prediction
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def predict_attendance_drift(
-        self,
-        reference_date: Optional[date] = None,
-        lookback_weeks: int = 6,
-    ) -> Dict[str, Any]:
-        ref_date = reference_date or date.today()
-        lookback_weeks = max(4, min(8, lookback_weeks))
+    @classmethod
+    def predict_attendance_drift(cls, input_dto: WfmPredictionInputDTO) -> Dict[str, Any]:
+        ref_date = input_dto.reference_date or date.today()
+        lookback_weeks = max(4, min(8, input_dto.lookback_weeks_drift))
         history_start = ref_date - timedelta(days=lookback_weeks * 7)
 
-        emp_q = select(User)
-        shift_q = select(ShiftDefinition)
-        role_q = select(JobRole)
-        if self.tenant_id is not None:
-            emp_q = emp_q.where(User.tenant_id == self.tenant_id)
-            shift_q = shift_q.where(ShiftDefinition.tenant_id == self.tenant_id)
-            role_q = role_q.where(JobRole.tenant_id == self.tenant_id)
-
-        employees = list(self.session.exec(emp_q).all())
-        shifts = list(self.session.exec(shift_q).all())
-        roles = list(self.session.exec(role_q).all())
+        employees = input_dto.employees
+        shifts = input_dto.shifts
+        roles = input_dto.roles
 
         emp_map = {e.id: e for e in employees}
         emp_ids = set(emp_map.keys())
-        shift_map = {s.id: s for s in shifts if s.id is not None}
-        role_map = {r.id: r for r in roles if r.id is not None}
+        shift_map = {s.id: s for s in shifts}
+        role_map = {r.id: r for r in roles}
 
-        hist_schedules = list(
-            self.session.exec(
-                select(Schedule).where(
-                    Schedule.date >= history_start,
-                    Schedule.date <= ref_date,
-                )
-            ).all()
-        )
-        if self.tenant_id is not None:
-            hist_schedules = [s for s in hist_schedules if s.user_id in emp_ids]
+        hist_schedules = [
+            s for s in input_dto.schedules
+            if s.user_id in emp_ids and history_start <= s.date <= ref_date
+        ]
+        hist_attendances = [
+            a for a in input_dto.attendances
+            if a.user_id in emp_ids
+            and history_start <= a.date <= ref_date
+            and a.status == "CONFIRMED"
+        ]
 
-        hist_attendances = list(
-            self.session.exec(
-                select(Attendance).where(
-                    Attendance.date >= history_start,
-                    Attendance.date <= ref_date,
-                    Attendance.status == AttendanceStatus.CONFIRMED,
-                )
-            ).all()
-        )
-        if self.tenant_id is not None:
-            hist_attendances = [a for a in hist_attendances if a.user_id in emp_ids]
-
-        schedule_by_id = {s.id: s for s in hist_schedules}
-        schedules_by_user_date: Dict[Tuple[UUID, date], List[Schedule]] = defaultdict(list)
+        schedule_by_id: Dict[UUID, WfmScheduleItemDTO] = {
+            s.id: s for s in hist_schedules if s.id is not None
+        }
+        schedules_by_user_date: Dict[Tuple[UUID, date], List[WfmScheduleItemDTO]] = defaultdict(list)
         for s in hist_schedules:
             schedules_by_user_date[(s.user_id, s.date)].append(s)
 
-        # Track drift stats per shift_def_id
         shift_end_drifts: Dict[int, List[float]] = defaultdict(list)
         shift_duration_drifts: Dict[int, List[float]] = defaultdict(list)
         total_planned_hours = 0.0
@@ -495,10 +390,10 @@ class WFMPredictionService:
         matched_records_count = 0
 
         for att in hist_attendances:
-            if getattr(att, "is_absent", False):
+            if att.is_absent:
                 continue
 
-            matched_sched: Optional[Schedule] = None
+            matched_sched: Optional[WfmScheduleItemDTO] = None
             if att.schedule_id and att.schedule_id in schedule_by_id:
                 matched_sched = schedule_by_id[att.schedule_id]
             else:
@@ -513,10 +408,10 @@ class WFMPredictionService:
             if not shift_def:
                 continue
 
-            planned_hrs = self._calc_shift_duration_hours(shift_def.start_time, shift_def.end_time, att.date)
-            actual_hrs = self._calc_shift_duration_hours(att.check_in, att.check_out, att.date)
+            planned_hrs = cls._calc_shift_duration_hours(shift_def.start_time, shift_def.end_time, att.date)
+            actual_hrs = cls._calc_shift_duration_hours(att.check_in, att.check_out, att.date)
             duration_drift_min = (actual_hrs - planned_hrs) * 60.0
-            end_drift_min = self._calc_end_drift_minutes(
+            end_drift_min = cls._calc_end_drift_minutes(
                 shift_def.start_time, shift_def.end_time, att.check_in, att.check_out
             )
 
@@ -528,8 +423,6 @@ class WFMPredictionService:
 
         shift_drifts: List[Dict[str, Any]] = []
         for s in shifts:
-            if s.id is None:
-                continue
             end_drifts = shift_end_drifts.get(s.id, [])
             dur_drifts = shift_duration_drifts.get(s.id, [])
             sample_cnt = len(end_drifts)
@@ -538,7 +431,7 @@ class WFMPredictionService:
             avg_dur_drift = sum(dur_drifts) / sample_cnt if sample_cnt > 0 else 0.0
             planned_end_str = s.end_time.strftime("%H:%M")
             planned_start_str = s.start_time.strftime("%H:%M")
-            avg_actual_end_str = self._add_minutes_to_time_str(s.end_time, avg_end_drift)
+            avg_actual_end_str = cls._add_minutes_to_time_str(s.end_time, avg_end_drift)
 
             is_drifting = sample_cnt > 0 and (avg_end_drift >= 15.0 or avg_dur_drift >= 15.0)
             msg = None
@@ -575,19 +468,12 @@ class WFMPredictionService:
             else 0.0
         )
 
-        # End-of-month projection based on current month schedules + drift
         month_start = date(ref_date.year, ref_date.month, 1)
         month_end = date(ref_date.year, ref_date.month, monthrange(ref_date.year, ref_date.month)[1])
-        month_schedules = list(
-            self.session.exec(
-                select(Schedule).where(
-                    Schedule.date >= month_start,
-                    Schedule.date <= month_end,
-                )
-            ).all()
-        )
-        if self.tenant_id is not None:
-            month_schedules = [s for s in month_schedules if s.user_id in emp_ids]
+        month_schedules = [
+            s for s in input_dto.schedules
+            if s.user_id in emp_ids and month_start <= s.date <= month_end
+        ]
 
         drift_map_by_shift = {
             sd["shift_def_id"]: sd["avg_duration_drift_minutes"] / 60.0
@@ -604,8 +490,8 @@ class WFMPredictionService:
             if not sh:
                 continue
             u = emp_map.get(sch.user_id)
-            rate = self.resolve_hourly_rate(u, sch.role_id, role_map)
-            p_hrs = self._calc_shift_duration_hours(sh.start_time, sh.end_time, sch.date)
+            rate = cls.resolve_hourly_rate(u, sch.role_id, role_map)
+            p_hrs = cls._calc_shift_duration_hours(sh.start_time, sh.end_time, sch.date)
 
             shift_drift_hrs = drift_map_by_shift.get(sch.shift_def_id, 0.0)
             if shift_drift_hrs == 0.0 and matched_records_count > 0 and drift_hours_ratio > 1.0:
@@ -643,52 +529,24 @@ class WFMPredictionService:
     #  3. Shift Stability Analysis (ShiftGiveaway / Rotation)
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def analyze_shift_stability(
-        self,
-        reference_date: Optional[date] = None,
-        lookback_weeks: int = 8,
-    ) -> Dict[str, Any]:
-        ref_date = reference_date or date.today()
-        history_start = ref_date - timedelta(days=lookback_weeks * 7)
+    @classmethod
+    def analyze_shift_stability(cls, input_dto: WfmPredictionInputDTO) -> Dict[str, Any]:
+        ref_date = input_dto.reference_date or date.today()
+        history_start = ref_date - timedelta(days=input_dto.lookback_weeks_stability * 7)
         horizon_end = ref_date + timedelta(days=30)
 
-        emp_q = select(User)
-        shift_q = select(ShiftDefinition)
-        role_q = select(JobRole)
-        if self.tenant_id is not None:
-            emp_q = emp_q.where(User.tenant_id == self.tenant_id)
-            shift_q = shift_q.where(ShiftDefinition.tenant_id == self.tenant_id)
-            role_q = role_q.where(JobRole.tenant_id == self.tenant_id)
+        emp_ids = {e.id for e in input_dto.employees}
+        shift_map = {s.id: s for s in input_dto.shifts}
 
-        employees = list(self.session.exec(emp_q).all())
-        shifts = list(self.session.exec(shift_q).all())
-        roles = list(self.session.exec(role_q).all())
+        giveaways = [g for g in input_dto.giveaways if g.offered_by in emp_ids]
+        schedules = [
+            s for s in input_dto.schedules
+            if s.user_id in emp_ids and history_start <= s.date <= horizon_end
+        ]
 
-        emp_ids = {e.id for e in employees}
-        shift_map = {s.id: s for s in shifts if s.id is not None}
-        role_map = {r.id: r for r in roles if r.id is not None}
-
-        giveaways = list(self.session.exec(select(ShiftGiveaway)).all())
-        if self.tenant_id is not None:
-            giveaways = [g for g in giveaways if g.offered_by in emp_ids]
-
-        schedules = list(
-            self.session.exec(
-                select(Schedule).where(
-                    Schedule.date >= history_start,
-                    Schedule.date <= horizon_end,
-                )
-            ).all()
-        )
-        if self.tenant_id is not None:
-            schedules = [s for s in schedules if s.user_id in emp_ids]
-
-        schedule_by_id = {s.id: s for s in schedules}
-        for g in giveaways:
-            if g.schedule_id not in schedule_by_id:
-                sch = self.session.get(Schedule, g.schedule_id)
-                if sch and (self.tenant_id is None or sch.user_id in emp_ids):
-                    schedule_by_id[sch.id] = sch
+        schedule_by_id: Dict[UUID, WfmScheduleItemDTO] = {
+            s.id: s for s in input_dto.schedules if s.id is not None and s.user_id in emp_ids
+        }
 
         scheduled_count_by_slot: Dict[Tuple[int, int], int] = defaultdict(int)
         for s in schedules:
@@ -749,35 +607,23 @@ class WFMPredictionService:
     #  4. Live Labor Cost Simulator
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def simulate_labor_cost(
-        self,
-        start_date: date,
-        end_date: date,
-        draft_entries: Optional[List[Dict[str, Any]]] = None,
-        reference_date: Optional[date] = None,
-    ) -> Dict[str, Any]:
-        emp_q = select(User)
-        shift_q = select(ShiftDefinition)
-        role_q = select(JobRole)
-        if self.tenant_id is not None:
-            emp_q = emp_q.where(User.tenant_id == self.tenant_id)
-            shift_q = shift_q.where(ShiftDefinition.tenant_id == self.tenant_id)
-            role_q = role_q.where(JobRole.tenant_id == self.tenant_id)
+    @classmethod
+    def simulate_labor_cost(cls, input_dto: WfmPredictionInputDTO) -> Dict[str, Any]:
+        start_date = input_dto.start_date
+        end_date = input_dto.end_date or (start_date + timedelta(days=6))
 
-        employees = list(self.session.exec(emp_q).all())
-        shifts = list(self.session.exec(shift_q).all())
-        roles = list(self.session.exec(role_q).all())
+        employees = input_dto.employees
+        shifts = input_dto.shifts
+        roles = input_dto.roles
 
         emp_map = {str(e.id): e for e in employees}
         emp_uuids = {e.id for e in employees}
-        shift_map = {s.id: s for s in shifts if s.id is not None}
-        role_map = {r.id: r for r in roles if r.id is not None}
+        shift_map = {s.id: s for s in shifts}
+        role_map = {r.id: r for r in roles}
 
-        # Get drift report to incorporate attendance drift into cost simulation
-        drift_report = self.predict_attendance_drift(reference_date=reference_date)
+        drift_report = cls.predict_attendance_drift(input_dto)
         shift_drift_hours_map: Dict[int, float] = {}
         for sd in drift_report.get("shift_drifts", []):
-            # Use positive drift in duration or end time
             drift_min = max(
                 float(sd.get("avg_duration_drift_minutes", 0.0)),
                 float(sd.get("avg_end_drift_minutes", 0.0)),
@@ -786,10 +632,9 @@ class WFMPredictionService:
 
         overall_drift_ratio = max(1.0, float(drift_report.get("drift_hours_ratio", 1.0)))
 
-        # Resolve entries to simulate
         normalized_entries: List[Dict[str, Any]] = []
-        if draft_entries is not None:
-            for item in draft_entries:
+        if input_dto.draft_entries is not None:
+            for item in input_dto.draft_entries:
                 if isinstance(item, dict):
                     d_val = item.get("date")
                     if isinstance(d_val, str):
@@ -808,23 +653,14 @@ class WFMPredictionService:
                         "role_id": int(getattr(item, "role_id")),
                     })
         else:
-            db_schedules = list(
-                self.session.exec(
-                    select(Schedule).where(
-                        Schedule.date >= start_date,
-                        Schedule.date <= end_date,
-                    )
-                ).all()
-            )
-            if self.tenant_id is not None:
-                db_schedules = [s for s in db_schedules if s.user_id in emp_uuids]
-            for s in db_schedules:
-                normalized_entries.append({
-                    "date": s.date,
-                    "shift_def_id": s.shift_def_id,
-                    "user_id": str(s.user_id),
-                    "role_id": s.role_id,
-                })
+            for s in input_dto.schedules:
+                if s.user_id in emp_uuids and start_date <= s.date <= end_date:
+                    normalized_entries.append({
+                        "date": s.date,
+                        "shift_def_id": s.shift_def_id,
+                        "user_id": str(s.user_id),
+                        "role_id": s.role_id,
+                    })
 
         total_planned_hours = 0.0
         total_projected_hours = 0.0
@@ -833,17 +669,16 @@ class WFMPredictionService:
 
         role_stats: Dict[int, Dict[str, Any]] = {}
         for r in roles:
-            if r.id is not None:
-                role_stats[r.id] = {
-                    "role_id": r.id,
-                    "role_name": r.name,
-                    "color_hex": r.color_hex,
-                    "planned_hours": 0.0,
-                    "projected_hours_with_drift": 0.0,
-                    "planned_cost": 0.0,
-                    "projected_cost_with_drift": 0.0,
-                    "shifts_count": 0,
-                }
+            role_stats[r.id] = {
+                "role_id": r.id,
+                "role_name": r.name,
+                "color_hex": r.color_hex,
+                "planned_hours": 0.0,
+                "projected_hours_with_drift": 0.0,
+                "planned_cost": 0.0,
+                "projected_cost_with_drift": 0.0,
+                "shifts_count": 0,
+            }
 
         days_count = max(0, (end_date - start_date).days + 1)
         daily_stats: Dict[date, Dict[str, Any]] = {}
@@ -871,8 +706,8 @@ class WFMPredictionService:
             if not sh:
                 continue
             u = emp_map.get(u_id)
-            rate = self.resolve_hourly_rate(u, r_id, role_map)
-            p_hrs = self._calc_shift_duration_hours(sh.start_time, sh.end_time, d)
+            rate = cls.resolve_hourly_rate(u, r_id, role_map)
+            p_hrs = cls._calc_shift_duration_hours(sh.start_time, sh.end_time, d)
 
             s_drift_hrs = shift_drift_hours_map.get(s_id, 0.0)
             if s_drift_hrs == 0.0 and overall_drift_ratio > 1.0:
@@ -912,9 +747,8 @@ class WFMPredictionService:
                 daily_stats[d]["projected_cost_with_drift"] += proj_cost
                 daily_stats[d]["shifts_count"] += 1
 
-        hours_by_role = []
-        for rs in role_stats.values():
-            hours_by_role.append({
+        hours_by_role = [
+            {
                 "role_id": rs["role_id"],
                 "role_name": rs["role_name"],
                 "color_hex": rs["color_hex"],
@@ -923,7 +757,9 @@ class WFMPredictionService:
                 "planned_cost": round(rs["planned_cost"], 2),
                 "projected_cost_with_drift": round(rs["projected_cost_with_drift"], 2),
                 "shifts_count": rs["shifts_count"],
-            })
+            }
+            for rs in role_stats.values()
+        ]
         hours_by_role.sort(key=lambda x: x["planned_hours"], reverse=True)
 
         daily_costs = []
@@ -968,33 +804,20 @@ class WFMPredictionService:
     #  5. Combined WFM Analytics & Prediction Payload
     # ═══════════════════════════════════════════════════════════════════════════
 
-    def get_full_wfm_prediction_report(
-        self,
-        start_date: date,
-        end_date: Optional[date] = None,
-        draft_entries: Optional[List[Dict[str, Any]]] = None,
-        reference_date: Optional[date] = None,
-    ) -> Dict[str, Any]:
-        week_end = end_date or (start_date + timedelta(days=6))
-        bottleneck_data = self.forecast_bottlenecks(
-            start_date=start_date,
-            end_date=week_end,
-            include_rest_of_month=True,
-        )
-        drift_data = self.predict_attendance_drift(reference_date=reference_date)
-        stability_data = self.analyze_shift_stability(reference_date=reference_date)
-        cost_sim = self.simulate_labor_cost(
-            start_date=start_date,
-            end_date=week_end,
-            draft_entries=draft_entries,
-            reference_date=reference_date,
-        )
+    @classmethod
+    def get_full_wfm_prediction_report(cls, input_dto: WfmPredictionInputDTO) -> WfmPredictionOutputDTO:
+        week_end = input_dto.end_date or (input_dto.start_date + timedelta(days=6))
+        scoped_dto = input_dto.model_copy(update={"end_date": week_end})
+        bottleneck_data = cls.forecast_bottlenecks(scoped_dto)
+        drift_data = cls.predict_attendance_drift(scoped_dto)
+        stability_data = cls.analyze_shift_stability(scoped_dto)
+        cost_sim = cls.simulate_labor_cost(scoped_dto)
 
-        return {
-            "start_date": start_date.isoformat(),
-            "end_date": week_end.isoformat(),
-            "bottleneck_forecast": bottleneck_data,
-            "attendance_drift": drift_data,
-            "shift_stability": stability_data,
-            "labor_cost_simulation": cost_sim,
-        }
+        return WfmPredictionOutputDTO(
+            start_date=input_dto.start_date.isoformat(),
+            end_date=week_end.isoformat(),
+            bottleneck_forecast=bottleneck_data,
+            attendance_drift=drift_data,
+            shift_stability=stability_data,
+            labor_cost_simulation=cost_sim,
+        )

@@ -8,3 +8,14 @@ backend/tests/test_kds*.py
 backend/tests/test_kitchen.py
 frontend/lib/screens/pos/
 frontend/lib/providers/pos_providers.dart
+
+# Generated Flutter mock files
+frontend/test/*.mocks.dart
+
+# Binary assets and native mobile shells
+frontend/assets/
+frontend/ios/
+frontend/android/
+
+# Historical Alembic database migrations
+backend/alembic/versions/

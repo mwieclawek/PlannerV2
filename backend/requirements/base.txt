@@ -1,0 +1,9 @@
+sqlmodel
+pydantic
+alembic
+psycopg2-binary
+psycopg[binary]
+asyncpg
+python-dotenv
+tzdata
+aio-pika

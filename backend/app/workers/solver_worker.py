@@ -16,7 +16,8 @@ import signal
 from typing import Any, Dict, Optional, Union
 from uuid import UUID, uuid4
 
-from ..services.solver import SolverJobPayload, solve_from_payload
+from ..contracts.wfm import SolverInputDTO as SolverJobPayload
+from ..services.solver import solve_from_payload
 from . import use_async_worker
 
 logger = logging.getLogger(__name__)

@@ -6,6 +6,7 @@ WFM Analytics & Prediction Worker (`python -m app.workers.wfm_analytics_worker`)
 - Provides `run_wfm_analytics_job` with synchronous fallback when `USE_ASYNC_WORKER=false`.
 """
 import asyncio
+from calendar import monthrange
 from datetime import date, datetime, time, timedelta
 import json
 import logging
@@ -16,10 +17,35 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Session, select
 
+from ..contracts.wfm import (
+    WfmAttendanceItemDTO,
+    WfmAvailabilityItemDTO,
+    WfmEmployeeDTO,
+    WfmGiveawayItemDTO,
+    WfmLeaveRequestItemDTO,
+    WfmPredictionInputDTO,
+    WfmRequirementItemDTO,
+    WfmRoleDTO,
+    WfmScheduleItemDTO,
+    WfmShiftDTO,
+)
 from ..database import engine
-from ..models import RestaurantConfig
+from ..models import (
+    Attendance,
+    AttendanceStatus,
+    Availability,
+    JobRole,
+    LeaveRequest,
+    LeaveStatus,
+    RestaurantConfig,
+    Schedule,
+    ShiftDefinition,
+    ShiftGiveaway,
+    StaffingRequirement,
+    User,
+)
 from ..services.wfm_prediction_service import WFMPredictionService
-from ..tenant_context import set_current_tenant_id
+from ..tenant_context import get_current_tenant_id, set_current_tenant_id
 from . import use_async_worker
 from .solver_worker import _run_coro_sync, get_rabbitmq_url
 
@@ -37,6 +63,256 @@ def _json_default(obj: Any) -> Any:
     if isinstance(obj, UUID):
         return str(obj)
     return str(obj)
+
+
+def build_wfm_prediction_input(
+    session: Session,
+    tenant_id: Optional[int],
+    start_date: date,
+    end_date: Optional[date] = None,
+    draft_entries: Optional[List[Dict[str, Any]]] = None,
+    reference_date: Optional[date] = None,
+    lookback_weeks_drift: int = 6,
+    lookback_weeks_stability: int = 8,
+    include_rest_of_month: bool = True,
+) -> WfmPredictionInputDTO:
+    """
+    Warstwa orkiestracji DB -> DTO:
+    pobiera wszystkie dane domenowe WFM z bazy PostgreSQL i buduje bezstanowy
+    kontrakt `WfmPredictionInputDTO` dla silnika `WFMPredictionService`.
+    """
+    tid = tenant_id
+    if tid is None:
+        tid = get_current_tenant_id()
+        if tid is None:
+            first_rest = session.exec(select(RestaurantConfig)).first()
+            if first_rest:
+                tid = first_rest.id
+
+    week_end = end_date or (start_date + timedelta(days=6))
+    ref_date = reference_date or date.today()
+    last_day_num = monthrange(start_date.year, start_date.month)[1]
+    month_start = date(start_date.year, start_date.month, 1)
+    month_end = date(start_date.year, start_date.month, last_day_num)
+    horizon_end = max(week_end, month_end) if include_rest_of_month else week_end
+
+    drift_start = ref_date - timedelta(days=max(4, min(8, lookback_weeks_drift)) * 7)
+    stability_start = ref_date - timedelta(days=lookback_weeks_stability * 7)
+    ref_month_start = date(ref_date.year, ref_date.month, 1)
+    ref_month_end = date(ref_date.year, ref_date.month, monthrange(ref_date.year, ref_date.month)[1])
+
+    sched_min = min(month_start, start_date, drift_start, stability_start, ref_month_start)
+    sched_max = max(month_end, horizon_end, ref_date + timedelta(days=30), ref_month_end)
+
+    emp_q = select(User)
+    shift_q = select(ShiftDefinition)
+    role_q = select(JobRole)
+    if tid is not None:
+        emp_q = emp_q.where(User.tenant_id == tid)
+        shift_q = shift_q.where(ShiftDefinition.tenant_id == tid)
+        role_q = role_q.where(JobRole.tenant_id == tid)
+
+    employees = list(session.exec(emp_q).all())
+    shifts = list(session.exec(shift_q).all())
+    roles = list(session.exec(role_q).all())
+
+    emp_ids = {e.id for e in employees}
+    shift_ids = {s.id for s in shifts if s.id is not None}
+
+    schedules = list(
+        session.exec(
+            select(Schedule).where(Schedule.date >= sched_min, Schedule.date <= sched_max)
+        ).all()
+    )
+    if tid is not None:
+        schedules = [s for s in schedules if s.user_id in emp_ids]
+
+    giveaways = list(session.exec(select(ShiftGiveaway)).all())
+    if tid is not None:
+        giveaways = [g for g in giveaways if g.offered_by in emp_ids]
+
+    sched_by_id = {s.id: s for s in schedules}
+    for g in giveaways:
+        if g.schedule_id not in sched_by_id:
+            sch = session.get(Schedule, g.schedule_id)
+            if sch and (tid is None or sch.user_id in emp_ids):
+                schedules.append(sch)
+                sched_by_id[sch.id] = sch
+
+    availabilities = list(
+        session.exec(
+            select(Availability).where(
+                Availability.date >= start_date,
+                Availability.date <= horizon_end,
+            )
+        ).all()
+    )
+    if tid is not None:
+        availabilities = [a for a in availabilities if a.user_id in emp_ids]
+
+    leaves = list(
+        session.exec(
+            select(LeaveRequest).where(
+                LeaveRequest.status == LeaveStatus.APPROVED,
+                LeaveRequest.end_date >= start_date,
+                LeaveRequest.start_date <= horizon_end,
+            )
+        ).all()
+    )
+    if tid is not None:
+        leaves = [lr for lr in leaves if lr.user_id in emp_ids]
+
+    specific_reqs = list(
+        session.exec(
+            select(StaffingRequirement).where(
+                StaffingRequirement.date >= start_date,
+                StaffingRequirement.date <= horizon_end,
+            )
+        ).all()
+    )
+    global_reqs = list(
+        session.exec(
+            select(StaffingRequirement).where(StaffingRequirement.day_of_week != None)
+        ).all()
+    )
+    if tid is not None:
+        specific_reqs = [r for r in specific_reqs if r.shift_def_id in shift_ids]
+        global_reqs = [r for r in global_reqs if r.shift_def_id in shift_ids]
+
+    attendances = list(
+        session.exec(
+            select(Attendance).where(
+                Attendance.date >= drift_start,
+                Attendance.date <= ref_date,
+                Attendance.status == AttendanceStatus.CONFIRMED,
+            )
+        ).all()
+    )
+    if tid is not None:
+        attendances = [a for a in attendances if a.user_id in emp_ids]
+
+    emp_dtos = [
+        WfmEmployeeDTO(
+            id=e.id,
+            full_name=e.full_name,
+            is_active=bool(e.is_active),
+            role_system=e.role_system.value if hasattr(e.role_system, "value") else str(e.role_system),
+            target_hours_per_month=e.target_hours_per_month,
+            hourly_rate=e.hourly_rate,
+            role_ids=[r.id for r in (e.job_roles or []) if r.id is not None],
+            role_hourly_rates=[
+                float(r.hourly_rate) for r in (e.job_roles or []) if r.hourly_rate is not None
+            ],
+        )
+        for e in employees
+    ]
+
+    shift_dtos = [
+        WfmShiftDTO(
+            id=s.id,
+            name=s.name,
+            start_time=s.start_time,
+            end_time=s.end_time,
+            applicable_days=(
+                [link.day_of_week for link in s.days]
+                if getattr(s, "days", None)
+                else [0, 1, 2, 3, 4, 5, 6]
+            ),
+        )
+        for s in shifts
+        if s.id is not None
+    ]
+
+    role_dtos = [
+        WfmRoleDTO(
+            id=r.id,
+            name=r.name,
+            color_hex=r.color_hex,
+            hourly_rate=r.hourly_rate,
+        )
+        for r in roles
+        if r.id is not None
+    ]
+
+    schedule_dtos = [
+        WfmScheduleItemDTO(
+            id=s.id,
+            date=s.date,
+            shift_def_id=s.shift_def_id,
+            user_id=s.user_id,
+            role_id=s.role_id,
+        )
+        for s in schedules
+    ]
+
+    avail_dtos = [
+        WfmAvailabilityItemDTO(
+            user_id=a.user_id,
+            date=a.date,
+            shift_def_id=a.shift_def_id,
+            status=a.status.value if hasattr(a.status, "value") else str(a.status),
+        )
+        for a in availabilities
+    ]
+
+    leave_dtos = [
+        WfmLeaveRequestItemDTO(
+            user_id=lr.user_id,
+            start_date=lr.start_date,
+            end_date=lr.end_date,
+            status=lr.status.value if hasattr(lr.status, "value") else str(lr.status),
+        )
+        for lr in leaves
+    ]
+
+    req_dtos = [
+        WfmRequirementItemDTO(
+            date=r.date,
+            day_of_week=r.day_of_week,
+            shift_def_id=r.shift_def_id,
+            role_id=r.role_id,
+            min_count=r.min_count,
+        )
+        for r in [*global_reqs, *specific_reqs]
+    ]
+
+    att_dtos = [
+        WfmAttendanceItemDTO(
+            user_id=a.user_id,
+            date=a.date,
+            schedule_id=a.schedule_id,
+            check_in=a.check_in,
+            check_out=a.check_out,
+            status=a.status.value if hasattr(a.status, "value") else str(a.status),
+            is_absent=bool(getattr(a, "is_absent", False)),
+        )
+        for a in attendances
+    ]
+
+    giveaway_dtos = [
+        WfmGiveawayItemDTO(schedule_id=g.schedule_id, offered_by=g.offered_by)
+        for g in giveaways
+    ]
+
+    return WfmPredictionInputDTO(
+        tenant_id=tid,
+        start_date=start_date,
+        end_date=week_end,
+        reference_date=ref_date,
+        lookback_weeks_drift=lookback_weeks_drift,
+        lookback_weeks_stability=lookback_weeks_stability,
+        include_rest_of_month=include_rest_of_month,
+        employees=emp_dtos,
+        shifts=shift_dtos,
+        roles=role_dtos,
+        schedules=schedule_dtos,
+        availabilities=avail_dtos,
+        leave_requests=leave_dtos,
+        requirements=req_dtos,
+        attendances=att_dtos,
+        giveaways=giveaway_dtos,
+        draft_entries=draft_entries,
+    )
 
 
 def execute_wfm_analytics_sync(
@@ -61,13 +337,16 @@ def execute_wfm_analytics_sync(
         own_session = True
 
     try:
-        svc = WFMPredictionService(session, tenant_id=tenant_id)
-        report = svc.get_full_wfm_prediction_report(
+        input_dto = build_wfm_prediction_input(
+            session=session,
+            tenant_id=tenant_id,
             start_date=start_date,
             end_date=end_date,
             draft_entries=draft_entries,
             reference_date=reference_date,
         )
+        report_dto = WFMPredictionService.get_full_wfm_prediction_report(input_dto)
+        report = report_dto.model_dump(mode="json")
         report["executed_via"] = executed_via
         return report
     finally:
@@ -94,13 +373,15 @@ def execute_labor_cost_simulation_sync(
         own_session = True
 
     try:
-        svc = WFMPredictionService(session, tenant_id=tenant_id)
-        sim = svc.simulate_labor_cost(
+        input_dto = build_wfm_prediction_input(
+            session=session,
+            tenant_id=tenant_id,
             start_date=start_date,
             end_date=end_date,
             draft_entries=draft_entries,
             reference_date=reference_date,
         )
+        sim = WFMPredictionService.simulate_labor_cost(input_dto)
         sim["executed_via"] = executed_via
         return sim
     finally:

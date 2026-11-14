@@ -1,0 +1,13 @@
+-r base.txt
+
+fastapi
+uvicorn
+PyJWT
+passlib[bcrypt]
+python-multipart
+requests
+httpx
+reportlab
+slowapi
+firebase-admin
+cryptography

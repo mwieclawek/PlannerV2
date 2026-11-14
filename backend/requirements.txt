@@ -1,22 +1,5 @@
-fastapi
-uvicorn
-sqlmodel
-psycopg2-binary
-psycopg[binary]
-asyncpg
-PyJWT
-passlib[bcrypt]
-python-multipart
-ortools
-requests
+-r requirements/api.txt
+-r requirements/worker.txt
+
 pytest
 pytest-asyncio
-httpx
-alembic
-reportlab
-python-dotenv
-slowapi
-firebase-admin
-cryptography
-tzdata
-aio-pika

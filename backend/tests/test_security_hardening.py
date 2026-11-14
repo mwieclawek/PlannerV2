@@ -183,12 +183,12 @@ async def test_requirements_are_tenant_scoped(client: AsyncClient, session, two_
 
 @pytest.mark.asyncio
 async def test_solver_ignores_foreign_tenant(session, two_tenants, test_tenant):
-    from app.services.solver import SolverService
+    from app.services.scheduler_service import SchedulerService
     from app.models import UserJobRoleLink
     t = two_tenants
     session.add(UserJobRoleLink(user_id=t["emp_b"].id, role_id=t["role_b"].id))
     session.commit()
-    res = SolverService(session, tenant_id=test_tenant.id).solve(date.today(), date.today(), save=False)
+    res = SchedulerService(session, tenant_id=test_tenant.id).solve_schedule(date.today(), date.today(), save=False)
     assert "emp_b" not in str(res)
 
 
