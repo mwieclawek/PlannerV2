@@ -26,12 +26,58 @@ class EmployeeDetailDialog extends ConsumerStatefulWidget {
 }
 
 class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
+  late int _selectedMonth;
+  late int _selectedYear;
   late Future<UserStats> _statsFuture;
+
+  static const List<String> _monthNames = [
+    'Styczeń',
+    'Luty',
+    'Marzec',
+    'Kwiecień',
+    'Maj',
+    'Czerwiec',
+    'Lipiec',
+    'Sierpień',
+    'Wrzesień',
+    'Październik',
+    'Listopad',
+    'Grudzień',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _statsFuture = ref.read(apiServiceProvider).getUserStats(widget.user.id);
+    final now = DateTime.now();
+    _selectedMonth = now.month;
+    _selectedYear = now.year;
+    _statsFuture = _fetchStats();
+  }
+
+  Future<UserStats> _fetchStats() {
+    return ref.read(apiServiceProvider).getUserStats(
+      widget.user.id,
+      month: _selectedMonth,
+      year: _selectedYear,
+    );
+  }
+
+  void _changeMonth(int delta) {
+    setState(() {
+      var m = _selectedMonth + delta;
+      var y = _selectedYear;
+      while (m <= 0) {
+        m += 12;
+        y -= 1;
+      }
+      while (m > 12) {
+        m -= 12;
+        y += 1;
+      }
+      _selectedMonth = m;
+      _selectedYear = y;
+      _statsFuture = _fetchStats();
+    });
   }
 
   @override
@@ -233,14 +279,41 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
   }
 
   Widget _buildStatsSection() {
+    final monthLabel = '${_monthNames[_selectedMonth - 1]} $_selectedYear';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Statystyki',
-          style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
+        Row(
+          children: [
+            Text(
+              'Statystyki',
+              style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.chevron_left, size: 20),
+              tooltip: 'Poprzedni miesiąc',
+              onPressed: () => _changeMonth(-1),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+            Text(
+              monthLabel,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.chevron_right, size: 20),
+              tooltip: 'Następny miesiąc',
+              onPressed: () => _changeMonth(1),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         FutureBuilder<UserStats>(
           future: _statsFuture,
           builder: (context, snapshot) {
@@ -258,24 +331,52 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
             }
 
             final stats = snapshot.data!;
+            final targetSuffix =
+                stats.targetHoursPerMonth != null
+                    ? ' / ${stats.targetHoursPerMonth}h'
+                    : '';
             return Column(
               children: [
                 Row(
                   children: [
                     Expanded(
                       child: _buildStatCard(
-                        'Ukończone zmiany',
+                        'Przepracowane ($monthLabel)',
+                        '${stats.selectedMonthWorkedHours.toStringAsFixed(1)}h (${stats.selectedMonthShifts} zm.)',
+                        Icons.event_available,
+                        Colors.green.shade50,
+                        Colors.green.shade700,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Zaplanowane ($monthLabel)',
+                        '${stats.selectedMonthPlannedHours.toStringAsFixed(1)}h$targetSuffix',
+                        Icons.calendar_month,
+                        Colors.blue.shade50,
+                        Colors.blue.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        'Ukończone zmiany (łącznie)',
                         stats.totalShiftsCompleted.toString(),
                         Icons.check_circle_outline,
                         Theme.of(context).colorScheme.primaryContainer,
                         Theme.of(context).colorScheme.primary,
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: _buildStatCard(
-                        'Przepracowane godziny',
-                        stats.totalHoursWorked.toStringAsFixed(1),
+                        'Przepracowane (łącznie)',
+                        '${stats.totalHoursWorked.toStringAsFixed(1)}h',
                         Icons.access_time,
                         Theme.of(context).colorScheme.secondaryContainer,
                         Theme.of(context).colorScheme.secondary,
@@ -306,16 +407,16 @@ class _EmployeeDetailDialogState extends ConsumerState<EmployeeDetailDialog> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children:
                         stats.monthlyShifts.reversed.map((m) {
-                          final count = m['count'] as int;
-                          // Simple bar chart
+                          final count = (m['count'] as num?)?.toInt() ?? 0;
+                          final hrs = (m['hours'] as num?)?.toDouble() ?? 0.0;
                           return Column(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               Text(
-                                '$count',
+                                '${hrs.toStringAsFixed(0)}h',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 12,
+                                  fontSize: 11,
                                 ),
                               ),
                               const SizedBox(height: 4),

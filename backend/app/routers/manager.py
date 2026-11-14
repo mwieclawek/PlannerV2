@@ -209,11 +209,13 @@ def get_users(
 
 @router.get("/users/{user_id}/stats", response_model=UserStats)
 def get_user_stats(
-    user_id: UUID, 
-    service: ManagerService = Depends(get_manager_service), 
-    _: User = Depends(get_manager_user)
+    user_id: UUID,
+    month: Optional[int] = Query(None, ge=1, le=12),
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    service: ManagerService = Depends(get_manager_service),
+    _: User = Depends(get_manager_user),
 ):
-    return service.get_user_stats(user_id)
+    return service.get_user_stats(user_id, month=month, year=year)
 
 @router.get("/dashboard/home", response_model=DashboardHomeResponse)
 def get_dashboard_home(
@@ -668,7 +670,29 @@ def get_employee_hours(
     ).all()
     users_with_availability = {str(a.user_id) for a in availabilities}
     
-    # Calculate hours per employee
+    # Get confirmed worked attendance for the month
+    attendances = session.exec(
+        select(Attendance).where(
+            Attendance.date >= first_day,
+            Attendance.date <= last_day,
+            Attendance.status == AttendanceStatus.CONFIRMED,
+            Attendance.is_absent == False,
+        ).join(User, Attendance.user_id == User.id).where(User.tenant_id == tenant_id)
+    ).all()
+    worked_by_user: dict[str, dict] = {}
+    for att in attendances:
+        uid = str(att.user_id)
+        s_dt = datetime.combine(att.date, att.check_in)
+        e_dt = datetime.combine(att.date, att.check_out)
+        if e_dt <= s_dt:
+            e_dt += timedelta(days=1)
+        dur = (e_dt - s_dt).total_seconds() / 3600
+        if uid not in worked_by_user:
+            worked_by_user[uid] = {"worked_hours": 0.0, "worked_shift_count": 0}
+        worked_by_user[uid]["worked_hours"] += dur
+        worked_by_user[uid]["worked_shift_count"] += 1
+    
+    # Calculate planned hours per employee
     hours_by_user = {}
     for schedule in schedules:
         uid = str(schedule.user_id)
@@ -676,11 +700,9 @@ def get_employee_hours(
         if not shift:
             continue
         
-        # Calculate shift duration in hours
         start_dt = datetime.combine(date.today(), shift.start_time)
         end_dt = datetime.combine(date.today(), shift.end_time)
         if end_dt <= start_dt:
-            # Overnight shift
             end_dt += timedelta(days=1)
         duration_hours = (end_dt - start_dt).total_seconds() / 3600
         
@@ -694,16 +716,23 @@ def get_employee_hours(
     for emp in employees:
         uid = str(emp.id)
         data = hours_by_user.get(uid, {"total_hours": 0.0, "shift_count": 0})
+        worked_data = worked_by_user.get(uid, {"worked_hours": 0.0, "worked_shift_count": 0})
+        planned = round(data["total_hours"], 1)
+        worked = round(worked_data["worked_hours"], 1)
         result.append({
             "user_id": uid,
             "user_name": emp.full_name,
-            "total_hours": round(data["total_hours"], 1),
+            "total_hours": planned,
+            "planned_hours": planned,
+            "worked_hours": worked,
             "shift_count": data["shift_count"],
+            "worked_shift_count": worked_data["worked_shift_count"],
+            "target_hours_per_month": emp.target_hours_per_month,
             "has_availability": uid in users_with_availability
         })
     
-    # Sort by total_hours descending
-    result.sort(key=lambda x: x["total_hours"], reverse=True)
+    # Sort by worked_hours then total_hours descending
+    result.sort(key=lambda x: (x["worked_hours"], x["total_hours"]), reverse=True)
     
     return result
 

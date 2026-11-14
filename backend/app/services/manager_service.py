@@ -548,9 +548,15 @@ class ManagerService:
             
         return result
 
-    def get_user_stats(self, user_id: UUID) -> dict:
+    def get_user_stats(
+        self,
+        user_id: UUID,
+        month: Optional[int] = None,
+        year: Optional[int] = None,
+    ) -> dict:
+        from calendar import monthrange
         from sqlalchemy import func
-        self._get_user(user_id)
+        user = self._get_user(user_id)
 
         
         # 1. Total shifts completed (from Attendance)
@@ -587,42 +593,80 @@ class ManagerService:
         today = date.today()
         monthly_stats = []
         for i in range(6):
-            # i=0 is current month, i=1 is previous...
-            # Calculate month start/end
-            month_date = today.replace(day=1) 
-            # Go back i months
-            # Simplified decrement
+            month_date = today.replace(day=1)
             y = month_date.year
             m = month_date.month - i
             while m <= 0:
                 m += 12
                 y -= 1
-            
+
             start_of_month = date(y, m, 1)
-            # End of month
-            if m == 12:
-                end_of_month = date(y+1, 1, 1) - timedelta(days=1)
-            else:
-                end_of_month = date(y, m+1, 1) - timedelta(days=1)
-                
-            count = self.session.exec(
-                 select(func.count(Attendance.id))
-                .where(Attendance.user_id == user_id)
-                .where(Attendance.status == AttendanceStatus.CONFIRMED)
-                .where(Attendance.is_absent == False)
-                .where(Attendance.date >= start_of_month)
-                .where(Attendance.date <= end_of_month)
-            ).one()
-            
+            end_of_month = date(y, m, monthrange(y, m)[1])
+
+            m_attendances = [
+                a for a in attendances if start_of_month <= a.date <= end_of_month
+            ]
+            m_hours = 0.0
+            for att in m_attendances:
+                s_dt = datetime.combine(att.date, att.check_in)
+                e_dt = datetime.combine(att.date, att.check_out)
+                if e_dt <= s_dt:
+                    e_dt += timedelta(days=1)
+                m_hours += (e_dt - s_dt).total_seconds() / 3600
+
             monthly_stats.append({
                 "month": start_of_month.strftime("%Y-%m"),
-                "count": count
+                "count": len(m_attendances),
+                "hours": round(m_hours, 1),
             })
-            
+
+        target_year = year if year is not None else today.year
+        target_month = month if month is not None else today.month
+        sel_start = date(target_year, target_month, 1)
+        sel_end = date(target_year, target_month, monthrange(target_year, target_month)[1])
+
+        sel_attendances = [a for a in attendances if sel_start <= a.date <= sel_end]
+        sel_worked_hours = 0.0
+        for att in sel_attendances:
+            s_dt = datetime.combine(att.date, att.check_in)
+            e_dt = datetime.combine(att.date, att.check_out)
+            if e_dt <= s_dt:
+                e_dt += timedelta(days=1)
+            sel_worked_hours += (e_dt - s_dt).total_seconds() / 3600
+
+        sel_schedules = self.session.exec(
+            select(Schedule)
+            .where(Schedule.user_id == user_id)
+            .where(Schedule.date >= sel_start)
+            .where(Schedule.date <= sel_end)
+        ).all()
+        shift_ids = {s.shift_def_id for s in sel_schedules}
+        shift_map = {}
+        if shift_ids:
+            shifts = self.session.exec(
+                select(ShiftDefinition).where(ShiftDefinition.id.in_(shift_ids))
+            ).all()
+            shift_map = {s.id: s for s in shifts}
+        sel_planned_hours = 0.0
+        for sch in sel_schedules:
+            sh = shift_map.get(sch.shift_def_id)
+            if not sh:
+                continue
+            s_dt = datetime.combine(sch.date, sh.start_time)
+            e_dt = datetime.combine(sch.date, sh.end_time)
+            if e_dt <= s_dt:
+                e_dt += timedelta(days=1)
+            sel_planned_hours += (e_dt - s_dt).total_seconds() / 3600
+
         return {
             "total_shifts_completed": total_shifts,
             "total_hours_worked": round(total_hours, 1),
-            "monthly_shifts": monthly_stats
+            "monthly_shifts": monthly_stats,
+            "selected_month": sel_start.strftime("%Y-%m"),
+            "selected_month_worked_hours": round(sel_worked_hours, 1),
+            "selected_month_planned_hours": round(sel_planned_hours, 1),
+            "selected_month_shifts": len(sel_attendances),
+            "target_hours_per_month": user.target_hours_per_month,
         }
 
     def get_dashboard_home(self, target_date: Optional[date] = None) -> dict:

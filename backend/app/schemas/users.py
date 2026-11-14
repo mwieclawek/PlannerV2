@@ -92,7 +92,12 @@ class UserStats(BaseModel):
     total_shifts_completed: int
     total_hours_worked: float
     # Monthly breakdown for the last 6 months
-    monthly_shifts: List[dict]  # [{"month": "2023-01", "count": 10}, ...]
+    monthly_shifts: List[dict]  # [{"month": "2023-01", "count": 10, "hours": 80.0}, ...]
+    selected_month: Optional[str] = None
+    selected_month_worked_hours: float = 0.0
+    selected_month_planned_hours: float = 0.0
+    selected_month_shifts: int = 0
+    target_hours_per_month: Optional[int] = None
 
 
 class UserResponse(UserBase):

@@ -867,6 +867,12 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                     _loadData();
                   },
                 ),
+                const Spacer(),
+                OutlinedButton.icon(
+                  onPressed: _showMonthlyHoursDialog,
+                  icon: const Icon(Icons.schedule, size: 18),
+                  label: const Text('Godziny w miesiącu'),
+                ),
               ],
             ),
           ),
@@ -876,6 +882,30 @@ class _TeamTabState extends ConsumerState<TeamTab> {
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddUserDialog,
         child: const Icon(Icons.person_add),
+      ),
+    );
+  }
+
+  void _showMonthlyHoursDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => _MonthlyHoursDialog(
+        onOpenUserDetails: (userId) {
+          final match = _users?.where((u) => u.id == userId).toList();
+          if (match != null && match.isNotEmpty) {
+            final user = match.first;
+            showDialog(
+              context: this.context,
+              builder: (ctx) => EmployeeDetailDialog(
+                user: user,
+                onEdit: () => _showPreferencesDialog(user),
+                onEditRoles: () => _showRoleDialog(user),
+                onResetPassword: () => _showPasswordDialog(user),
+                onEditName: () => _showEditUserDialog(user),
+              ),
+            );
+          }
+        },
       ),
     );
   }
@@ -1079,6 +1109,215 @@ class _TeamTabState extends ConsumerState<TeamTab> {
                   ],
                 ),
           ),
+    );
+  }
+}
+
+
+class _MonthlyHoursDialog extends ConsumerStatefulWidget {
+  final void Function(String userId)? onOpenUserDetails;
+
+  const _MonthlyHoursDialog({this.onOpenUserDetails});
+
+  @override
+  ConsumerState<_MonthlyHoursDialog> createState() => _MonthlyHoursDialogState();
+}
+
+class _MonthlyHoursDialogState extends ConsumerState<_MonthlyHoursDialog> {
+  late int _month;
+  late int _year;
+  late Future<List<Map<String, dynamic>>> _hoursFuture;
+
+  static const List<String> _monthNames = [
+    'Styczeń',
+    'Luty',
+    'Marzec',
+    'Kwiecień',
+    'Maj',
+    'Czerwiec',
+    'Lipiec',
+    'Sierpień',
+    'Wrzesień',
+    'Październik',
+    'Listopad',
+    'Grudzień',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _month = now.month;
+    _year = now.year;
+    _hoursFuture = _loadHours();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadHours() {
+    return ref.read(apiServiceProvider).getEmployeeHours(_month, _year);
+  }
+
+  void _changeMonth(int delta) {
+    setState(() {
+      var m = _month + delta;
+      var y = _year;
+      while (m <= 0) {
+        m += 12;
+        y -= 1;
+      }
+      while (m > 12) {
+        m -= 12;
+        y += 1;
+      }
+      _month = m;
+      _year = y;
+      _hoursFuture = _loadHours();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final monthLabel = '${_monthNames[_month - 1]} $_year';
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: 620,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.schedule,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Godziny pracowników',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  tooltip: 'Poprzedni miesiąc',
+                  onPressed: () => _changeMonth(-1),
+                ),
+                Text(
+                  monthLabel,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  tooltip: 'Następny miesiąc',
+                  onPressed: () => _changeMonth(1),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            Expanded(
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: _hoursFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        'Błąd ładowania godzin: ${snapshot.error}',
+                        style: const TextStyle(color: Colors.red),
+                      ),
+                    );
+                  }
+                  final rows = snapshot.data ?? const [];
+                  if (rows.isEmpty) {
+                    return const Center(child: Text('Brak pracowników.'));
+                  }
+                  return ListView.separated(
+                    itemCount: rows.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final r = rows[index];
+                      final name = (r['user_name'] ?? 'Nieznany').toString();
+                      final worked =
+                          (r['worked_hours'] as num?)?.toDouble() ?? 0.0;
+                      final planned =
+                          (r['planned_hours'] as num?)?.toDouble() ??
+                          (r['total_hours'] as num?)?.toDouble() ??
+                          0.0;
+                      final workedShifts =
+                          (r['worked_shift_count'] as num?)?.toInt() ?? 0;
+                      final plannedShifts =
+                          (r['shift_count'] as num?)?.toInt() ?? 0;
+                      final target = r['target_hours_per_month'] as num?;
+                      final userId = r['user_id']?.toString();
+
+                      return ListTile(
+                        title: Text(
+                          name,
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          'Zatwierdzone: $workedShifts zm.  •  Grafik: $plannedShifts zm.'
+                          '${target != null ? '  •  Cel: ${target}h' : ''}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${worked.toStringAsFixed(1)} h',
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                            Text(
+                              'Plan: ${planned.toStringAsFixed(1)} h',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        onTap: userId == null || widget.onOpenUserDetails == null
+                            ? null
+                            : () {
+                                Navigator.of(context).pop();
+                                widget.onOpenUserDetails!(userId);
+                              },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Zamknij'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

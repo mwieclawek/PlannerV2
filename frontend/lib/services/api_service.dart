@@ -834,8 +834,18 @@ class ApiService {
   }
 
   // New features
-  Future<UserStats> getUserStats(String userId) async {
-    final response = await _dio.get('/manager/users/$userId/stats');
+  Future<UserStats> getUserStats(
+    String userId, {
+    int? month,
+    int? year,
+  }) async {
+    final Map<String, dynamic> queryParameters = {};
+    if (month != null) queryParameters['month'] = month;
+    if (year != null) queryParameters['year'] = year;
+    final response = await _dio.get(
+      '/manager/users/$userId/stats',
+      queryParameters: queryParameters.isNotEmpty ? queryParameters : null,
+    );
     return UserStats.fromJson(response.data);
   }
 

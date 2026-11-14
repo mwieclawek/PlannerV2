@@ -604,19 +604,37 @@ class UserStats {
   final int totalShiftsCompleted;
   final double totalHoursWorked;
   final List<Map<String, dynamic>> monthlyShifts;
+  final String? selectedMonth;
+  final double selectedMonthWorkedHours;
+  final double selectedMonthPlannedHours;
+  final int selectedMonthShifts;
+  final int? targetHoursPerMonth;
 
   UserStats({
     required this.totalShiftsCompleted,
     required this.totalHoursWorked,
     required this.monthlyShifts,
+    this.selectedMonth,
+    this.selectedMonthWorkedHours = 0.0,
+    this.selectedMonthPlannedHours = 0.0,
+    this.selectedMonthShifts = 0,
+    this.targetHoursPerMonth,
   });
 
   factory UserStats.fromJson(Map<String, dynamic> json) {
     return UserStats(
-      totalShiftsCompleted: json['total_shifts_completed'],
-      totalHoursWorked: (json['total_hours_worked'] as num).toDouble(),
+      totalShiftsCompleted: json['total_shifts_completed'] ?? 0,
+      totalHoursWorked: (json['total_hours_worked'] as num?)?.toDouble() ?? 0.0,
       monthlyShifts:
-          (json['monthly_shifts'] as List).cast<Map<String, dynamic>>(),
+          (json['monthly_shifts'] as List? ?? const [])
+              .cast<Map<String, dynamic>>(),
+      selectedMonth: json['selected_month'] as String?,
+      selectedMonthWorkedHours:
+          (json['selected_month_worked_hours'] as num?)?.toDouble() ?? 0.0,
+      selectedMonthPlannedHours:
+          (json['selected_month_planned_hours'] as num?)?.toDouble() ?? 0.0,
+      selectedMonthShifts: json['selected_month_shifts'] as int? ?? 0,
+      targetHoursPerMonth: json['target_hours_per_month'] as int?,
     );
   }
 }
