@@ -41,6 +41,9 @@ from .operations import (
     HaccpLog,
     Announcement,
     AnnouncementReadReceipt,
+    WorkerJobStatus,
+    WorkerJobType,
+    WorkerJob,
 )
 from .pos_legacy import (
     TableZone,
@@ -109,6 +112,9 @@ __all__ = [
     "HaccpLog",
     "Announcement",
     "AnnouncementReadReceipt",
+    "WorkerJobStatus",
+    "WorkerJobType",
+    "WorkerJob",
     # POS & KDS (v2 + legacy)
     "TableZone",
     "TableStatus",

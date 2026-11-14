@@ -173,6 +173,39 @@ class AnnouncementReadReceipt(SQLModel, table=True):
     user: Optional[User] = Relationship()
 
 
+class WorkerJobStatus(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+
+
+class WorkerJobType(str, Enum):
+    SOLVER = "SOLVER"
+    PREDICTION = "PREDICTION"
+    LABOR_COST_SIMULATION = "LABOR_COST_SIMULATION"
+
+
+class WorkerJob(SQLModel, table=True):
+    __tablename__ = "worker_job"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    job_id: str = Field(index=True, unique=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="restaurantconfig.id", index=True)
+    job_type: str = Field(default=WorkerJobType.SOLVER.value, index=True)
+    status: str = Field(default=WorkerJobStatus.PENDING.value, index=True)
+    payload_json: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
+    result_summary_json: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
+    error_message: Optional[str] = Field(default=None, sa_column=Column(String, nullable=True))
+    retry_count: int = Field(default=0)
+    max_retries: int = Field(default=3)
+    started_at: Optional[datetime] = Field(default=None, index=True)
+    finished_at: Optional[datetime] = Field(default=None)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 register_tenant_listener(
     DailyCloseout,
     ChecklistTemplate,

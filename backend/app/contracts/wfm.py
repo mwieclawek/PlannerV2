@@ -126,11 +126,16 @@ class SolverExplanationDTO(BaseModel):
     solve_duration_sec: float
     variables_count: int
     objective_terms_count: int
+    wall_time_sec: float = 0.0
+    user_time_sec: float = 0.0
     objective_value: float
+    best_objective_bound: float = 0.0
     total_required_slots: int
     total_assigned_slots: int
     coverage_pct: float
     deficit_explanations: List[Dict[str, Any]] = Field(default_factory=list)
+    bottlenecks: List[Dict[str, Any]] = Field(default_factory=list)
+    telemetry: Dict[str, Any] = Field(default_factory=dict)
     deficit_details: Dict[str, Any] = Field(default_factory=dict)
     employee_summary_log: Dict[str, Any] = Field(default_factory=dict)
     employee_summaries: List[Dict[str, Any]] = Field(default_factory=list)

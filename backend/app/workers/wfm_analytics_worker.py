@@ -3,6 +3,8 @@ WFM Analytics & Prediction Worker (`python -m app.workers.wfm_analytics_worker`)
 - Consumes analytics and labor cost simulation tasks from RabbitMQ durable queue `wfm.analytics.tasks`
   with QoS `prefetch_count=1` and manual ACK (`message.process(requeue=True)`).
 - Runs periodic background WFM bottleneck / attendance drift / shift stability prediction.
+- Runs startup & periodic stale/zombie `WorkerJob` recovery.
+- Supports graceful shutdown on SIGINT / SIGTERM: finishes in-flight iteration or rolls back & requeues.
 - Provides `run_wfm_analytics_job` with synchronous fallback when `USE_ASYNC_WORKER=false`.
 """
 import asyncio
@@ -10,8 +12,6 @@ from calendar import monthrange
 from datetime import date, datetime, time, timedelta
 import json
 import logging
-import os
-import signal
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
@@ -43,11 +43,18 @@ from ..models import (
     ShiftGiveaway,
     StaffingRequirement,
     User,
+    WorkerJobType,
 )
 from ..services.wfm_prediction_service import WFMPredictionService
 from ..tenant_context import get_current_tenant_id, set_current_tenant_id
-from . import use_async_worker
-from .solver_worker import _run_coro_sync, get_rabbitmq_url
+from . import install_signal_handlers, use_async_worker
+from .recovery import (
+    complete_worker_job,
+    create_or_start_worker_job,
+    fail_or_requeue_worker_job,
+    periodic_stale_job_recovery_loop,
+)
+from .solver_worker import _next_message_or_stop, _run_coro_sync, get_rabbitmq_url
 
 logger = logging.getLogger(__name__)
 
@@ -323,10 +330,11 @@ def execute_wfm_analytics_sync(
     reference_date: Optional[date] = None,
     session: Optional[Session] = None,
     executed_via: str = "sync_fallback",
+    job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Execute WFM Analytics & Prediction tasks (Schedule, Availability, Attendance,
-    LeaveRequest, ShiftGiveaway, Payroll) in-process.
+    LeaveRequest, ShiftGiveaway, Payroll) in-process with WorkerJob tracking & rollback safety.
     """
     if tenant_id is not None:
         set_current_tenant_id(tenant_id)
@@ -336,7 +344,15 @@ def execute_wfm_analytics_sync(
         session = Session(engine)
         own_session = True
 
+    effective_job_id = job_id or str(uuid4())
     try:
+        create_or_start_worker_job(
+            session,
+            job_id=effective_job_id,
+            job_type=WorkerJobType.PREDICTION.value,
+            tenant_id=tenant_id,
+            payload={"start_date": start_date.isoformat(), "end_date": end_date.isoformat() if end_date else None},
+        )
         input_dto = build_wfm_prediction_input(
             session=session,
             tenant_id=tenant_id,
@@ -348,7 +364,21 @@ def execute_wfm_analytics_sync(
         report_dto = WFMPredictionService.get_full_wfm_prediction_report(input_dto)
         report = report_dto.model_dump(mode="json")
         report["executed_via"] = executed_via
+        report.setdefault("job_id", effective_job_id)
+        complete_worker_job(
+            session,
+            job_id=effective_job_id,
+            result_summary={"executed_via": executed_via, "start_date": start_date.isoformat()},
+        )
         return report
+    except Exception as exc:
+        fail_or_requeue_worker_job(
+            session,
+            job_id=effective_job_id,
+            error_message=str(exc),
+            requeue=(executed_via == "async_worker"),
+        )
+        raise
     finally:
         if own_session:
             session.close()
@@ -362,6 +392,7 @@ def execute_labor_cost_simulation_sync(
     reference_date: Optional[date] = None,
     session: Optional[Session] = None,
     executed_via: str = "sync_fallback",
+    job_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Execute Live Labor Cost Simulation using Payroll rates and Attendance drift."""
     if tenant_id is not None:
@@ -372,7 +403,15 @@ def execute_labor_cost_simulation_sync(
         session = Session(engine)
         own_session = True
 
+    effective_job_id = job_id or str(uuid4())
     try:
+        create_or_start_worker_job(
+            session,
+            job_id=effective_job_id,
+            job_type=WorkerJobType.LABOR_COST_SIMULATION.value,
+            tenant_id=tenant_id,
+            payload={"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
+        )
         input_dto = build_wfm_prediction_input(
             session=session,
             tenant_id=tenant_id,
@@ -383,7 +422,21 @@ def execute_labor_cost_simulation_sync(
         )
         sim = WFMPredictionService.simulate_labor_cost(input_dto)
         sim["executed_via"] = executed_via
+        sim.setdefault("job_id", effective_job_id)
+        complete_worker_job(
+            session,
+            job_id=effective_job_id,
+            result_summary={"executed_via": executed_via, "start_date": start_date.isoformat()},
+        )
         return sim
+    except Exception as exc:
+        fail_or_requeue_worker_job(
+            session,
+            job_id=effective_job_id,
+            error_message=str(exc),
+            requeue=(executed_via == "async_worker"),
+        )
+        raise
     finally:
         if own_session:
             session.close()
@@ -393,6 +446,7 @@ def process_analytics_task_message(data: Dict[str, Any]) -> Dict[str, Any]:
     """Process a single analytics task payload from `wfm.analytics.tasks`."""
     task_type = data.get("task", "wfm_analytics")
     tenant_id = data.get("tenant_id")
+    job_id = data.get("job_id")
     s_date = date.fromisoformat(data["start_date"])
     e_date = date.fromisoformat(data["end_date"]) if data.get("end_date") else (s_date + timedelta(days=6))
     ref_date = date.fromisoformat(data["reference_date"]) if data.get("reference_date") else None
@@ -407,6 +461,7 @@ def process_analytics_task_message(data: Dict[str, Any]) -> Dict[str, Any]:
             reference_date=ref_date,
             session=None,
             executed_via="async_worker",
+            job_id=job_id,
         )
     return execute_wfm_analytics_sync(
         start_date=s_date,
@@ -416,6 +471,7 @@ def process_analytics_task_message(data: Dict[str, Any]) -> Dict[str, Any]:
         reference_date=ref_date,
         session=None,
         executed_via="async_worker",
+        job_id=job_id,
     )
 
 
@@ -454,9 +510,9 @@ async def _periodic_wfm_prediction_loop(stop_event: asyncio.Event, interval_sec:
 async def run_analytics_worker_consumer(stop_event: Optional[asyncio.Event] = None) -> None:
     """
     Main async RabbitMQ consumer loop for the `analytics-worker` container.
-    - Durable queue: `wfm.analytics.tasks`
-    - QoS: `prefetch_count=1`
-    - Manual ACK via `async with message.process(requeue=True):`
+    - Runs startup & periodic stale/zombie `WorkerJob` recovery.
+    - Durable queue: `wfm.analytics.tasks`, QoS: `prefetch_count=1`, manual ACK (`requeue=True`).
+    - Graceful shutdown on SIGINT / SIGTERM: exits immediately when idle, or finishes current iteration.
     """
     import aio_pika
     from aio_pika import DeliveryMode, Message
@@ -466,14 +522,10 @@ async def run_analytics_worker_consumer(stop_event: Optional[asyncio.Event] = No
 
     if stop_event is None:
         stop_event = asyncio.Event()
-        loop = asyncio.get_running_loop()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            try:
-                loop.add_signal_handler(sig, stop_event.set)
-            except NotImplementedError:
-                signal.signal(sig, lambda *_: stop_event.set())
+        install_signal_handlers(stop_event, "WFM ANALYTICS WORKER", logger)
 
     periodic_task = asyncio.create_task(_periodic_wfm_prediction_loop(stop_event))
+    recovery_task = asyncio.create_task(periodic_stale_job_recovery_loop(stop_event, run_on_startup=True))
 
     try:
         while not stop_event.is_set():
@@ -489,19 +541,33 @@ async def run_analytics_worker_consumer(stop_event: Optional[asyncio.Event] = No
                     )
 
                     async with tasks_queue.iterator() as queue_iter:
-                        async for message in queue_iter:
-                            if stop_event.is_set():
+                        while not stop_event.is_set():
+                            message = await _next_message_or_stop(queue_iter, stop_event)
+                            if message is None:
                                 break
                             async with message.process(requeue=True):
                                 job_id = message.correlation_id or str(uuid4())
                                 try:
                                     data = json.loads(message.body.decode("utf-8"))
                                     job_id = data.get("job_id") or job_id
+                                    data["job_id"] = job_id
                                     logger.info(
                                         f"[WFM ANALYTICS WORKER] Podjęto zadanie analityczne job_id={job_id} "
                                         f"(task={data.get('task')}) [tenant:{data.get('tenant_id')}]."
                                     )
                                     result = await asyncio.to_thread(process_analytics_task_message, data)
+                                except asyncio.CancelledError:
+                                    logger.warning(
+                                        f"[WFM ANALYTICS WORKER] Przerwano zadanie job_id={job_id} podczas shutdown — ponowne kolejkowanie (requeue)."
+                                    )
+                                    with Session(engine) as err_session:
+                                        fail_or_requeue_worker_job(
+                                            err_session,
+                                            job_id=job_id,
+                                            error_message="Interrupted by worker shutdown",
+                                            requeue=True,
+                                        )
+                                    raise
                                 except Exception as exc:
                                     logger.error(
                                         f"[WFM ANALYTICS WORKER] Błąd wykonania zadania job_id={job_id}: {exc}",
@@ -532,11 +598,12 @@ async def run_analytics_worker_consumer(stop_event: Optional[asyncio.Event] = No
                 except asyncio.TimeoutError:
                     pass
     finally:
-        periodic_task.cancel()
-        try:
-            await periodic_task
-        except asyncio.CancelledError:
-            pass
+        for bg_task in (periodic_task, recovery_task):
+            bg_task.cancel()
+            try:
+                await bg_task
+            except asyncio.CancelledError:
+                pass
 
     logger.info("[WFM ANALYTICS WORKER] Proces analytics-worker zakończony.")
 
@@ -640,6 +707,7 @@ def run_wfm_analytics_job(
         reference_date=reference_date,
         session=session,
         executed_via="sync_fallback",
+        job_id=job_id,
     )
 
 
@@ -652,6 +720,7 @@ if __name__ == "__main__":
         configure_noise_levels,
     )
     from logging.handlers import RotatingFileHandler
+    import os
 
     os.makedirs(LOG_DIR, exist_ok=True)
     _log_format = "%(asctime)s [%(levelname)s] [tenant:%(tenant_id)s] %(name)s: %(message)s"
