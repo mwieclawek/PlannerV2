@@ -126,12 +126,14 @@ Pasek nawigacyjny z zakładkami:
 
 #### Team Tab (Zespół)
 - Lista pracowników z avatarami i rolami
+- Przycisk **„Godziny w miesiącu”** (`Icons.calendar_month`) otwierający modal `_MonthlyHoursDialog`:
+  - Nawigacja po miesiącach (`< Miesiąc Rok >`)
+  - Zestawienie godzin **Przepracowanych** (zielony akcent), **Zaplanowanych** (morski akcent) oraz **Celu miesięcznego** z paskiem postępu `LinearProgressIndicator`
 - Przycisk dodawania pracownika
-- Okno dialogowe pracownika:
-  - Przypisywanie ról
-  - Edycja danych (imię, adres e-mail, cele godzinowe)
-  - Reset hasła z walidacją złożoności
-  - Aktywacja / dezaktywacja konta
+- Okno dialogowe pracownika (`EmployeeDetailDialog`):
+  - Selektor miesiąca (`< Miesiąc Rok >`) prezentujący karty **Przepracowane**, **Zaplanowane (grafik)** oraz **Zmiany (przepr. / graf.)**
+  - Wykres / lista z ostatnich 6 miesięcy z podsumowaniem zmian i godzin (`h`)
+  - Przypisywanie ról, edycja danych (imię, adres e-mail, cele godzinowe), reset hasła, aktywacja / dezaktywacja konta
 
 #### Setup Tab (Ustawienia)
 - Sekcja Role: lista stanowisk, kolory

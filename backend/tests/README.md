@@ -26,7 +26,9 @@ backend/tests/
 ├── test_wfm_prediction_service.py # Prognozowanie popytu i analityka WFM
 ├── test_wfm_ops_modules.py        # Moduły operacyjne WFM (HACCP, checklisty, payroll)
 ├── test_google_calendar_sync.py   # Synchronizacja z Google Calendar
-└── test_alembic_migrations.py     # Walidacja spójności drzewa migracji Alembic (287 testów łącznie)
+├── test_monthly_hours.py          # Zestawienie godzin przepracowanych i zaplanowanych w miesiącu
+├── test_worker_reliability.py     # Cykl życia WorkerJob, recovery.py, graceful shutdown i telemetria CP-SAT
+└── test_alembic_migrations.py     # Walidacja spójności drzewa migracji Alembic
 ```
 
 ## Uruchamianie

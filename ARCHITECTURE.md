@@ -1,195 +1,184 @@
-# Architektura Systemu PlannerV2
+# Architektura Systemu — PlannerV2 (v2.2.4)
 
-## Architektura Multi-Tenant (Wielodostępność)
-System działa w modelu wielodostępowym, pozwalającym na obsługę wielu restauracji (Tenantów) w ramach jednej instancji aplikacji.
-- **Tenant**: Każda restauracja to oddzielny byt (model `Tenant`) posiadający `name` oraz `slug` (tzw. Login ID).
-- **Izolacja danych**: Modele bazodanowe przypisane do konkretnej restauracji (np. pracownicy, definicje zmian, role) posiadają kolumnę `tenant_id`. Izolacja na poziomie API jest zapewniona przez zależność (Dependency) FastAPI `require_tenant`, która na podstawie tokenu automatycznie sprawdza uprawnienia i wstrzykuje kontekst restauracji do zapytań.
-- **Dual-Login (Podwójny tryb logowania)**: System autoryzacji pozwala na dwa sposoby logowania:
-  1. Za pomocą globalnie unikalnego adresu `email` i hasła.
-  2. Za pomocą kombinacji `username` + `Login ID` (slug tenanta) i hasła.
-- Payload tokenów JWT posiada izolowane dane (zawiera m.in. klucz `tenant_id` oprócz `user_id` i roli), zapewniając bezpieczne przełączanie kontekstu.
+## Przegląd
 
-## Superadmin i Panel Globalny
-- **Rola SUPERADMIN**: W systemie istnieje globalna rola użytkownika `SUPERADMIN` posiadająca pełen wgląd w całą instancję serwera (zazwyczaj nie przypisana do żadnego tenanta).
-- **Globalny Dashboard**: Superadmini mają dostęp do globalnego panelu sterowania (`/#/superadmin`).
-- **Możliwości**:
-  - Tworzenie oraz edycja restauracji (Tenantów).
-  - Wgląd w listę wszystkich użytkowników w całym systemie (Cross-Tenant).
-  - Dodawanie pierwszych kont typu Manager do nowo powstałych restauracji.
-  - Resetowanie haseł menedżerów.
-  - Podgląd i filtrowanie logów serwerowych w czasie rzeczywistym per restauracja (tenant) oraz per poziom logowania, wraz z wyszukiwarką fraz i analizą tracebacków błędów.
+PlannerV2 to wielodostępny (Multi-Tenant) system klasy **Workforce Management (WFM)** dla gastronomii z bezstanowymi silnikami obliczeniowymi AI/OR-Tools CP-SAT, niezawodną kolejką zadań RabbitMQ, audytem zmian per slot, rozliczeniem godzin miesięcznych (przepracowanych i zaplanowanych) oraz powiadomieniami Web/Mobile Push.
 
-## Zarządzanie pracownikami i Role-Based Shifts
-- **Role-Based Shifts (Zmiany przypisane do ról)**: Zmiany w grafiku (model `ShiftDefinition`) są teraz powiązane z konkretnymi stanowiskami (model `JobRole`). Dzięki temu pracownicy widzą i mogą zgłaszać dostępność wyłącznie na te zmiany, które są adekwatne do ich umiejętności i przypisanych im ról.
-- **Aktualizacje Danych Pracowników**: Menedżerowie mają rozszerzone uprawnienia do zarządzania swoimi pracownikami, w tym m.in. mogą bezpośrednio dodawać oraz edytować adresy e-mail przypisane do kont pracowników, co wspiera działanie trybu logowania za pomocą poczty elektronicznej (Dual-Login).
+> [!TIP]
+> **Wygodne przeglądanie i powiększanie diagramów na GitHubie:**
+> 1. Pod każdym diagramem znajduje się bezpośredni przycisk **🔍 Otwórz pełnoekranowy diagram SVG (Zoom / Ctrl+Scroll)**, który otwiera wektorowy diagram w osobnej karcie przeglądarki z obsługą nieskończonego powiększania.
+> 2. Wielki diagram bazy danych został podzielony na **3 czytelne diagramy domenowe**, dzięki czemu czcionki są duże i ostre bezpośrednio na stronie.
+> 3. Pod każdym diagramem dostępny jest również rozwijany **schemat tekstowy ASCII / tabela relacji**, które powiększają się natywnie wraz ze stroną (`Ctrl` + `+`).
 
-## Diagram Komponentów
+---
+
+## 1. Diagram Komponentów i Przepływu Danych
+
+**[🔍 Otwórz pełnoekranowy diagram komponentów SVG (Zoom / Ctrl+Scroll)](https://mermaid.ink/svg/eyJjb2RlIjogImZsb3djaGFydCBURFxuICAgIHN1YmdyYXBoIENsaWVudFtcIlx1ZDgzZFx1ZGNmMSBXYXJzdHdhIEtsaWVudGEgKEZsdXR0ZXIgMy54KVwiXVxuICAgICAgICBXRUJbXCJGbHV0dGVyIFdlYiAvIFBXQVwiXVxuICAgICAgICBNT0JbXCJBbmRyb2lkICgxNktCIFBhZ2UpIC8gaU9TXCJdXG4gICAgICAgIFNXW1wiU2VydmljZSBXb3JrZXIgKEZDTSBXZWIgUHVzaClcIl1cbiAgICBlbmRcblxuICAgIHN1YmdyYXBoIEVkZ2VbXCJcdWQ4M2NcdWRmMTAgUmV2ZXJzZSBQcm94eVwiXVxuICAgICAgICBOR0lOWFtcIk5naW54IChQb3J0IDgwKVwiXVxuICAgIGVuZFxuXG4gICAgc3ViZ3JhcGggQmFja2VuZFtcIlx1MjY5OVx1ZmUwZiBGYXN0QVBJIEJhY2tlbmQgKFBvcnQgODAwMClcIl1cbiAgICAgICAgUk9VVEVSU1tcIlJvdXRlcnkgQVBJICgvYXV0aCwgL21hbmFnZXIsIC9lbXBsb3llZSwgL3NjaGVkdWxlciwgL3N5c2FkbWluKVwiXVxuICAgICAgICBTRVJWSUNFU1tcIlNlcndpc3kgT3JraWVzdHJhY2ppIChNYW5hZ2VyLCBFbXBsb3llZSwgU2NoZWR1bGVyLCBSYWJiaXRNUSwgUHVzaClcIl1cbiAgICAgICAgQ09OVFJBQ1RTW1wiS29udHJha3R5IERUTyAoYXBwL2NvbnRyYWN0cy93Zm0ucHkpXCJdXG4gICAgICAgIE1PREVMU1tcIk1vZGVsZSBTUUxNb2RlbCAoYXBwL21vZGVscy8qKSAmIFNjaGVtYXR5IChhcHAvc2NoZW1hcy8qKVwiXVxuICAgIGVuZFxuXG4gICAgc3ViZ3JhcGggQXN5bmNXb3JrZXJzW1wiXHVkODNkXHVkZTgwIEJlenN0YW5vd2UgV29ya2VyeSBPYmxpY3plbmlvd2UgKFB1cmUgRG9tYWluIEVuZ2luZXMpXCJdXG4gICAgICAgIFJNUVsoXCJSYWJiaXRNUSAzIEFNUVBcXG4oS29sZWpraSBUcndhXHUwMTQyZSArIFJQQylcIildXG4gICAgICAgIFNPTFZFUl9XW1wic29sdmVyLXdvcmtlclxcbih3b3JrZXIgKyByZWNvdmVyeS5weSlcIl1cbiAgICAgICAgU09MVkVSX0VbXCJQdXJlIEVuZ2luZTogU29sdmVyU2VydmljZVxcbihPUi1Ub29scyBDUC1TQVQpXCJdXG4gICAgICAgIFdGTV9XW1wiYW5hbHl0aWNzLXdvcmtlclxcbih3b3JrZXIgKyByZWNvdmVyeS5weSlcIl1cbiAgICAgICAgV0ZNX0VbXCJQdXJlIEVuZ2luZTogV0ZNUHJlZGljdGlvblNlcnZpY2VcXG4oUHJvZ25venkgJiBTeW11bGFjamUpXCJdXG4gICAgZW5kXG5cbiAgICBzdWJncmFwaCBTdG9yYWdlW1wiXHVkODNkXHVkZGM0XHVmZTBmIERhbmUgaSBJbnRlZ3JhY2plIFpld25cdTAxMTl0cnpuZVwiXVxuICAgICAgICBQR1soXCJQb3N0Z3JlU1FMIDE1XFxuKERhbmUgKyBTaGlmdEF1ZGl0TG9nICsgV29ya2VySm9iKVwiKV1cbiAgICAgICAgRkNNW1wiRmlyZWJhc2UgQ2xvdWQgTWVzc2FnaW5nXCJdXG4gICAgICAgIEdDQUxbXCJHb29nbGUgQ2FsZW5kYXIgQVBJIChPQXV0aCAyLjApXCJdXG4gICAgZW5kXG5cbiAgICBXRUIgJiBNT0IgLS0-IE5HSU5YXG4gICAgU1cgPC4tPiBGQ01cbiAgICBOR0lOWCAtLT58XCIvYXBpLypcInwgUk9VVEVSU1xuICAgIFJPVVRFUlMgLS0-IFNFUlZJQ0VTXG4gICAgU0VSVklDRVMgLS0-IE1PREVMU1xuICAgIE1PREVMUyAtLT4gUEdcbiAgICBTRVJWSUNFUyAtLT58XCJQdWJsaWthY2phIEFNUVAgKyBXb3JrZXJKb2JcInwgUk1RXG4gICAgUk1RIC0tPiBTT0xWRVJfVyAmIFdGTV9XXG4gICAgU09MVkVSX1cgLS0-fFwiU29sdmVySW5wdXREVE8gLT4gU29sdmVyUmVzdWx0RFRPXCJ8IFNPTFZFUl9FXG4gICAgV0ZNX1cgLS0-fFwiV2ZtUHJlZGljdGlvbklucHV0RFRPIC0-IE91dHB1dERUT1wifCBXRk1fRVxuICAgIFNPTFZFUl9XICYgV0ZNX1cgLS0-fFwiU3RhdHVzIC8gV3luaWsgLyBIZWFydGJlYXRcInwgUEdcbiAgICBTRVJWSUNFUyAtLT4gRkNNICYgR0NBTCIsICJtZXJtYWlkIjogeyJ0aGVtZSI6ICJkZWZhdWx0In19)**
 
 ```mermaid
-graph TD
-    subgraph FRONTEND["FRONTEND (Flutter Web/Mobile)"]
-        direction TB
-        LOGIN["Login / Setup (Dual-Login)"]
-        SUPERADMIN_UI["Superadmin UI (Global Panel)"]
-        MANAGER_UI["Manager UI (8 zakładek)"]
-        EMPLOYEE_UI["Employee Dashboard (5 ekranów)"]
-        POS_UI["POS / KDS Screens"]
-        API_SVC["ApiService (Dio + JWT)"]
-        CONFIG_SVC["ConfigService (QR / Manual)"]
-
-        LOGIN --> API_SVC
-        SUPERADMIN_UI --> API_SVC
-        MANAGER_UI --> API_SVC
-        EMPLOYEE_UI --> API_SVC
-        POS_UI --> API_SVC
-        MANAGER_UI --> CONFIG_SVC
+flowchart TD
+    subgraph Client["📱 Warstwa Klienta (Flutter 3.x)"]
+        WEB["Flutter Web / PWA"]
+        MOB["Android (16KB Page) / iOS"]
+        SW["Service Worker (FCM Web Push)"]
     end
 
-    API_SVC -- "HTTP/REST + JWT Bearer" --> ROUTERS
-
-    subgraph BACKEND["BACKEND (FastAPI)"]
-        direction TB
-        ROUTERS["Routers Layer: auth | superadmin | manager | employee | scheduler | pos | kitchen | notifications | health | bug"]
-        SERVICES["Services Layer: SuperadminService | ManagerService | EmployeeService | SchedulerService | PosService | KDSService | PushService"]
-        SOLVER["SolverService (OR-Tools CP-SAT)\n- Constraint Programming\n- Employee-Shift-Role Assignment\n- Soft Penalties > Hard Limits"]
-        ORM["SQLModel (ORM) + Alembic"]
-
-        ROUTERS --> SERVICES
-        SERVICES --> SOLVER
-        SERVICES --> ORM
+    subgraph Edge["🌐 Reverse Proxy"]
+        NGINX["Nginx (Port 80)"]
     end
 
-    SERVICES -- "FCM Push" --> FCM["Firebase Cloud Messaging"]
-    SERVICES -- "AMQP RPC / Tasks (aio-pika)" --> RABBITMQ["RabbitMQ 3 (AMQP Broker)\n- wfm.solver.requests\n- wfm.solver.results\n- wfm.analytics.tasks"]
-    RABBITMQ -- "Pure-Compute JSON (QoS=1)" --> SOLVER_WORKER["solver-worker (Stateless Container)\n- Dockerfile.solver\n- OR-Tools CP-SAT\n- Zero DB Dependencies"]
-    RABBITMQ -- "Async Tasks (QoS=1)" --> ANALYTICS_WORKER["analytics-worker\n- WfmPredictionService\n- Demand & Cost Analytics"]
-    ANALYTICS_WORKER --> ORM
-    ORM --> DB["SQLite (dev) / PostgreSQL (prod)"]
+    subgraph Backend["⚙️ FastAPI Backend (Port 8000)"]
+        ROUTERS["Routery API (/auth, /manager, /employee, /scheduler, /sysadmin)"]
+        SERVICES["Serwisy Orkiestracji (Manager, Employee, Scheduler, RabbitMQ, Push)"]
+        CONTRACTS["Kontrakty DTO (app/contracts/wfm.py)"]
+        MODELS["Modele SQLModel (app/models/*) & Schematy (app/schemas/*)"]
+    end
+
+    subgraph AsyncWorkers["🚀 Bezstanowe Workery Obliczeniowe (Pure Domain Engines)"]
+        RMQ[("RabbitMQ 3 AMQP\n(Kolejki Trwałe + RPC)")]
+        SOLVER_W["solver-worker\n(worker + recovery.py)"]
+        SOLVER_E["Pure Engine: SolverService\n(OR-Tools CP-SAT)"]
+        WFM_W["analytics-worker\n(worker + recovery.py)"]
+        WFM_E["Pure Engine: WFMPredictionService\n(Prognozy & Symulacje)"]
+    end
+
+    subgraph Storage["🗄️ Dane i Integracje Zewnętrzne"]
+        PG[("PostgreSQL 15\n(Dane + ShiftAuditLog + WorkerJob)")]
+        FCM["Firebase Cloud Messaging"]
+        GCAL["Google Calendar API (OAuth 2.0)"]
+    end
+
+    WEB & MOB --> NGINX
+    SW <.-> FCM
+    NGINX -->|"/api/*"| ROUTERS
+    ROUTERS --> SERVICES
+    SERVICES --> MODELS
+    MODELS --> PG
+    SERVICES -->|"Publikacja AMQP + WorkerJob"| RMQ
+    RMQ --> SOLVER_W & WFM_W
+    SOLVER_W -->|"SolverInputDTO -> SolverResultDTO"| SOLVER_E
+    WFM_W -->|"WfmPredictionInputDTO -> OutputDTO"| WFM_E
+    SOLVER_W & WFM_W -->|"Status / Wynik / Heartbeat"| PG
+    SERVICES --> FCM & GCAL
 ```
 
-## Modele Danych
+<details>
+<summary>📐 <b>Alternatywny schemat tekstowy architektury (ASCII — łatwe powiększanie Ctrl++)</b></summary>
+
+```text
++-----------------------------------------------------------------------------------+
+|                        WARSTWA KLIENTA (Flutter 3.x)                              |
+|   [Flutter Web / PWA]     [Android 16KB / iOS]     [Service Worker Web Push]      |
++-----------------------------------------+-----------------------------------------+
+                                          | HTTPS / REST (JSON)
+                                          v
++-----------------------------------------------------------------------------------+
+|                           NGINX REVERSE PROXY (Port 80)                           |
+|             / -> statyczny build Flutter Web   |   /api/* -> FastAPI :8000        |
++-----------------------------------------+-----------------------------------------+
+                                          |
+                                          v
++-----------------------------------------------------------------------------------+
+|                         FASTAPI BACKEND (app/main.py)                             |
+|  +-----------------------+  +------------------------+  +----------------------+  |
+|  | Routery REST          |  | Serwisy Orkiestracji   |  | Kontrakty DTO        |  |
+|  | - /auth, /sysadmin    |  | - SchedulerService     |  | app/contracts/wfm.py |  |
+|  | - /manager, /employee |  | - ManagerService       |  | - SolverInputDTO     |  |
+|  | - /scheduler          |  | - EmployeeService      |  | - SolverResultDTO    |  |
+|  | - /api/notifications  |  | - RabbitMQService      |  | - WfmPrediction*DTO  |  |
+|  +-----------------------+  +------------------------+  +----------------------+  |
+|  +-----------------------------------------------------------------------------+  |
+|  | Modularne Modele & Schematy: app/models/* oraz app/schemas/*                |  |
+|  | (base, tenant, users, scheduling, operations, pos_legacy)                   |  |
+|  +-----------------------------------------------------------------------------+  |
++-------------------+-------------------------------------------+-------------------+
+                    | SQLModel / Alembic                        | AMQP RPC (aio-pika)
+                    v                                           v
++---------------------------------------+   +---------------------------------------+
+|         POSTGRESQL 15 DATABASE        |   |          RABBITMQ 3 BROKER            |
+|  - Tenant, User, JobRole              |   |  - Kolejka: solver_jobs               |
+|  - Schedule, ShiftAuditLog (per slot) |   |  - Kolejka: wfm_analytics_jobs        |
+|  - Attendance, LeaveRequest           |<--+  - Rejestr stanu zadań: WorkerJob     |
+|  - WorkerJob (śledzenie zadań AMQP)   |   +-------------------+-------------------+
++---------------------------------------+                       |
+                                                                v
+                                            +---------------------------------------+
+                                            |   WORKERY + PURE DOMAIN ENGINES       |
+                                            |  1. solver_worker.py + recovery.py    |
+                                            |     -> SolverService (OR-Tools CP-SAT)|
+                                            |        [Zero zależności od sesji DB]  |
+                                            |  2. wfm_analytics_worker.py           |
+                                            |     -> WFMPredictionService           |
+                                            |        [Zero zależności od sesji DB]  |
+                                            +---------------------------------------+
+```
+
+</details>
+
+---
+
+## 2. Architektura Pure Domain Engines i Kontraktów DTO
+
+Silniki obliczeniowe WFM zostały całkowicie odizolowane od warstwy bazy danych (`SQLModel` / `Session`) i działają jako bezstanowe, deterministyczne silniki domenowe (**Pure Domain Engines**), gotowe do niezależnego skalowania:
+
+| Komponent | Lokalizacja | Rola w architekturze |
+|-----------|-------------|----------------------|
+| **Kontrakty WFM DTO** | `backend/app/contracts/wfm.py` | Ścisłe modele Pydantic v2 definiujące wejście i wyjście obliczeń: `SolverInputDTO`, `SolverResultDTO`, `DecisionExplanationDTO`, `SolverWeightsDTO`, `WfmPredictionInputDTO`, `WfmPredictionOutputDTO`. |
+| **Silnik CP-SAT** | `backend/app/services/solver.py` | Przyjmuje wyłącznie `SolverInputDTO` i zwraca `SolverResultDTO`. Wylicza optymalny grafik, telemetrię CP-SAT (`telemetry`), klasyfikację wąskich gardeł (`bottlenecks` przez `_classify_bottleneck_reason`) oraz szczegółowe wyjaśnienia decyzji dla każdego slotu (`decision_explanations`). |
+| **Silnik Predykcji WFM** | `backend/app/services/wfm_prediction_service.py` | Przyjmuje `WfmPredictionInputDTO` i zwraca `WfmPredictionOutputDTO`. Oblicza prognozy ruchu gości, przychodów oraz wagi popytu bez otwierania połączeń do bazy danych. |
+| **Warstwa Orkiestracji** | `backend/app/workers/solver_worker.py`, `wfm_analytics_worker.py`, `scheduler_service.py` | Odpowiada za pobranie encji z PostgreSQL, zbudowanie obiektów DTO, wywołanie czystego silnika obliczeniowego oraz zapis wyników, logów `ShiftAuditLog` i statusu `WorkerJob` w bazie danych. |
+
+---
+
+## 3. Modularna Struktura Pakietów i Zależności Backendu
+
+### 3.1 Modele (`backend/app/models/`) i Schematy (`backend/app/schemas/`)
+Monolityczne pliki modeli i schematów zostały rozdzielone na pakiety domenowe przy zachowaniu pełnej kompatybilności wstecznej eksportów w `__init__.py`:
+- `base.py` — wyliczenia (`RoleSystem`, `AvailabilityStatus`, `LeaveStatus`, `AttendanceStatus`) oraz klasy bazowe.
+- `tenant.py` — `Tenant`, `RestaurantConfig`, `RestaurantOpeningHour`.
+- `users.py` — `User`, `JobRole`, `UserJobRoleLink`, `UserDevice`, `Notification`.
+- `scheduling.py` — `ShiftDefinition`, `ShiftRoleLink`, `ShiftDefinitionDayLink`, `StaffingRequirement`, `Availability`, `Schedule`, `ShiftGiveaway`, `ShiftSwapRequest`, `LeaveRequest`, `ShiftAuditLog`.
+- `operations.py` — `Attendance`, `WfmPrediction`, `WorkerJob`, `ChecklistTemplate`, `ChecklistItem`, `ChecklistExecution`, `HaccpLogPoint`, `HaccpLog`, `Announcement`, `PayrollRecord`.
+- `pos_legacy.py` — odizolowane modele gastronomiczne POS/KDS (tymczasowo wyłączone z głównego kontekstu WFM).
+
+### 3.2 Modularne Zależności Python (`backend/requirements/`)
+Zależności podzielono na 3 wyspecjalizowane pliki, co odchudza obrazy kontenerów Docker:
+- `backend/requirements/base.txt` — rdzeń: SQLModel, SQLAlchemy, Pydantic, Alembic, `psycopg2-binary`, `aio-pika`, narzędzia kryptograficzne i logowanie.
+- `backend/requirements/api.txt` — `-r base.txt` + FastAPI, Uvicorn, `httpx`, integracje Google Calendar OAuth, Firebase Admin SDK (Push), ReportLab (eksport PDF) -> instalowane w `backend/Dockerfile`.
+- `backend/requirements/worker.txt` — `-r base.txt` + `ortools` oraz biblioteki matematyczne wykorzystywane przez `solver-worker` -> instalowane w lekkim obrazie `backend/Dockerfile.solver`.
+- `backend/requirements.txt` — agregator (`-r requirements/api.txt` oraz `-r requirements/worker.txt`) dla lokalnego środowiska developerskiego i CI.
+
+---
+
+## 4. Niezawodność Workerów, Graceful Shutdown i Samo-Uzdrawianie (`recovery.py`)
+
+Workery `solver_worker.py` oraz `wfm_analytics_worker.py` posiadają mechanizmy wysokiej niezawodności produkcyjnej:
+1. **Śledzenie cyklu życia zadań (`WorkerJob`)**: Każde zadanie zlecone przez RabbitMQ lub wykonywane w tle jest rejestrowane w tabeli `worker_job` ze statusem (`PENDING` -> `PROCESSING` -> `COMPLETED` / `FAILED` / `STALE`), licznikiem prób (`attempt_count`), identyfikatorem workera (`worker_id`) oraz czasem rozpoczęcia i zakończenia.
+2. **Graceful Shutdown (`SIGINT` / `SIGTERM`)**: Workery przechwytują sygnały zamknięcia kontenera Docker, wstrzymują pobieranie nowych wiadomości z kolejki AMQP i czekają na bezpieczne dokończenie aktualnie przetwarzanego zadania przed zamknięciem połączenia.
+3. **Automatyczny Recovery (`backend/app/workers/recovery.py`)**:
+   - Przy starcie workera oraz cyklicznie w tle uruchamiany jest proces `recover_stale_jobs()`.
+   - Zadania wiszące w stanie `PROCESSING` lub `PENDING` dłużej niż próg `STALE_JOB_TIMEOUT_MINUTES` są automatycznie oznaczane jako `STALE` lub bezpiecznie ponawiane (do limitu `MAX_JOB_ATTEMPTS`), co zapobiega blokowaniu kolejki po awarii zasilania lub OOM.
+
+---
+
+## 5. Model Danych (Podział na 3 Domeny ER)
+
+Aby diagramy były w pełni czytelne na GitHubie, schemat bazy danych został podzielony na **3 wyspecjalizowane diagramy domenowe**.
+
+### 5.1 Domena 1: Multi-Tenancy, Konfiguracja Lokalu i Użytkownicy
+
+**[🔍 Otwórz pełnoekranowy diagram Domeny 1 SVG (Zoom / Ctrl+Scroll)](https://mermaid.ink/svg/eyJjb2RlIjogImVyRGlhZ3JhbVxuICAgIFRlbmFudCB7XG4gICAgICAgIGludCBpZCBQS1xuICAgICAgICBzdHJpbmcgbmFtZVxuICAgICAgICBzdHJpbmcgc2x1ZyBVSyBcIktvZCBsb2dvd2FuaWEgbG9rYWx1XCJcbiAgICAgICAgYm9vbCBpc19hY3RpdmVcbiAgICAgICAgZGF0ZXRpbWUgY3JlYXRlZF9hdFxuICAgIH1cbiAgICBSZXN0YXVyYW50Q29uZmlnIHtcbiAgICAgICAgaW50IGlkIFBLXG4gICAgICAgIGludCB0ZW5hbnRfaWQgRktcbiAgICAgICAgc3RyaW5nIG5hbWVcbiAgICAgICAgc3RyaW5nIGFkZHJlc3NcbiAgICAgICAgYm9vbCBlbmFibGVfZGFpbHlfY2xvc2VvdXRcbiAgICAgICAgYm9vbCByZXF1aXJlX2NoZWNrbGlzdHNfZm9yX2F0dGVuZGFuY2VcbiAgICAgICAgYm9vbCBlbmFibGVfdGlwX3Bvb2xcbiAgICB9XG4gICAgUmVzdGF1cmFudE9wZW5pbmdIb3VyIHtcbiAgICAgICAgaW50IGlkIFBLXG4gICAgICAgIGludCBjb25maWdfaWQgRktcbiAgICAgICAgaW50IGRheV9vZl93ZWVrXG4gICAgICAgIHRpbWUgb3Blbl90aW1lXG4gICAgICAgIHRpbWUgY2xvc2VfdGltZVxuICAgIH1cbiAgICBVc2VyIHtcbiAgICAgICAgVVVJRCBpZCBQS1xuICAgICAgICBpbnQgdGVuYW50X2lkIEZLXG4gICAgICAgIHN0cmluZyB1c2VybmFtZVxuICAgICAgICBzdHJpbmcgZW1haWwgVUtcbiAgICAgICAgc3RyaW5nIHBhc3N3b3JkX2hhc2hcbiAgICAgICAgc3RyaW5nIGZ1bGxfbmFtZVxuICAgICAgICBlbnVtIHJvbGVfc3lzdGVtIFwiU1VQRVJBRE1JTiAvIE1BTkFHRVIgLyBFTVBMT1lFRVwiXG4gICAgICAgIGludCB0YXJnZXRfaG91cnNfcGVyX21vbnRoXG4gICAgICAgIGludCB0YXJnZXRfc2hpZnRzX3Blcl9tb250aFxuICAgICAgICBmbG9hdCBob3VybHlfcmF0ZVxuICAgICAgICBib29sIGlzX2FjdGl2ZVxuICAgIH1cbiAgICBKb2JSb2xlIHtcbiAgICAgICAgaW50IGlkIFBLXG4gICAgICAgIGludCB0ZW5hbnRfaWQgRktcbiAgICAgICAgc3RyaW5nIG5hbWVcbiAgICAgICAgc3RyaW5nIGNvbG9yX2hleFxuICAgIH1cbiAgICBOb3RpZmljYXRpb24ge1xuICAgICAgICBVVUlEIGlkIFBLXG4gICAgICAgIFVVSUQgdXNlcl9pZCBGS1xuICAgICAgICBzdHJpbmcgdGl0bGVcbiAgICAgICAgc3RyaW5nIGJvZHlcbiAgICAgICAgYm9vbCBpc19yZWFkXG4gICAgfVxuICAgIFVzZXJEZXZpY2Uge1xuICAgICAgICBVVUlEIGlkIFBLXG4gICAgICAgIFVVSUQgdXNlcl9pZCBGS1xuICAgICAgICBzdHJpbmcgZmNtX3Rva2VuIFVLXG4gICAgICAgIGRhdGV0aW1lIGxhc3RfYWN0aXZlXG4gICAgfVxuXG4gICAgVGVuYW50IHx8LS1veyBVc2VyIDogXCJ6YXRydWRuaWFcIlxuICAgIFRlbmFudCB8fC0tb3sgSm9iUm9sZSA6IFwiZGVmaW5pdWplIHJvbGVcIlxuICAgIFRlbmFudCB8fC0tb3wgUmVzdGF1cmFudENvbmZpZyA6IFwia29uZmlndXJhY2phXCJcbiAgICBSZXN0YXVyYW50Q29uZmlnIHx8LS1veyBSZXN0YXVyYW50T3BlbmluZ0hvdXIgOiBcImdvZHppbnkgb3R3YXJjaWFcIlxuICAgIFVzZXIgfW8tLW97IEpvYlJvbGUgOiBcInBvc2lhZGEgcm9sZSAoVXNlckpvYlJvbGVMaW5rKVwiXG4gICAgVXNlciB8fC0tb3sgTm90aWZpY2F0aW9uIDogXCJvdHJ6eW11amVcIlxuICAgIFVzZXIgfHwtLW97IFVzZXJEZXZpY2UgOiBcInVyelx1MDEwNWR6ZW5pYSBQdXNoXCIiLCAibWVybWFpZCI6IHsidGhlbWUiOiAiZGVmYXVsdCJ9fQ==)**
 
 ```mermaid
 erDiagram
     Tenant {
         int id PK
         string name
-        string slug UK "Login ID"
-        datetime created_at
-    }
-
-    User {
-        UUID id PK
-        int tenant_id FK "nullable for SUPERADMIN"
-        string username
-        string email UK "globally unique"
-        string password_hash
-        string full_name
-        enum role_system "SUPERADMIN / MANAGER / EMPLOYEE"
+        string slug UK "Kod logowania lokalu"
         bool is_active
-        int target_hours_per_month
-        int target_shifts_per_month
-        string encrypted_google_access_token
-        string encrypted_google_refresh_token
         datetime created_at
     }
-
-    JobRole {
-        int id PK
-        int tenant_id FK
-        string name
-        string color_hex
-    }
-
-    ShiftDefinition {
-        int id PK
-        int tenant_id FK
-        string name
-        time start_time
-        time end_time
-    }
-    
-    ShiftRoleLink {
-        int shift_def_id FK
-        int role_id FK
-    }
-
-    ShiftDefinitionDayLink {
-        int shift_def_id FK
-        int day_of_week "0=Mon 6=Sun"
-    }
-
-    Availability {
-        UUID id PK
-        UUID user_id FK
-        date date
-        int shift_def_id FK
-        enum status "AVAILABLE / UNAVAILABLE"
-    }
-
-    StaffingRequirement {
-        UUID id PK
-        int shift_def_id FK
-        int role_id FK
-        int min_count
-        date date "nullable - specific date"
-        int day_of_week "nullable - global rule"
-    }
-
-    Schedule {
-        UUID id PK
-        date date
-        int shift_def_id FK
-        UUID user_id FK
-        int role_id FK
-        bool is_published
-    }
-
-    Attendance {
-        UUID id PK
-        UUID user_id FK
-        date date
-        time check_in
-        time check_out
-        bool was_scheduled
-        enum status "PENDING / CONFIRMED / REJECTED"
-        UUID schedule_id FK
-    }
-
-    ShiftGiveaway {
-        UUID id PK
-        UUID schedule_id FK
-        UUID offered_by FK
-        UUID taken_by FK
-        enum status "OPEN / TAKEN / CANCELLED"
-    }
-
-    LeaveRequest {
-        UUID id PK
-        UUID user_id FK
-        date start_date
-        date end_date
-        string reason
-        enum status "PENDING / APPROVED / REJECTED / CANCELLED"
-        UUID reviewed_by FK
-    }
-
-    Notification {
-        UUID id PK
-        UUID user_id FK
-        string title
-        string body
-        bool is_read
-        datetime created_at
-    }
-
-    UserDevice {
-        UUID id PK
-        UUID user_id FK
-        string fcm_token UK
-        datetime last_active
-    }
-
     RestaurantConfig {
         int id PK
         int tenant_id FK
@@ -199,7 +188,6 @@ erDiagram
         bool require_checklists_for_attendance
         bool enable_tip_pool
     }
-
     RestaurantOpeningHour {
         int id PK
         int config_id FK
@@ -207,150 +195,160 @@ erDiagram
         time open_time
         time close_time
     }
-
-    TableZone {
+    User {
         UUID id PK
         int tenant_id FK
-        string name
-        int sort_order
+        string username
+        string email UK
+        string password_hash
+        string full_name
+        enum role_system "SUPERADMIN / MANAGER / EMPLOYEE"
+        int target_hours_per_month
+        int target_shifts_per_month
+        float hourly_rate
         bool is_active
     }
-
-    PosTable {
-        UUID id PK
-        string name
-        UUID zone_id FK
-        int seats
-        enum status "FREE / OCCUPIED / BILL_PRINTED / DIRTY"
-    }
-
-    Category {
+    JobRole {
         int id PK
         int tenant_id FK
-        string name UK
+        string name
         string color_hex
-        int sort_order
     }
-
-    MenuItem {
+    Notification {
         UUID id PK
-        string name
-        float price
-        int category_id FK
-        int prep_time_sec "KDS Pacing"
-        float tax_rate
-        bool kitchen_print
-        bool bar_print
+        UUID user_id FK
+        string title
+        string body
+        bool is_read
+    }
+    UserDevice {
+        UUID id PK
+        UUID user_id FK
+        string fcm_token UK
+        datetime last_active
     }
 
-    ModifierGroup {
+    Tenant ||--o{ User : "zatrudnia"
+    Tenant ||--o{ JobRole : "definiuje role"
+    Tenant ||--o| RestaurantConfig : "konfiguracja"
+    RestaurantConfig ||--o{ RestaurantOpeningHour : "godziny otwarcia"
+    User }o--o{ JobRole : "posiada role (UserJobRoleLink)"
+    User ||--o{ Notification : "otrzymuje"
+    User ||--o{ UserDevice : "urządzenia Push"
+
+```
+
+### 5.2 Domena 2: Grafik Pracy, Dyspozycyjność, Wymiany i Audyt (`ShiftAuditLog`)
+
+**[🔍 Otwórz pełnoekranowy diagram Domeny 2 SVG (Zoom / Ctrl+Scroll)](https://mermaid.ink/svg/eyJjb2RlIjogImVyRGlhZ3JhbVxuICAgIFNoaWZ0RGVmaW5pdGlvbiB7XG4gICAgICAgIGludCBpZCBQS1xuICAgICAgICBpbnQgdGVuYW50X2lkIEZLXG4gICAgICAgIHN0cmluZyBuYW1lXG4gICAgICAgIHRpbWUgc3RhcnRfdGltZVxuICAgICAgICB0aW1lIGVuZF90aW1lXG4gICAgICAgIGZsb2F0IGJyZWFrX21pbnV0ZXNcbiAgICB9XG4gICAgU3RhZmZpbmdSZXF1aXJlbWVudCB7XG4gICAgICAgIGludCBpZCBQS1xuICAgICAgICBkYXRlIGRhdGVcbiAgICAgICAgaW50IGRheV9vZl93ZWVrXG4gICAgICAgIGludCBzaGlmdF9kZWZfaWQgRktcbiAgICAgICAgaW50IHJvbGVfaWQgRktcbiAgICAgICAgaW50IG1pbl9jb3VudFxuICAgIH1cbiAgICBBdmFpbGFiaWxpdHkge1xuICAgICAgICBpbnQgaWQgUEtcbiAgICAgICAgVVVJRCB1c2VyX2lkIEZLXG4gICAgICAgIGRhdGUgZGF0ZVxuICAgICAgICBpbnQgc2hpZnRfZGVmX2lkIEZLXG4gICAgICAgIGVudW0gc3RhdHVzIFwiUFJFRkVSUkVEIC8gQVZBSUxBQkxFIC8gVU5BVkFJTEFCTEVcIlxuICAgIH1cbiAgICBTY2hlZHVsZSB7XG4gICAgICAgIFVVSUQgaWQgUEtcbiAgICAgICAgZGF0ZSBkYXRlXG4gICAgICAgIGludCBzaGlmdF9kZWZfaWQgRktcbiAgICAgICAgVVVJRCB1c2VyX2lkIEZLXG4gICAgICAgIGludCByb2xlX2lkIEZLXG4gICAgICAgIGJvb2wgaXNfcHVibGlzaGVkXG4gICAgfVxuICAgIFNoaWZ0QXVkaXRMb2cge1xuICAgICAgICBpbnQgaWQgUEtcbiAgICAgICAgaW50IHJlc3RhdXJhbnRfaWQgRktcbiAgICAgICAgc3RyaW5nIHNoaWZ0X2lkXG4gICAgICAgIFVVSUQgc2NoZWR1bGVfaWQgRksgXCJudWxsYWJsZSAoU0VUIE5VTEwpXCJcbiAgICAgICAgaW50IHNoaWZ0X2RlZl9pZCBGSyBcInNsb3Qgem1pYW55XCJcbiAgICAgICAgZGF0ZSBkYXRlIFwiZGF0YSBzbG90dVwiXG4gICAgICAgIHN0cmluZyBhY3Rpb24gXCJBU1NJR05FRCAvIFVOQVNTSUdORUQgLyBTV0FQUEVEIC8gV0VFS19QVUJMSVNIRURcIlxuICAgICAgICBzdHJpbmcgdGFyZ2V0X3VzZXJfbmFtZVxuICAgICAgICBzdHJpbmcgYWN0b3JfbmFtZVxuICAgICAgICBzdHJpbmcgc3VtbWFyeVxuICAgICAgICBkYXRldGltZSBjcmVhdGVkX2F0XG4gICAgfVxuICAgIFNoaWZ0R2l2ZWF3YXkge1xuICAgICAgICBVVUlEIGlkIFBLXG4gICAgICAgIFVVSUQgc2NoZWR1bGVfaWQgRktcbiAgICAgICAgVVVJRCBvZmZlcmVkX2J5IEZLXG4gICAgICAgIFVVSUQgdGFrZW5fYnkgRktcbiAgICAgICAgZW51bSBzdGF0dXMgXCJPUEVOIC8gVEFLRU4gLyBDQU5DRUxMRURcIlxuICAgIH1cbiAgICBTaGlmdFN3YXBSZXF1ZXN0IHtcbiAgICAgICAgaW50IGlkIFBLXG4gICAgICAgIFVVSUQgcmVxdWVzdGVyX2lkIEZLXG4gICAgICAgIFVVSUQgdGFyZ2V0X3VzZXJfaWQgRktcbiAgICAgICAgVVVJRCBvd25fc2NoZWR1bGVfaWQgRktcbiAgICAgICAgVVVJRCB0YXJnZXRfc2NoZWR1bGVfaWQgRktcbiAgICAgICAgc3RyaW5nIHN0YXR1cyBcIlBFTkRJTkcgLyBBQ0NFUFRFRCAvIFJFSkVDVEVEXCJcbiAgICB9XG4gICAgTGVhdmVSZXF1ZXN0IHtcbiAgICAgICAgVVVJRCBpZCBQS1xuICAgICAgICBVVUlEIHVzZXJfaWQgRktcbiAgICAgICAgZGF0ZSBzdGFydF9kYXRlXG4gICAgICAgIGRhdGUgZW5kX2RhdGVcbiAgICAgICAgZW51bSBzdGF0dXMgXCJQRU5ESU5HIC8gQVBQUk9WRUQgLyBSRUpFQ1RFRFwiXG4gICAgfVxuXG4gICAgU2hpZnREZWZpbml0aW9uIHx8LS1veyBTdGFmZmluZ1JlcXVpcmVtZW50IDogXCJ3eW1hZ2Egb2JzYWR5XCJcbiAgICBTaGlmdERlZmluaXRpb24gfHwtLW97IEF2YWlsYWJpbGl0eSA6IFwiZHlzcG96eWNqYSBuYVwiXG4gICAgU2hpZnREZWZpbml0aW9uIHx8LS1veyBTY2hlZHVsZSA6IFwicHJ6eXBpc2FuaWVcIlxuICAgIFNoaWZ0RGVmaW5pdGlvbiB8fC0tb3sgU2hpZnRBdWRpdExvZyA6IFwiaGlzdG9yaWEgc2xvdHVcIlxuICAgIFNjaGVkdWxlIHx8LS1veyBTaGlmdEF1ZGl0TG9nIDogXCJvcGNqb25hbG5hIHJlZiAoU0VUIE5VTEwpXCJcbiAgICBTY2hlZHVsZSB8fC0tb3wgU2hpZnRHaXZlYXdheSA6IFwiZ2llXHUwMTQyZGEgem1pYW5cIlxuICAgIFNjaGVkdWxlIHx8LS1veyBTaGlmdFN3YXBSZXF1ZXN0IDogXCJiZXpwb1x1MDE1YnJlZG5pYSB3eW1pYW5hXCIiLCAibWVybWFpZCI6IHsidGhlbWUiOiAiZGVmYXVsdCJ9fQ==)**
+
+```mermaid
+erDiagram
+    ShiftDefinition {
         int id PK
         int tenant_id FK
         string name
-        int min_select
-        int max_select
+        time start_time
+        time end_time
+        float break_minutes
     }
-
-    Modifier {
+    StaffingRequirement {
         int id PK
-        int group_id FK
-        string name
-        float price_override
+        date date
+        int day_of_week
+        int shift_def_id FK
+        int role_id FK
+        int min_count
     }
-
-    Order {
+    Availability {
+        int id PK
+        UUID user_id FK
+        date date
+        int shift_def_id FK
+        enum status "PREFERRED / AVAILABLE / UNAVAILABLE"
+    }
+    Schedule {
         UUID id PK
-        int tenant_id FK
-        UUID table_id FK
-        UUID waiter_id FK
-        enum status "OPEN / SENT / PARTIALLY_PAID / PAID / CANCELLED"
-        int guest_count
-        float discount_pct
+        date date
+        int shift_def_id FK
+        UUID user_id FK
+        int role_id FK
+        bool is_published
     }
-
-    OrderItem {
-        UUID id PK
-        UUID order_id FK
-        UUID menu_item_id FK
-        int quantity
-        float unit_price_snapshot
-        string item_name_snapshot
-        int prep_time_sec_snapshot
-        int course
-        enum kds_status "NEW / PREPARING / READY / DELIVERED / VOIDED"
-        int document_version
-    }
-
-    Payment {
-        UUID id PK
-        UUID order_id FK
-        enum method "CASH / CARD / VOUCHER / MOBILE"
-        float amount
-        float tip_amount
-    }
-
-    KDSEventLog {
-        UUID id PK
-        UUID order_item_id FK
-        string action_type
-        UUID actor_id FK
-        string old_state
-        string new_state
-        bool is_undo
-    }
-
-    Tenant ||--o{ User : "has"
-    Tenant ||--o{ JobRole : "has"
-    Tenant ||--o{ ShiftDefinition : "has"
-    Tenant ||--o{ Order : "has"
-    Tenant ||--o{ Category : "has"
-    User ||--o{ Availability : "has"
-    User ||--o{ Schedule : "assigned to"
-    User ||--o{ Attendance : "registers"
-    User ||--o{ LeaveRequest : "submits"
-    User ||--o{ Notification : "receives"
-    User ||--o{ UserDevice : "has devices"
-    User }o--o{ JobRole : "has roles (M:N via UserJobRoleLink)"
-    ShiftDefinition ||--o{ ShiftDefinitionDayLink : "applicable on"
-    ShiftDefinition ||--o{ ShiftRoleLink : "allowed for role"
-    JobRole ||--o{ ShiftRoleLink : "can perform"
-    ShiftDefinition ||--o{ Availability : "for shift"
-    ShiftDefinition ||--o{ Schedule : "uses"
-    ShiftDefinition ||--o{ StaffingRequirement : "requires"
-    JobRole ||--o{ StaffingRequirement : "for role"
-    JobRole ||--o{ Schedule : "as role"
-    Schedule ||--o| ShiftGiveaway : "can be given away"
-    Schedule ||--o| Attendance : "linked to"
-    RestaurantConfig ||--o{ RestaurantOpeningHour : "hours"
-    TableZone ||--o{ PosTable : "contains"
-    PosTable ||--o{ Order : "has orders"
-    User ||--o{ Order : "waiter"
-    Category ||--o{ MenuItem : "contains"
-    MenuItem }o--o{ ModifierGroup : "M:N via MenuItemModifierGroup"
-    ModifierGroup ||--o{ Modifier : "options"
-    Order ||--o{ OrderItem : "line items"
-    Order ||--o{ Payment : "payments"
-    OrderItem ||--o{ KDSEventLog : "audit trail"
-    ShiftDefinition ||--o{ ShiftAuditLog : "slot history"
-    Schedule ||--o{ ShiftAuditLog : "optional ref (SET NULL)"
-
     ShiftAuditLog {
         int id PK
         int restaurant_id FK
         string shift_id
-        UUID schedule_id FK "nullable (ondelete=SET NULL)"
-        int shift_def_id FK "slot shift definition"
-        date date "slot date"
-        UUID changed_by_user_id FK
-        string action "ASSIGNED / UNASSIGNED / SWAPPED / REASSIGNED / WEEK_PUBLISHED"
-        string shift_name_snapshot
-        string role_name_snapshot
+        UUID schedule_id FK "nullable (SET NULL)"
+        int shift_def_id FK "slot zmiany"
+        date date "data slotu"
+        string action "ASSIGNED / UNASSIGNED / SWAPPED / WEEK_PUBLISHED"
         string target_user_name
         string actor_name
         string summary
         datetime created_at
     }
+    ShiftGiveaway {
+        UUID id PK
+        UUID schedule_id FK
+        UUID offered_by FK
+        UUID taken_by FK
+        enum status "OPEN / TAKEN / CANCELLED"
+    }
+    ShiftSwapRequest {
+        int id PK
+        UUID requester_id FK
+        UUID target_user_id FK
+        UUID own_schedule_id FK
+        UUID target_schedule_id FK
+        string status "PENDING / ACCEPTED / REJECTED"
+    }
+    LeaveRequest {
+        UUID id PK
+        UUID user_id FK
+        date start_date
+        date end_date
+        enum status "PENDING / APPROVED / REJECTED"
+    }
 
+    ShiftDefinition ||--o{ StaffingRequirement : "wymaga obsady"
+    ShiftDefinition ||--o{ Availability : "dyspozycja na"
+    ShiftDefinition ||--o{ Schedule : "przypisanie"
+    ShiftDefinition ||--o{ ShiftAuditLog : "historia slotu"
+    Schedule ||--o{ ShiftAuditLog : "opcjonalna ref (SET NULL)"
+    Schedule ||--o| ShiftGiveaway : "giełda zmian"
+    Schedule ||--o{ ShiftSwapRequest : "bezpośrednia wymiana"
+
+```
+
+### 5.3 Domena 3: Ewidencja Czasu Pracy, Analityka WFM i Zadania Workerów (`WorkerJob`)
+
+**[🔍 Otwórz pełnoekranowy diagram Domeny 3 SVG (Zoom / Ctrl+Scroll)](https://mermaid.ink/svg/eyJjb2RlIjogImVyRGlhZ3JhbVxuICAgIEF0dGVuZGFuY2Uge1xuICAgICAgICBVVUlEIGlkIFBLXG4gICAgICAgIFVVSUQgdXNlcl9pZCBGS1xuICAgICAgICBkYXRlIGRhdGVcbiAgICAgICAgdGltZSBjaGVja19pblxuICAgICAgICB0aW1lIGNoZWNrX291dFxuICAgICAgICBVVUlEIHNjaGVkdWxlX2lkIEZLXG4gICAgICAgIGJvb2wgd2FzX3NjaGVkdWxlZFxuICAgICAgICBlbnVtIHN0YXR1cyBcIlBFTkRJTkcgLyBDT05GSVJNRUQgLyBSRUpFQ1RFRFwiXG4gICAgfVxuICAgIFdvcmtlckpvYiB7XG4gICAgICAgIHN0cmluZyBqb2JfaWQgUEsgXCJjb3JyZWxhdGlvbl9pZFwiXG4gICAgICAgIHN0cmluZyBxdWV1ZV9uYW1lIFwic29sdmVyX2pvYnMgLyB3Zm1fYW5hbHl0aWNzX2pvYnNcIlxuICAgICAgICBzdHJpbmcgdGFza190eXBlIFwiU09MVkVSIC8gUFJFRElDVElPTiAvIFNJTVVMQVRJT05cIlxuICAgICAgICBpbnQgcmVzdGF1cmFudF9pZCBGS1xuICAgICAgICBzdHJpbmcgc3RhdHVzIFwiUEVORElORyAvIFBST0NFU1NJTkcgLyBDT01QTEVURUQgLyBGQUlMRUQgLyBTVEFMRVwiXG4gICAgICAgIHN0cmluZyB3b3JrZXJfaWRcbiAgICAgICAgaW50IGF0dGVtcHRfY291bnRcbiAgICAgICAgc3RyaW5nIGVycm9yX21lc3NhZ2VcbiAgICAgICAgZGF0ZXRpbWUgc3RhcnRlZF9hdFxuICAgICAgICBkYXRldGltZSBjb21wbGV0ZWRfYXRcbiAgICB9XG4gICAgV2ZtUHJlZGljdGlvbiB7XG4gICAgICAgIGludCBpZCBQS1xuICAgICAgICBpbnQgcmVzdGF1cmFudF9pZCBGS1xuICAgICAgICBkYXRlIHRhcmdldF9kYXRlXG4gICAgICAgIGludCBwcmVkaWN0ZWRfZ3Vlc3RzXG4gICAgICAgIGZsb2F0IHByZWRpY3RlZF9yZXZlbnVlXG4gICAgICAgIGZsb2F0IGNvbmZpZGVuY2Vfc2NvcmVcbiAgICAgICAgc3RyaW5nIHdlYXRoZXJfZmFjdG9yXG4gICAgfVxuICAgIENoZWNrbGlzdFRlbXBsYXRlIHtcbiAgICAgICAgaW50IGlkIFBLXG4gICAgICAgIGludCByZXN0YXVyYW50X2lkIEZLXG4gICAgICAgIHN0cmluZyB0aXRsZVxuICAgICAgICBpbnQgcm9sZV9pZCBGS1xuICAgICAgICBib29sIGlzX2FjdGl2ZVxuICAgIH1cbiAgICBIYWNjcExvZyB7XG4gICAgICAgIGludCBpZCBQS1xuICAgICAgICBpbnQgbG9nX1BvaW50X2lkIEZLXG4gICAgICAgIFVVSUQgcmVjb3JkZWRfYnlfdXNlcl9pZCBGS1xuICAgICAgICBmbG9hdCB0ZW1wZXJhdHVyZV92YWx1ZVxuICAgICAgICBib29sIGlzX2NvbXBsaWFudFxuICAgICAgICBkYXRldGltZSByZWNvcmRlZF9hdFxuICAgIH1cblxuICAgIEF0dGVuZGFuY2UgfW8tLW98IENoZWNrbGlzdFRlbXBsYXRlIDogXCJ3ZXJ5ZmlrYWNqYSBwcnp5IHd5alx1MDE1YmNpdVwiIiwgIm1lcm1haWQiOiB7InRoZW1lIjogImRlZmF1bHQifX0=)**
+
+```mermaid
+erDiagram
+    Attendance {
+        UUID id PK
+        UUID user_id FK
+        date date
+        time check_in
+        time check_out
+        UUID schedule_id FK
+        bool was_scheduled
+        enum status "PENDING / CONFIRMED / REJECTED"
+    }
+    WorkerJob {
+        string job_id PK "correlation_id"
+        string queue_name "solver_jobs / wfm_analytics_jobs"
+        string task_type "SOLVER / PREDICTION / SIMULATION"
+        int restaurant_id FK
+        string status "PENDING / PROCESSING / COMPLETED / FAILED / STALE"
+        string worker_id
+        int attempt_count
+        string error_message
+        datetime started_at
+        datetime completed_at
+    }
     WfmPrediction {
         int id PK
         int restaurant_id FK
@@ -359,250 +357,151 @@ erDiagram
         float predicted_revenue
         float confidence_score
         string weather_factor
-        datetime generated_at
     }
+    ChecklistTemplate {
+        int id PK
+        int restaurant_id FK
+        string title
+        int role_id FK
+        bool is_active
+    }
+    HaccpLog {
+        int id PK
+        int log_Point_id FK
+        UUID recorded_by_user_id FK
+        float temperature_value
+        bool is_compliant
+        datetime recorded_at
+    }
+
+    Attendance }o--o| ChecklistTemplate : "weryfikacja przy wyjściu"
+
 ```
 
-## Warstwa Serwisów
+<details>
+<summary>📋 <b>Zbiorcza tabela wszystkich kluczowych encji i relacji (łatwe wyszukiwanie Ctrl+F i powiększanie)</b></summary>
 
-| Serwis | Odpowiedzialność |
-|--------|-----------------|
-| `SuperadminService` | Zarządzanie tenantami w całym systemie, podgląd wszystkich użytkowników (Cross-Tenant), dodawanie managerów dla nowych lokali, resetowanie haseł. |
-| `SolverService` | Generowanie grafiku (OR-Tools CP-SAT): ładowanie ograniczeń (dostępność, wymagania, cele godzinowe MTD, restrykcje **Role-Based Shifts**), soft penalties za nadgodziny, priorytet wypełniania zmian nad limitami |
-| `ManagerService` | CRUD ról/zmian/users (w tym **edycja emaili pracowników**), statystyki, giveaway management, wymagania kadrowe, urlopy (approve/reject), dashboard, konfiguracja restauracji w obrębie danego Tenanta |
-| `EmployeeService` | Dostępność (+ status endpoint), grafik z listą współpracowników, widok przefiltrowanych zmian wg przypisanych ról stanowiskowych, obecność, integracja Google Calendar (OAuth 2.0) |
-| `SchedulerService` | Zapis batch, listowanie, publikacja grafiku z powiadomieniami push |
-| `PosService` | CRUD stref/stołów/kategorii/menu/modyfikatorów, zarządzanie zamówieniami i płatnościami, snapshotowanie cen |
-| `KDSService` | **Monotoniczny sync batch** (walidacja wag stanów, anti-ghosting, audit log), **Pacing Engine** (anchor-based course staggering, `delay_start_sec`) |
-| `PushService` | Firebase Cloud Messaging — wysyłka powiadomień push na urządzenia mobilne, fallback na mock w dev |
-| `RabbitMQService` | Asynchroniczny klient AMQP (`aio-pika`): publikacja zadań optymalizacyjnych i analitycznych, obsługa bezstanowego RPC z ekskluzywną kolejką zwrotną (`reply_to` + `correlation_id`) |
-| `WfmPredictionService` | Prognozowanie popytu i obłożenia lokalu (`WfmPrediction`), symulacja kosztów pracy (*Live Labor Cost*) oraz analityka WFM |
-| `solver_worker` | **Bezstanowy mikroserwis obliczeniowy** (`Dockerfile.solver`): odbiera ładunek JSON z `wfm.solver.requests`, uruchamia OR-Tools CP-SAT i zwraca wynik JSON bez dostępu do bazy danych |
-| `wfm_analytics_worker` | **Dedykowany worker analityczny**: konsumuje zadania z `wfm.analytics.tasks`, przelicza predykcje popytu oraz statystyki WFM w tle |
+| Encja (Tabela) | Moduł (`app/models/`) | Klucz główny i obce | Przeznaczenie biznesowe |
+|----------------|-----------------------|---------------------|-------------------------|
+| `Tenant` | `tenant.py` | `id` (PK), `slug` (UK) | Instancja restauracji w architekturze Multi-Tenant. |
+| `RestaurantConfig` | `tenant.py` | `id` (PK), `tenant_id` (FK) | Ustawienia lokalu, flagi modułów (`require_checklists_for_attendance`, `enable_daily_closeout`, `enable_tip_pool`). |
+| `User` | `users.py` | `id` (UUID PK), `tenant_id` (FK) | Konto użytkownika (`SUPERADMIN`, `MANAGER`, `EMPLOYEE`), cele miesięczne (`target_hours_per_month`, `target_shifts_per_month`), stawka godzinowa. |
+| `JobRole` | `users.py` | `id` (PK), `tenant_id` (FK) | Stanowisko pracy (np. Barista, Kelner, Kucharz) z przypisanym kolorem HEX. |
+| `ShiftDefinition` | `scheduling.py` | `id` (PK), `tenant_id` (FK) | Szablon zmiany z godzinami `start_time`–`end_time`, przerwą i przypisanymi rolami (`ShiftRoleLink`). |
+| `StaffingRequirement` | `scheduling.py` | `id` (PK), `shift_def_id`, `role_id` | Zapotrzebowanie kadrowe na dany dzień tygodnia lub konkretną datę. |
+| `Availability` | `scheduling.py` | `id` (PK), `user_id`, `shift_def_id` | Deklaracja dyspozycyjności pracownika (`PREFERRED`, `AVAILABLE`, `UNAVAILABLE`). |
+| `Schedule` | `scheduling.py` | `id` (UUID PK), `user_id`, `shift_def_id`, `role_id` | Przypisanie pracownika do zmiany (szkic `is_published=False` lub opublikowany `is_published=True`). |
+| `ShiftAuditLog` | `scheduling.py` | `id` (PK), `shift_def_id`, `date`, `schedule_id` (SET NULL) | Nieusuwalny dziennik audytowy zmian per slot (`ASSIGNED`, `UNASSIGNED`, `SWAPPED`, `REASSIGNED`, `WEEK_PUBLISHED`). |
+| `Attendance` | `operations.py` | `id` (UUID PK), `user_id`, `schedule_id` | Rzeczywisty czas pracy (`check_in`, `check_out`, `status=PENDING/CONFIRMED/REJECTED`) wykorzystywany do rozliczeń przepracowanych godzin. |
+| `WorkerJob` | `operations.py` | `job_id` (PK), `restaurant_id` | Rejestr zadań asynchronicznych RabbitMQ (`PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, `STALE`) z obsługą recovery. |
+| `WfmPrediction` | `operations.py` | `id` (PK), `restaurant_id`, `target_date` | Prognoza liczby gości i przychodów wygenerowana przez `analytics-worker`. |
 
-## Architektura Kolejkowania RabbitMQ (AMQP) i Rozdzielenia Workerów
+</details>
 
-System wykorzystuje broker **RabbitMQ (`rabbitmq:3-management-alpine`)** do odciążenia głównego procesu API FastAPI od ciężkich obliczeń kombinatorycznych oraz zadań analitycznych:
+---
 
-1. **Trwałe Kolejki AMQP (`durable=True`, `DeliveryMode.PERSISTENT`)**:
-   - `wfm.solver.requests`: kolejka wejściowa zadań optymalizacji grafiku dla `solver-worker`.
-   - `wfm.solver.results`: kolejka wyników optymalizacji oraz obsługa bezpośrednich odpowiedzi RPC (`reply_to`).
-   - `wfm.analytics.tasks`: kolejka zadań predykcyjnych i analitycznych dla `analytics-worker`.
-2. **Niezawodność (QoS & Manual ACK)**:
-   - Workery konfigurują `prefetch_count=1`, dzięki czemu pojedyncza instancja pobiera naraz wyłącznie jedno zadanie obliczeniowe, co pozwala na liniowe skalowanie poziome (`docker compose up --scale solver-worker=3`).
-   - Potwierdzenie wykonania (`ACK` za pomocą `message.process()`) następuje dopiero po pełnym zakończeniu obliczeń. W razie restartu lub awarii kontenera w trakcie pracy solvera wiadomość automatycznie wraca do kolejki i zostaje podjęta przez kolejną instancję.
-3. **Kontrakt Pure-Compute (`solver-worker`)**:
-   - Kontener budowany z `backend/Dockerfile.solver` jest w 100% bezstanowy — nie posiada sterowników bazy danych (`psycopg`, `sqlmodel`, `alembic`) ani dostępu do sieci bazodanowej.
-   - Cały kontekst problemu (pracownicy, role, zmiany, dostępności, godziny MTD, wymagania kadrowe) przekazywany jest w ustrukturyzowanym ładunku JSON, a wynik (przypisania, ostrzeżenia, `SolverExplanation`, diagnostyka Root Cause Analysis) wraca w ułamku sekundy przez dedykowaną kolejkę zwrotną RPC.
-4. **Panel Administracyjny RabbitMQ Management**:
-   - Port `15672` zbindowany jest lokalnie do `127.0.0.1:15672:15672`, co umożliwia bezpieczny wgląd w kolejki przez tunel SSH (`ssh -L 15672:localhost:15672 root@<host>`).
+## 6. Przepływy Sekwencji (Sequence Diagrams)
 
-## Historia Zmian Grafiku oparta o Sloty (`ShiftAuditLog`)
+### 6.1 Generowanie Grafiku przez Pure Domain Engine (`SolverService`)
 
-Rejestr audytu operacji na grafiku (`ShiftAuditLog`) śledzi cykl życia każdego **slotu zmiany** (`date` + `shift_def_id`), a nie wyłącznie pojedynczego rekordu przypisania:
-- **Odporność na usunięcia (`ondelete="SET NULL"`)**: Usunięcie pracownika ze zmiany kasuje rekord `Schedule`, lecz zachowuje wszystkie wpisy historyczne dla danego slotu (`date`, `shift_def_id`) wraz z migawkami nazw (`shift_name_snapshot`, `role_name_snapshot`, `target_user_name`, `actor_name`, `summary`).
-- **Brak szumu technicznego**: Publikacja grafiku tygodniowego nie generuje pojedynczych wpisów `is_published: false -> true` dla każdej zmiany, lecz zapisuje jeden zbiorczy wpis `action="WEEK_PUBLISHED"` (`"Opublikowano grafik na tydzień ..."`).
-- **Typy operacji w historii**:
-  - `ASSIGNED`: przypisanie pracownika z określoną rolą na zmianę.
-  - `UNASSIGNED`: usunięcie pracownika ze zmiany.
-  - `SWAPPED`: bezpośrednia wymiana zmian między pracownikami.
-  - `REASSIGNED`: przejęcie zmiany z giełdy zmian.
-  - `WEEK_PUBLISHED`: publikacja harmonogramu na dany tydzień.
-- **Widoki w UI**: Manager może otworzyć zarówno **„Historię zmiany ({Data} – {Nazwa zmiany})”** klikając ikonę historii bezpośrednio na komórce slotu, jak i **„Historię zmian tygodnia”** prezentującą chronologiczny dziennik wszystkich operacji w wybranym tygodniu.
-
-## Przepływ Generowania Grafiku
+**[🔍 Otwórz pełnoekranowy diagram sekwencji Solvera SVG (Zoom / Ctrl+Scroll)](https://mermaid.ink/svg/eyJjb2RlIjogInNlcXVlbmNlRGlhZ3JhbVxuICAgIGF1dG9udW1iZXJcbiAgICBhY3RvciBNIGFzIE1hbmFnZXIgKEZsdXR0ZXIpXG4gICAgcGFydGljaXBhbnQgQVBJIGFzIEZhc3RBUEkgKC9zY2hlZHVsZXIvZ2VuZXJhdGUpXG4gICAgcGFydGljaXBhbnQgREIgYXMgUG9zdGdyZVNRTFxuICAgIHBhcnRpY2lwYW50IFJNUSBhcyBSYWJiaXRNUSAoc29sdmVyX2pvYnMpXG4gICAgcGFydGljaXBhbnQgVyBhcyBzb2x2ZXJfd29ya2VyLnB5XG4gICAgcGFydGljaXBhbnQgRU5HIGFzIFNvbHZlclNlcnZpY2UgKFB1cmUgRW5naW5lKVxuXG4gICAgTS0-PkFQSTogUE9TVCAvc2NoZWR1bGVyL2dlbmVyYXRlIChzdGFydF9kYXRlLCBlbmRfZGF0ZSlcbiAgICBBUEktPj5EQjogVXR3XHUwMGYzcnogcmVrb3JkIFdvcmtlckpvYiAoc3RhdHVzPVBFTkRJTkcpXG4gICAgQVBJLT4-Uk1ROiBQdWJsaWt1aiB3aWFkb21vXHUwMTViXHUwMTA3IFJQQyAoY29ycmVsYXRpb25faWQsIHJlcGx5X3RvKVxuICAgIFJNUS0-Plc6IERvc3RhcmN6IHphZGFuaWUgeiBrb2xlamtpIHNvbHZlcl9qb2JzXG4gICAgVy0-PkRCOiBXb3JrZXJKb2IgLT4gc3RhdHVzPVBST0NFU1NJTkcsIGF0dGVtcHRfY291bnQrK1xuICAgIFctPj5EQjogUG9iaWVyeiBVc2VycywgU2hpZnRzLCBBdmFpbGFiaWxpdGllcywgUmVxdWlyZW1lbnRzLCBMZWF2ZXMsIE1URCBIb3Vyc1xuICAgIFctPj5XOiBaYnVkdWoga29udHJha3QgU29sdmVySW5wdXREVE8gKGFwcC9jb250cmFjdHMvd2ZtLnB5KVxuICAgIFctPj5FTkc6IFNvbHZlclNlcnZpY2Uuc29sdmUoU29sdmVySW5wdXREVE8pIFtCZXogZG9zdFx1MDExOXB1IGRvIERCIV1cbiAgICBFTkctLT4-VzogWndyXHUwMGYzXHUwMTA3IFNvbHZlclJlc3VsdERUTyAoc2NoZWR1bGVzLCB0ZWxlbWV0cnksIGJvdHRsZW5lY2tzLCBleHBsYW5hdGlvbnMpXG4gICAgVy0-PkRCOiBXb3JrZXJKb2IgLT4gc3RhdHVzPUNPTVBMRVRFRCAoemFwaXN6IHd5bmlrIGkgdGVsZW1ldHJpXHUwMTE5KVxuICAgIFctLT4-Uk1ROiBPZHBvd2llZFx1MDE3YSBKU09OIG5hIGtvbGVqa1x1MDExOSByZXBseV90b1xuICAgIFJNUS0tPj5BUEk6IFp3clx1MDBmM1x1MDEwNyB3eWdlbmVyb3dhbnkgc3praWMgZ3JhZmlrdSArIHd5amFcdTAxNWJuaWVuaWFcbiAgICBBUEktLT4-TTogV3lcdTAxNWJ3aWV0bCBTemtpYyAoRHJhZnQpICsgUmFwb3J0IFwiSmFrIHRvIGR6aWFcdTAxNDJhP1wiIiwgIm1lcm1haWQiOiB7InRoZW1lIjogImRlZmF1bHQifX0=)**
 
 ```mermaid
 sequenceDiagram
-    participant M as Manager
-    participant F as Frontend
-    participant B as Backend
-    participant S as SolverService
+    autonumber
+    actor M as Manager (Flutter)
+    participant API as FastAPI (/scheduler/generate)
+    participant DB as PostgreSQL
+    participant RMQ as RabbitMQ (solver_jobs)
+    participant W as solver_worker.py
+    participant ENG as SolverService (Pure Engine)
 
-    M->>F: Klik "Generuj grafik"
-    F->>B: POST /scheduler/generate
-    B->>S: solve(start_date, end_date, save=False)
-    S->>S: Load: users, roles, shifts, requirements, availability (filtered by Tenant)
-    S->>S: Fetch MTD hours (month-to-date)
-    S->>S: CP-SAT Solver (constraints + soft penalties)
-    Note over S: Priorytet: wypełnienie zmiany (+50k) > kara za nadgodziny (-2k)
-    S-->>B: {status, schedules[], warnings[]}
-    B-->>F: Draft schedule (nie zapisany do DB)
-    F->>F: Display in grid (Draft Mode)
-    M->>F: Ręczne edycje (dodaj/usuń)
-    M->>F: Klik "Zapisz"
-    F->>B: POST /scheduler/save_batch
-    B-->>F: {status: saved, count}
-    M->>F: Klik "Opublikuj"
-    F->>B: POST /scheduler/publish
-    B->>B: Create Notifications + Push (FCM)
-    B-->>F: {status: published, count}
-    Note over F: Pracownicy widzą grafik + otrzymują powiadomienie push
+    M->>API: POST /scheduler/generate (start_date, end_date)
+    API->>DB: Utwórz rekord WorkerJob (status=PENDING)
+    API->>RMQ: Publikuj wiadomość RPC (correlation_id, reply_to)
+    RMQ->>W: Dostarcz zadanie z kolejki solver_jobs
+    W->>DB: WorkerJob -> status=PROCESSING, attempt_count++
+    W->>DB: Pobierz Users, Shifts, Availabilities, Requirements, Leaves, MTD Hours
+    W->>W: Zbuduj kontrakt SolverInputDTO (app/contracts/wfm.py)
+    W->>ENG: SolverService.solve(SolverInputDTO) [Bez dostępu do DB!]
+    ENG-->>W: Zwróć SolverResultDTO (schedules, telemetry, bottlenecks, explanations)
+    W->>DB: WorkerJob -> status=COMPLETED (zapisz wynik i telemetrię)
+    W-->>RMQ: Odpowiedź JSON na kolejkę reply_to
+    RMQ-->>API: Zwróć wygenerowany szkic grafiku + wyjaśnienia
+    API-->>M: Wyświetl Szkic (Draft) + Raport "Jak to działa?"
+
 ```
 
-## Przepływ Giełdy Zmian
+### 6.2 Giełda Zmian i Bezpośrednie Wymiany z Audytem Slotu
+
+**[🔍 Otwórz pełnoekranowy diagram sekwencji Giełdy Zmian SVG (Zoom / Ctrl+Scroll)](https://mermaid.ink/svg/eyJjb2RlIjogInNlcXVlbmNlRGlhZ3JhbVxuICAgIGF1dG9udW1iZXJcbiAgICBhY3RvciBFMSBhcyBQcmFjb3duaWsgQVxuICAgIGFjdG9yIEUyIGFzIFByYWNvd25payBCXG4gICAgcGFydGljaXBhbnQgQVBJIGFzIEZhc3RBUEkgQmFja2VuZFxuICAgIHBhcnRpY2lwYW50IERCIGFzIFBvc3RncmVTUUxcbiAgICBwYXJ0aWNpcGFudCBGQ00gYXMgUHVzaFNlcnZpY2UgKEZDTSlcblxuICAgIEUxLT4-QVBJOiBQT1NUIC9lbXBsb3llZS9naXZlYXdheS97c2NoZWR1bGVfaWR9XG4gICAgQVBJLT4-REI6IFV0d1x1MDBmM3J6IFNoaWZ0R2l2ZWF3YXkgKHN0YXR1cz1PUEVOKVxuICAgIEFQSS0tPj5FMTogWm1pYW5hIHd5c3Rhd2lvbmEgbmEgZ2llXHUwMTQyZFx1MDExOVxuICAgIEUyLT4-QVBJOiBQT1NUIC9lbXBsb3llZS9naXZlYXdheXMve2lkfS9jbGFpbVxuICAgIEFQSS0-PkRCOiBXYWxpZGFjamEgcm9saSwgdXJsb3BcdTAwZjN3IGkga29saXpqaSAoPCAzMCBtaW4gbmFrXHUwMTQyYWRhbmlhKVxuICAgIEFQSS0-PkRCOiBQcnp5cGlzeiBTY2hlZHVsZSBkbyBQcmFjb3duaWthIEIgKyB6YXBpc3ogU2hpZnRBdWRpdExvZyAoUkVBU1NJR05FRClcbiAgICBBUEktPj5GQ006IFd5XHUwMTVibGlqIHBvd2lhZG9taWVuaWUgUHVzaCBkbyBQcmFjb3duaWthIEEgaSBCXG4gICAgQVBJLS0-PkUyOiBabWlhbmEgcHJ6ZWpcdTAxMTl0YSBwb215XHUwMTVibG5pZSIsICJtZXJtYWlkIjogeyJ0aGVtZSI6ICJkZWZhdWx0In19)**
 
 ```mermaid
 sequenceDiagram
-    participant E1 as Pracownik (oddający)
-    participant F as Frontend
-    participant B as Backend
-    participant E2 as Pracownik (przejmujący)
-    participant M as Manager
+    autonumber
+    actor E1 as Pracownik A
+    actor E2 as Pracownik B
+    participant API as FastAPI Backend
+    participant DB as PostgreSQL
+    participant FCM as PushService (FCM)
 
-    E1->>F: Klik "Oddaj zmianę"
-    F->>B: POST /employee/giveaway/{schedule_id}
-    B->>B: Create ShiftGiveaway (OPEN)
-    B->>B: Notify managers + eligible employees (in-app + push)
-    B-->>F: {id, status: created}
-    Note over B: Powiadomienia trafiają do managerów i kwalifikujących się pracowników (wg. JobRole)
+    E1->>API: POST /employee/giveaway/{schedule_id}
+    API->>DB: Utwórz ShiftGiveaway (status=OPEN)
+    API-->>E1: Zmiana wystawiona na giełdę
+    E2->>API: POST /employee/giveaways/{id}/claim
+    API->>DB: Walidacja roli, urlopów i kolizji (< 30 min nakładania)
+    API->>DB: Przypisz Schedule do Pracownika B + zapisz ShiftAuditLog (REASSIGNED)
+    API->>FCM: Wyślij powiadomienie Push do Pracownika A i B
+    API-->>E2: Zmiana przejęta pomyślnie
 
-    alt Pracownik przejmuje
-        E2->>F: Widzi zmianę na giełdzie
-        F->>B: POST /employee/giveaways/{id}/claim
-        B->>B: Sprawdź konflikty (overlap > 30 min = blok)
-        B->>B: Reassign schedule to E2
-        B->>B: Notify E1 + managers (push + in-app)
-        B-->>F: {status: claimed}
-    else Manager przydziela
-        M->>F: Widzi listę oddawanych zmian + sugestie
-        F->>B: POST /manager/giveaways/{id}/reassign
-        B-->>F: {status: reassigned}
-    end
 ```
 
-## Przepływ Zamówienia POS v2 / KDS (Offline-First Sync)
+---
 
-```mermaid
-sequenceDiagram
-    participant W as Kelner (Waiter)
-    participant POS as POS Screen
-    participant B as Backend (Fat Server)
-    participant KDS as KDS Tablet (Thin Client)
+## 7. Rozliczanie Godzin Miesięcznych (Przepracowane vs Zaplanowane)
 
-    W->>POS: Wybór stolika + pozycji z menu + kursy
-    POS->>B: POST /pos/v2/orders
-    Note over B: Snapshot ceny, nazwy, prep_time_sec każdej pozycji
-    B-->>POS: {order_id, status: OPEN, items[]}
+System zapewnia pełną przejrzystość godzin pracy każdego członka zespołu w ujęciu miesięcznym:
+- **Endpoint zbiorczy (`GET /manager/employee-hours?month=M&year=Y`)**:
+  - Zwraca dla każdego aktywnego pracownika lokalu:
+    - `worked_hours` oraz `worked_shift_count` — suma rzeczywiście przepracowanych godzin i zmian na podstawie zatwierdzonych wpisów obecności (`Attendance` ze statusem `CONFIRMED` w wybranym miesiącu).
+    - `planned_hours` oraz `shift_count` — suma godzin i zmian wynikająca z grafiku (`Schedule`) w wybranym miesiącu (z uwzględnieniem odliczenia przerw `break_minutes` oraz zmian nocnych przechodzących przez północ).
+    - `target_hours_per_month` — miesięczny wymiar docelowy pracownika.
+- **Endpoint indywidualny (`GET /manager/users/{user_id}/stats?month=M&year=Y`)**:
+  - Zwraca statystyki bieżące, historię z ostatnich 6 miesięcy (z liczbą zmian i godzin w każdym miesiącu) oraz szczegółowe pola wybranego miesiąca: `selected_month`, `selected_month_worked_hours`, `selected_month_planned_hours`, `selected_month_shifts`.
+- **Interfejs Managera (`TeamTab` & `EmployeeDetailDialog`)**:
+  - Przycisk **„Godziny w miesiącu”** w nagłówku zakładki *Zespół* otwiera dedykowane zestawienie tabelaryczne całego personelu z przełącznikiem miesięcy (`< Miesiąc Rok >`), paskiem realizacji celu godzinowego i porównaniem godzin przepracowanych vs zaplanowanych.
+  - W oknie szczegółów pojedynczego pracownika (`EmployeeDetailDialog`) dostępny jest selektor miesiąca pozwalający natychmiast sprawdzić bilans godzin w dowolnym historycznym lub przyszłym miesiącu.
 
-    KDS->>B: GET /pos/v2/kds/items (polling)
-    B->>B: KDSService.calculate_pacing(items)
-    Note over B: Anchor-based staggering: najdłuższy prep_time_sec = anchor,<br/>pozostałe pozycje w kursie dostają delay_start_sec
-    B-->>KDS: Lista pozycji + pacing_metadata {is_anchor, delay_start_sec}
+---
 
-    Note over KDS: Kucharz pracuje offline (zerwane Wi-Fi)
-    KDS->>KDS: Lokalna zmiana stanów (NEW → PREPARING → READY)
+## 8. Warstwa Serwisów Backendu
 
-    Note over KDS: Wi-Fi wróciło — batch sync
-    KDS->>B: POST /pos/v2/kds/sync {actions: [{item_id, new_status, client_timestamp}]}
-    B->>B: KDSService.process_sync_batch()
-    Note over B: Monotonic weight check (NEW:10 < PREPARING:30 < READY:40)<br/>Forward OK | Stale rejected | Voided ghost blocked
-    B->>B: KDSEventLog (audit trail)
-    B-->>KDS: {results: [{success, applied_status}], server_time}
+| Serwis | Plik | Odpowiedzialność |
+|--------|------|------------------|
+| `SolverService` | `app/services/solver.py` | **Pure Domain Engine (OR-Tools CP-SAT)**: przyjmuje `SolverInputDTO`, rozwiązuje problem harmonogramowania z twardymi i miękkimi więzami, klasyfikuje wąskie gardła (`_classify_bottleneck_reason`) i zwraca `SolverResultDTO` z pełną telemetrią i wyjaśnieniami decyzji (`DecisionExplanationDTO`). |
+| `WFMPredictionService` | `app/services/wfm_prediction_service.py` | **Pure Domain Engine**: przyjmuje `WfmPredictionInputDTO`, wylicza prognozy ruchu, przychodu oraz współczynniki popytu, zwracając `WfmPredictionOutputDTO`. |
+| `SchedulerService` | `app/services/scheduler_service.py` | Orkiestracja zapisu partii grafiku (`save_batch`), ręcznych przypisań, publikacji grafiku z wysyłką powiadomień Push oraz trwałego rejestrowania historii zmian w `ShiftAuditLog`. |
+| `ManagerService` | `app/services/manager_service.py` | Zarządzanie zespołem, rolami, zmianami, wymaganiami kadrowymi, obecnościami, urlopami oraz **miesięcznymi zestawieniami godzin przepracowanych i zaplanowanych**. |
+| `EmployeeService` | `app/services/employee_service.py` | Dyspozycyjność, indywidualny i zespołowy grafik pracy, rejestracja obecności, giełda zmian, wymiany bezpośrednie oraz synchronizacja Google Calendar OAuth 2.0. |
+| `RabbitMQService` | `app/services/rabbitmq_service.py` | Asynchroniczny klient AMQP (`aio-pika`), trwałe kolejki zadań, bezstanowe wywołania RPC (`reply_to` + `correlation_id`). |
+| `SuperadminService` | `app/routers/superadmin.py` | Zarządzanie tenantami (restauracjami), kontami managerów oraz inspekcją logów wielodostępowych (`LogService` + `TenantLogFilter`). |
+| `PushService` | `app/services/push_service.py` | Wysyłka powiadomień Firebase Cloud Messaging na urządzenia Android, iOS oraz przeglądarki Web Push (PWA). |
 
-    W->>POS: Widzi pozycje jako READY
-    W->>B: POST /pos/v2/kds/sync {READY → DELIVERED}
-```
+---
 
-## Powiadomienia Push i Web Push (FCM)
+## 9. Bezpieczeństwo, Logowanie i Wdrożenie Produkcyjne
 
-System obsługuje powiadomienia push za pomocą Firebase Cloud Messaging na platformach mobilnych (Android/iOS) oraz w przeglądarkach (Web Push i Safari iOS PWA):
+### 9.1 Bezpieczeństwo i Obsługa Błędów
+- **Multi-Tenant JWT Auth**: Tokeny ważne 60 minut (`pbkdf2_sha256`), izolacja danych po `tenant_id`.
+- **Polityka Silnych Haseł**: Minimum 8 znaków, co najmniej 1 wielka litera i 1 cyfra (weryfikowane przez Pydantic i `ApiErrorHandler`).
+- **`ApiErrorHandler` & `FriendlyDioException`**: Przechwytywanie błędów Dio (400/401/403/404/409/422/500 oraz błędów sieciowych) i tłumaczenie ich na czytelne komunikaty w języku polskim.
+- **Szyfrowanie Tokenów**: Tokeny OAuth Google Calendar szyfrowane kluczem Fernet (`ENCRYPTION_KEY`).
 
-| Zdarzenie | Odbiorcy | Kanał |
-|-----------|----------|-------|
-| Opublikowanie grafiku | Pracownicy z przypisaniami | In-app + Push (FCM / Web Push) |
-| Nowa zmiana na giełdzie | Managerowie + kwalifikujący się pracownicy (z odpowiednią rolą) | In-app + Push |
-| Zmiana przejęta z giełdy | Oddający pracownik + managerowie | In-app + Push |
-| Nowy wniosek urlopowy | Managerowie | In-app + Push |
-| Zatwierdzenie/odrzucenie urlopu | Wnioskujący pracownik | In-app + Push |
-
-### Komponenty Web Push
-- **Service Worker (`firebase-messaging-sw.js`):** Obsługa zdarzeń w tle (`onBackgroundMessage`), ikona `/icons/Icon-192.png`, przywracanie fokusu karty (`notificationclick`).
-- **Foreground Dual Notifications:** Równoległa prezentacja powiadomienia systemowego przeglądarki (HTML5 Notification API przez `package:web`) oraz banera `MaterialBanner` u góry ekranu (`ScaffoldMessenger`).
-- **Wymóg User Gesture:** Dedykowany przycisk w oknie dialogowym `NotificationBell` umożliwiający wywołanie `requestPermission()` w bezpośredniej odpowiedzi na kliknięcie użytkownika (niezbędne dla Safari iOS PWA i Chrome).
-- **Konfiguracja Nginx:** Wyłączenie buforowania plików Service Workera (`Cache-Control: no-cache, no-store, must-revalidate`).
-
-## Obsługa Błędów i Walidacja Danych (ApiErrorHandler)
-
-Dla zapewnienia spójnego doświadczenia użytkownika i bezpieczeństwa danych:
-- **`ApiErrorHandler` (Frontend):** Przechwytuje błędy biblioteki Dio i mapuje kody HTTP, błędy walidacji Pydantic (tablice 422 `detail`), słowniki oraz błędy połączenia na czytelne komunikaty w języku polskim.
-- **`FriendlyDioException`:** Hermetyzuje sformatowany komunikat błędu, ułatwiając jego bezpośrednie wyświetlanie w komponentach SnackBar i MaterialBanner.
-- **Polityka Silnych Haseł:** Narzucenie minimalnych wymagań (min. 8 znaków, co najmniej 1 wielka litera, co najmniej 1 cyfra) w walidatorach frontendowych oraz w schematach Pydantic backendu (`PasswordChangeRequest`, `ManagerCreateRequest`).
-
-## Bezpieczeństwo
-
-- **Multi-Tenant Auth**: Logowanie wielodostępowe i token JWT izolowany dla zadanego Tenanta.
-- **JWT Auth**: Tokeny ważne 60 min (pbkdf2_sha256 password hashing)
-- **Manager PIN**: Konfigurowalny zmienną `MANAGER_REGISTRATION_PIN` (domyślnie `1234`)
-- **Rejestracja wyłączona**: Konta tworzy wyłącznie Manager (`POST /manager/users`) lub Superadmin.
-- **Aktywacja użytkowników**: Dezaktywowani użytkownicy nie mogą się zalogować (`is_active`)
-- **Role-Based Access**: Różne obszary systemu na podstawie `role_system` (SUPERADMIN, MANAGER, EMPLOYEE)
-- **Encrypted Tokens**: Tokeny Google (access + refresh) szyfrowane Fernetem (`ENCRYPTION_KEY`)
-- **CORS**: Skonfigurowany na `*` (dev), do zawężenia w produkcji
-- **Google OAuth 2.0**: Klucze przechowywane jako zmienne środowiskowe
-
-## Wdrożenie (Produkcja)
-
-Architektura kontenerowa obejmuje 6 niezależnych serwisów w sieci `plannerv2-network`:
-- `db` (`postgres:15`): główna baza danych PostgreSQL.
-- `rabbitmq` (`rabbitmq:3-management-alpine`): broker komunikatów AMQP (port `5672` wewnętrznie oraz `127.0.0.1:15672:15672` dla Management UI przez tunel SSH).
-- `backend` (`./backend/Dockerfile`): serwer API FastAPI z automatycznymi migracjami Alembic na starcie.
-- `solver-worker` (`./backend/Dockerfile.solver`): bezstanowy mikroserwis obliczeniowy OR-Tools CP-SAT (`python -m app.workers.solver_worker`).
-- `analytics-worker` (`./backend/Dockerfile`): dedykowany worker analityczny i predykcyjny WFM (`python -m app.workers.wfm_analytics_worker`).
-- `nginx` (`nginx:alpine`): serwer reverse proxy i plików statycznych Flutter Web PWA.
-
-```yaml
-# docker-compose.yml
-services:
-  db:
-    image: postgres:15
-    # Persistent volume for data
-
-  backend:
-    build: ./backend
-    # Alembic migrations run on startup
-    # env: DATABASE_URL, SECRET_KEY, MANAGER_REGISTRATION_PIN,
-    #       ENCRYPTION_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
-    #       GOOGLE_APPLICATION_CREDENTIALS, GITHUB_TOKEN, GITHUB_REPO
-
-  nginx:
-    image: nginx:alpine
-    ports: ["80:80"]
-    # Reverse proxy: /api -> backend, / -> frontend static files
-```
-
-Pipeline CI/CD (Jenkins):
-1. Backend tests (`pytest`)
-2. Frontend analyze & test (`flutter analyze`, `flutter test`)
-3. Docker build & backup bazy danych (`pg_dump` z limitem czasowym i zwalnianiem blokad)
-4. Blue-Green deployment (DEV: auto z `main`, PROD: auto z tagów `v*`)
-
-## System Logów, Monitoringu i Telemetrii (TenantLogFilter)
-System posiada moduł agregacji, inspekcji logów serwerowych oraz telemetrii silnika optymalizacyjnego w czasie rzeczywistym:
-- **`TenantLogFilter`**: Filtr wstrzykiwany do handlera `RotatingFileHandler` oraz `StreamHandler` biblioteki standardowej `logging`. Pobiera wartość `tenant_id` z kontekstu asynchronicznego (`ContextVar` w `backend/app/tenant_context.py`), który jest automatycznie ustawiany w trakcie weryfikacji tokenu JWT przez `get_current_user`.
-- **Format logu**: `%(asctime)s [%(levelname)s] [%(tenant_str)s] %(name)s: %(message)s` — np. `[tenant:1]` dla zapytań powiązanych z lokalem lub `[tenant:system]` dla zadań asynchronicznych i zdarzeń globalnych.
-- **Wyciszenie zapytań bezstanowych (GET)**: Rutynowe zapytania odpytujące (`GET /api/notifications`, `GET /employee/attendance/missing`) zapisywane są na poziomie `DEBUG`, dzięki czemu na domyślnym poziomie `INFO` w panelu Superadmina eksponowane są wyłącznie mutacje stanu i zdarzenia biznesowe.
-- **Strukturalne tagi zdarzeń biznesowych i anomalii**:
-  - `[AUTH]` / `[AUTH ANOMALY]`: logowania, wylogowania, błędne hasła, próby dostępu do nieaktywnych kont lub lokali w trybie serwisowym.
-  - `[ATTENDANCE]` / `[ATTENDANCE ANOMALY]`: rejestracja czasu pracy, braki checklist zamknięcia, próby rejestracji w przyszłości, zatwierdzenia/odrzucenia przez managera.
-  - `[AVAILABILITY]`: zgłoszenia dyspozycyjności pracowników na nowy okres planistyczny.
-  - `[SWAP]` / `[SWAP ANOMALY]`: wystawienia, bezpośrednia wymiana zmian (A <-> B), claim, odrzucenia z powodu kolizji grafiku (>30 min) lub braku ról.
-  - `[LEAVE]` / `[LEAVE ANOMALY]`: wnioski urlopowe, rozpatrywanie przez managera, nakładające się wnioski.
-  - `[SCHEDULE]` / `[SCHEDULE ANOMALY]`: zapisywanie partii grafików, publikacja z liczbą powiadomień, ręczne modyfikacje i usuwanie przypisań.
-  - `[USER]` / `[USER ANOMALY]`: tworzenie pracowników, modyfikacja ról, stawek oraz audyt dezaktywacji kont.
-  - `[PUSH]` / `[PUSH WARNING]` / `[PUSH ANOMALY]`: rejestracja i wyrejestrowywanie tokenów FCM (np. przy wylogowaniu), wysyłka powiadomień do urządzeń, ostrzeżenia o braku zarejestrowanego urządzenia pracownika oraz błędy Firebase Admin SDK.
-  - `[GCAL]` / `[GCAL ANOMALY]`: łączenie i odłączanie kalendarza Google, odświeżanie tokenów OAuth, podsumowania synchronizacji partii grafików oraz wykrywanie utraty sesji bez refresh_token.
-  - `[CONFIG]` / `[CONFIG ANOMALY]`: audyt zmian parametrów lokalu i godzin otwarcia dokonanych przez managera.
-- **Telemetria Solver Workera (OR-Tools CP-SAT) i Root Cause Analysis**:
-  - Tagi `[SOLVER WORKER]`, `[SOLVER WORKER DEFICIT]`, `[SOLVER WORKER DEFICIT CAUSE]`, `[SOLVER WORKER STATS]`, `[SOLVER WORKER REST VIOLATION]` oraz `[SOLVER WORKER ANOMALY]`.
-  - Rejestrowanie statystyk zadania optymalizacyjnego, czasu wykonania `solve_duration`, liczby zmiennych, raportu braków obsadowych per zmiana/rola oraz ostrzeżeń o naruszeniach 11h dobowego odpoczynku (clopening).
-  - **Root Cause Analysis (RCA)**: natychmiastowa analiza kandydatów dla każdego deficytu obsady (brak pracowników z daną rolą w lokalu, pracownik zajęty inną zmianą w danym dniu, pracownik niedostępny wg zadeklarowanej dyspozycyjności lub optymalizacja innych reguł twardych/miękkich).
-  - **Worker Stats Summary**: podsumowanie przydziału godzin i zmian per pracownik w skali miesiąca z uwzględnieniem godzin zrealizowanych MTD, nowych godzin oraz limitów miesięcznych (`target_hours_per_month` i `target_shifts_per_month`), co wyjaśnia decyzje solvera przy zgłoszeniach od managerów.
-- **Parser wieloliniowy**: `LogService` scala tracebacki wyjątków Python (stack trace) z rekordem źródłowym, co pozwala na przejrzysty podgląd pełnych błędów 500 w panelu Superadmina bez rozrywania kontekstu.
-- **Bezpieczeństwo**: Endpointy `/sysadmin/logs` chronione są funkcją `require_superadmin`. Superadmin może filtrować wpisy po identyfikatorze lokalu, poziomie logowania (`INFO`, `WARNING`, `ERROR`, `CRITICAL`, `DEBUG`), frazie tekstowej (z dedykowanymi szybkimi filtrami kategorii i anomalii) oraz zarządzać czyszczeniem/rotacją pliku.
-
-## Zgodność z Pamięcią 16 KB (Android 15+)
-System Android 15 wprowadza opcję oraz wymóg obsługi stron pamięci o wielkości 16 KB (zamiast dotychczasowych 4 KB) w architekturze ARM64:
-- Zaktualizowano biblioteki Google CameraX do wersji `1.4.1`, które są natywnie skompilowane z wyrównaniem stron 16 KB.
-- Przełączono skaner kodów QR `mobile_scanner` na wersję unbundled opartą o dynamiczne usługi Google Play Services (`dev.steenbakker.mobile_scanner.useUnbundled=true`), eliminując przestarzałe biblioteki natywne ML Kit z pakietu APK/AAB i zapewniając zgodność z wytycznymi sklepu Google Play.
-
+### 9.2 Konteneryzacja i Pipeline CI/CD (Blue-Green Deployment)
+Architektura produkcyjna obejmuje 6 współpracujących kontenerów w sieci `plannerv2-network`:
+1. `db` (`postgres:15`) — baza danych z wolumenem trwałym.
+2. `rabbitmq` (`rabbitmq:3-management-alpine`) — broker AMQP (`5672` wewnętrznie, `127.0.0.1:15672` dla tunelu SSH).
+3. `backend` (`./backend/Dockerfile`, zależności `requirements/api.txt`) — serwer FastAPI z automatycznymi migracjami Alembic na starcie.
+4. `solver-worker` (`./backend/Dockerfile.solver`, zależności `requirements/worker.txt`) — bezstanowy worker CP-SAT z obsługą graceful shutdown i `recovery.py`.
+5. `analytics-worker` (`./backend/Dockerfile`) — worker analityczny i predykcyjny WFM.
+6. `nginx` (`nginx:alpine`) — reverse proxy i serwer statyczny Flutter Web PWA (z nagłówkami `no-cache` dla `firebase-messaging-sw.js`).

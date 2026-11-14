@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v2.2.4] - 2026-11-14
+
+### Dodano (Added)
+- **Zestawienie Godzin Miesięcznych (Przepracowane vs Zaplanowane)**:
+  - Rozbudowano endpoint `GET /manager/employee-hours?month=M&year=Y` o wyliczanie godzin rzeczywiście przepracowanych (`worked_hours`, `worked_shift_count` na podstawie zatwierdzonych obecności `Attendance`), godzin zaplanowanych z grafiku (`planned_hours`, `shift_count`) oraz celu miesięcznego (`target_hours_per_month`).
+  - Rozbudowano endpoint `GET /manager/users/{user_id}/stats?month=M&year=Y` o parametry wybranego miesiąca (`selected_month`, `selected_month_worked_hours`, `selected_month_planned_hours`, `selected_month_shifts`) oraz sumę godzin dla każdego miesiąca w 6-miesięcznym zestawieniu historycznym.
+  - Dodano przycisk **„Godziny w miesiącu”** w nagłówku zakładki *Zespół* (`TeamTab`), otwierający okno dialogowe `_MonthlyHoursDialog` z przełącznikiem miesięcy (`< Miesiąc Rok >`), paskiem postępu celu i porównaniem godzin przepracowanych oraz zaplanowanych dla całego zespołu.
+  - Dodano selektor miesiąca i roku (`< Miesiąc Rok >`) bezpośrednio w oknie szczegółów pracownika (`EmployeeDetailDialog`), prezentujący przepracowane godziny, zaplanowane godziny oraz liczbę zmian w dowolnym miesiącu.
+- **Kontrakty DTO dla Silników WFM (`backend/app/contracts/wfm.py`)**:
+  - Zdefiniowano ścisłe modele Pydantic v2: `SolverInputDTO`, `SolverResultDTO`, `DecisionExplanationDTO`, `SolverWeightsDTO`, `WfmPredictionInputDTO`, `WfmPredictionOutputDTO`.
+- **Niezawodność Workerów, Śledzenie Zadań (`WorkerJob`) i Samo-Uzdrawianie (`recovery.py`)**:
+  - Dodano tabelę `worker_job` oraz migrację Alembic `20261114_worker_job_table.py` rejestrującą pełny cykl życia zadań asynchronicznych (`PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, `STALE`).
+  - Dodano moduł `backend/app/workers/recovery.py` automatycznie odzyskujący lub oznaczający zawieszone zadania (`recover_stale_jobs`) przy starcie workera oraz cyklicznie w tle.
+  - Dodano obsługę **Graceful Shutdown** (`SIGINT` / `SIGTERM`) w `solver_worker.py` i `wfm_analytics_worker.py` zapewniającą bezpieczne dokończenie trwających obliczeń przed zatrzymaniem kontenera.
+  - Rozbudowano telemetrię CP-SAT o klasyfikację wąskich gardeł (`_classify_bottleneck_reason`, `bottlenecks`, `telemetry`).
+- **Nowe Testy Automatyczne**:
+  - `backend/tests/test_monthly_hours.py` — testy jednostkowe i integracyjne wyliczania godzin przepracowanych i zaplanowanych w wybranym miesiącu.
+  - `backend/tests/test_worker_reliability.py` — testy cyklu życia `WorkerJob`, mechanizmu `recover_stale_jobs`, graceful shutdown oraz klasyfikacji wąskich gardeł solvera.
+
+### Zmieniono (Changed)
+- **Refaktoryzacja Pure Domain Engines (`solver.py` i `wfm_prediction_service.py`)**:
+  - Całkowicie odizolowano silniki obliczeniowe od sesji bazy danych (`SQLModel` / `Session`). `SolverService.solve()` oraz `WFMPredictionService` operują wyłącznie na bezstanowych kontraktach DTO, a cała orkiestracja I/O (pobranie encji z DB, budowa DTO, zapis `ShiftAuditLog` i `WorkerJob`) została przeniesiona do `solver_worker.py`, `wfm_analytics_worker.py` oraz `scheduler_service.py`.
+- **Modularyzacja Modeli, Schematów i Zależności Backendu**:
+  - Rozbito monolityczne pliki `models.py` i `schemas.py` na pakiety domenowe `backend/app/models/` oraz `backend/app/schemas/` (`base.py`, `tenant.py`, `users.py`, `scheduling.py`, `operations.py`, `pos_legacy.py`) z zachowaniem pełnej kompatybilności importów.
+  - Rozdzielono `backend/requirements.txt` na modułową strukturę `backend/requirements/` (`base.txt`, `api.txt`, `worker.txt`) i zoptymalizowano `backend/Dockerfile` oraz `backend/Dockerfile.solver`.
+  - Zaktualizowano `.aiignore` oraz `.cursorignore` o wykluczenia tymczasowo nieużywanych modułów POS/KDS, wygenerowanych mocków i starych migracji.
+- **Przebudowa Diagramów i Dokumentacji Technicznej (`ARCHITECTURE.md`, `PUSH_ARCHITECTURE.md`)**:
+  - Podzielono rozbudowany diagram ER na **3 czytelne diagramy domenowe** (Multi-Tenancy & Użytkownicy, Grafik & Audyt, Operacje & Workery), dodano bezpośrednie linki do pełnoekranowych wektorowych diagramów SVG (`mermaid.ink`) umożliwiających swobodne powiększanie (Zoom / Ctrl+Scroll) oraz rozwijane schematy ASCII i tabele relacji.
+
 ## [v2.2.3] - 2026-11-10
 
 ### Added

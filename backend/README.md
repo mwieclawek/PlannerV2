@@ -8,8 +8,9 @@ Backend systemu PlannerV2 — FastAPI + SQLModel + PostgreSQL / SQLite.
 backend/
 ├── app/
 │   ├── main.py                 # FastAPI app, CORS, lifespan, log_requests_middleware
-│   ├── models.py               # SQLModel entities (modele Multi-Tenant, opcje lokalu, WFM)
-│   ├── schemas.py              # Pydantic v2 schemas (walidacja haseł, logi, KDS sync)
+│   ├── contracts/              # Ścisłe kontrakty DTO dla Pure Domain Engines (wfm.py)
+│   ├── models/                 # Modularne modele SQLModel (base, tenant, users, scheduling, operations)
+│   ├── schemas/                # Modularne schematy Pydantic v2
 │   ├── database.py             # Konfiguracja bazy danych (SQLite / PostgreSQL)
 │   ├── auth_utils.py           # JWT creation/verification, password hashing, tenant context
 │   ├── tenant_context.py       # ContextVar z aktualnym tenant_id dla loggera
@@ -37,12 +38,14 @@ backend/
 │       └── push_service.py     # Firebase Cloud Messaging (Android, iOS, Web)
 │   └── workers/
 │       ├── solver_worker.py    # Bezstanowy mikroserwis CP-SAT (Pure-Compute JSON)
-│       └── wfm_analytics_worker.py # Worker analityczny i predykcyjny WFM
+│       ├── wfm_analytics_worker.py # Worker analityczny i predykcyjny WFM
+│       └── recovery.py         # Automatyczne odzyskiwanie zawieszonych zadań (WorkerJob)
 ├── alembic/                    # Migracje bazy danych
 ├── tests/                      # Zestaw testów automatycznych (287 testów pytest)
 ├── seed_test_data.py           # Generator danych testowych
 ├── reset_db_alembic.py         # Reset bazy + migracje
-├── requirements.txt
+├── requirements/               # Modularne zależności (base.txt, api.txt, worker.txt)
+├── requirements.txt            # Agregator zależności dla środowiska dev/CI
 ├── alembic.ini
 ├── Dockerfile                  # Obraz głównego API oraz analytics-worker
 └── Dockerfile.solver           # Lekki, bezstanowy obraz dla solver-worker

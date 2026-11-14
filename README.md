@@ -129,10 +129,12 @@ flutter run -d web-server --web-port 5000
 ```
 PlannerV2/
 ├── backend/
+│   ├── requirements/              # Modularne zależności (base.txt, api.txt, worker.txt)
 │   ├── app/
 │   │   ├── main.py                # FastAPI app + lifespan
-│   │   ├── models.py              # SQLModel entities (30+ modeli)
-│   │   ├── schemas.py             # Pydantic v2 schemas (KDS sync models, walidacja haseł)
+│   │   ├── contracts/             # Kontrakty DTO Pure Domain Engines (wfm.py)
+│   │   ├── models/                # Modularne modele SQLModel (base, tenant, users, scheduling, operations)
+│   │   ├── schemas/               # Modularne schematy Pydantic v2
 │   │   ├── database.py            # Konfiguracja bazy danych
 │   │   ├── auth_utils.py          # JWT + password hashing (pbkdf2_sha256)
 │   │   ├── routers/
@@ -156,8 +158,9 @@ PlannerV2/
 │   │       ├── wfm_prediction_service.py # Prognozy obłożenia i analityka WFM
 │   │       └── push_service.py     # Firebase Cloud Messaging
 │   │   └── workers/
-│   │       ├── solver_worker.py    # Bezstanowy worker CP-SAT (Pure-Compute JSON)
-│   │       └── wfm_analytics_worker.py # Worker analityczny i predykcyjny WFM
+│   │       ├── solver_worker.py    # Orkiestracja CP-SAT + Graceful Shutdown + WorkerJob
+│   │       ├── wfm_analytics_worker.py # Worker analityczny i predykcyjny WFM
+│   │       └── recovery.py         # Automatyczne odzyskiwanie zawieszonych zadań (recover_stale_jobs)
 │   ├── Dockerfile                  # Obraz głównego API oraz analytics-worker
 │   ├── Dockerfile.solver           # Lekki, bezstanowy obraz dla solver-worker
 │   ├── alembic/                    # Migracje bazy danych
@@ -227,13 +230,13 @@ PlannerV2/
 | `PUT` | `/manager/users/{id}/roles` | Przypisanie ról |
 | `PUT` | `/manager/users/{id}/password` | Reset hasła pracownika |
 | `GET` | `/manager/dashboard/home` | Dashboard z dziennym podglądem |
-| `GET` | `/manager/users/{id}/stats` | Statystyki pracownika |
+| `GET` | `/manager/users/{id}/stats` | Statystyki pracownika (w tym godziny przepracowane i zaplanowane dla wybranego miesiąca `?month=&year=`) |
 | `GET/POST` | `/manager/config` | Konfiguracja restauracji |
 | `GET/POST` | `/manager/attendance` | Obecności (CRUD + filtrowanie) |
 | `PUT` | `/manager/attendance/{id}/confirm` | Zatwierdzenie obecności |
 | `PUT` | `/manager/attendance/{id}/reject` | Odrzucenie obecności |
 | `GET` | `/manager/attendance/export` | Eksport PDF obecności |
-| `GET` | `/manager/employee-hours` | Podsumowanie godzin miesięcznych |
+| `GET` | `/manager/employee-hours` | Zestawienie godzin miesięcznych zespołu (przepracowane `worked_hours`, zaplanowane `planned_hours`, cel `target_hours_per_month`) |
 | `GET` | `/manager/availability` | Dostępność wszystkich pracowników |
 | `GET` | `/manager/schedules/available-employees` | Dostępni na zmianę |
 | `GET/POST/DELETE` | `/manager/giveaways` | Giełda zmian (zarządzanie) |
@@ -332,7 +335,7 @@ Dla frontendu Web dopuszczalna jest flaga kompilacji:
 Aplikacja wykorzystuje Jenkins do automatycznych wdrożeń:
 
 - **DEV**: Wdrażany automatycznie z gałęzi `main`.
-- **PROD**: Wdrażany automatycznie po utworzeniu taga wersji (np. `v2.2.3`).
+- **PROD**: Wdrażany automatycznie po utworzeniu taga wersji (np. `v2.2.4`).
 - **Monitoring Kolejek RabbitMQ**: Panel administracyjny RabbitMQ Management jest zbindowany na serwerze lokalnie (`127.0.0.1:15672:15672`). Dostęp przez tunel SSH:
   ```bash
   ssh -L 15672:localhost:15672 root@<adres-serwera>

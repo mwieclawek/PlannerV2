@@ -173,9 +173,16 @@ Ewidencja i rozliczanie rzeczywistego czasu pracy:
 
 ---
 
-### 2.5 Zespół
+### 2.5 Zespół i Rozliczenie Godzin Miesięcznych
 
 - **Lista pracowników**: Przegląd personelu, przypisanych stanowisk i wypracowanych godzin.
+- **Zestawienie „Godziny w miesiącu” (cały zespół)**:
+  - Kliknij przycisk **„Godziny w miesiącu”** w prawym górnym rogu zakładki **Zespół**.
+  - Za pomocą strzałek `< Miesiąc Rok >` wybierz interesujący Cię miesiąc.
+  - Tabela prezentuje dla każdego pracownika: **Godziny przepracowane** (z zatwierdzonych obecności), **Godziny zaplanowane** (z grafiku), wymiar docelowy (**Cel**) oraz pasek realizacji normy miesięcznej.
+- **Sprawdzenie godzin w karcie pracownika**:
+  - Kliknij wybranego pracownika na liście zespołu, aby otworzyć okno szczegółów.
+  - W sekcji **„Godziny w wybranym miesiącu”** użyj przełącznika `< Miesiąc Rok >`, aby sprawdzić dokładną liczbę godzin przepracowanych, zaplanowanych oraz liczbę zmian w dowolnym miesiącu.
 - **Tworzenie konta**: Kliknij „+”, podaj imię i nazwisko, login, hasło (min. 8 znaków, 1 wielka litera, 1 cyfra) oraz adres e-mail.
 - **Zarządzanie pracownikiem**:
   - Przypisywanie i zmiana ról (stanowisk)

@@ -70,6 +70,8 @@ backend/tests/
 | WFM Ops Modules | `test_wfm_ops_modules.py` | Checklisty operacyjne, HACCP, payroll, ogłoszenia zespołowe |
 | Google Calendar | `test_google_calendar_sync.py`, `test_google_calendar_triggers.py` | Synchronizacja OAuth 2.0, automatyczne wyzwalacze przy publikacji i wymianie zmian |
 | Multi-Tenant & Sysadmin | `test_multi_tenant.py`, `test_sysadmin.py`, `test_superadmin_security.py` | Pełna izolacja tenantów, zarządzanie restauracjami, bezpieczeństwo logów |
+| Godziny Miesięczne | `test_monthly_hours.py` | Wyliczanie godzin przepracowanych (`Attendance`) i zaplanowanych (`Schedule`) w wybranym miesiącu dla zespołu i pracownika |
+| Niezawodność Workerów & Pure Engines | `test_worker_reliability.py` | Kontrakty DTO (`SolverInputDTO`/`SolverResultDTO`), cykl życia `WorkerJob`, `recover_stale_jobs`, graceful shutdown, klasyfikacja wąskich gardeł |
 
 ### Frontend (flutter test)
 

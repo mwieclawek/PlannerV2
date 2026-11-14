@@ -48,7 +48,7 @@ flutter run -d web-server --web-hostname=127.0.0.1 --web-port=5000 --dart-define
 ### Manager Dashboard (zakładki)
 - **Home (`home_tab.dart`)**: Kalendarz dzienny z podglądem obsady, bezpośrednie prośby o wymianę zmian.
 - **Grafik (`scheduler_tab.dart`, `schedule_viewer.dart`)**: Generator CP-SAT (AMQP RPC), tryb szkicu (Draft), batch save, publikacja z powiadomieniami push, **Historia zmiany per slot** (`Icons.history_rounded` na każdej komórce), **Historia zmian tygodnia**, panel **Analityki i Predykcji WFM**, **Symulator Kosztu Tygodnia** oraz raport wyjaśniający decyzje solvera (`SolverExplanation`).
-- **Zespół (`team_tab.dart`)**: Zarządzanie personelem, edycja e-maili, przypisywanie ról, cele godzinowe/zmianowe, reset haseł.
+- **Zespół (`team_tab.dart`, `employee_detail_dialog.dart`)**: Zarządzanie personelem, zestawienie **„Godziny w miesiącu”** (porównanie godzin przepracowanych i zaplanowanych dla całego zespołu lub wybranego pracownika w dowolnym miesiącu), edycja e-maili, przypisywanie ról, cele godzinowe/zmianowe, reset haseł.
 - **Ustawienia (`setup_tab.dart`)**: Konfiguracja stanowisk (ról), definicji zmian powiązanych z rolami, dane lokalu, strefy i stoliki POS, włączniki modułów (zamknięcie dnia, wymóg checklisty, ukrywanie tip poolingu).
 - **Obecności (`attendance_approval_tab.dart`)**: Zatwierdzanie ewidencji czasu pracy, eksport raportu PDF.
 - **Giełda (`giveaway_tab.dart`)**: Zarządzanie oddawanymi zmianami i sugerowane zastępstwa.
