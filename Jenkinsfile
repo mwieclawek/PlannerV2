@@ -143,11 +143,15 @@ pipeline {
                             echo "✅ Baza DEV już działa. Pomijam uruchamianie."
                         fi
 
+                        if docker port plannerv2-rabbitmq-dev 2>/dev/null | grep -q ':15672$'; then
+                            echo "🔄 Przełączanie portu Management UI RabbitMQ DEV z 15672 na 15673 (15672 zarezerwowany dla PROD)..."
+                            docker rm -f plannerv2-rabbitmq-dev || true
+                        fi
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-rabbitmq-dev 2>/dev/null)" != "true" ]; then
-                            echo "🐇 RabbitMQ DEV nie działa. Uruchamiam..."
+                            echo "🐇 RabbitMQ DEV nie działa. Uruchamiam na porcie 127.0.0.1:15673..."
                             docker rm -f plannerv2-rabbitmq-dev plannerv2-redis-dev || true
                             docker run -d --name plannerv2-rabbitmq-dev --network plannerv2-network \
-                              -p 127.0.0.1:15672:15672 \
+                              -p 127.0.0.1:15673:15672 \
                               -e RABBITMQ_DEFAULT_USER=planner -e RABBITMQ_DEFAULT_PASS=planner_secret \
                               -v plannerv2_rabbitmq_data_dev:/var/lib/rabbitmq \
                               --restart unless-stopped rabbitmq:3-management-alpine
@@ -373,8 +377,17 @@ pipeline {
                             echo "✅ Baza PROD już działa. Pomijam uruchamianie."
                         fi
 
+                        if docker port plannerv2-rabbitmq-dev 2>/dev/null | grep -q ':15672$'; then
+                            echo "🔄 Zwalnianie portu 15672 przez RabbitMQ DEV (przełączenie DEV na 127.0.0.1:15673)..."
+                            docker rm -f plannerv2-rabbitmq-dev || true
+                            docker run -d --name plannerv2-rabbitmq-dev --network plannerv2-network \
+                              -p 127.0.0.1:15673:15672 \
+                              -e RABBITMQ_DEFAULT_USER=planner -e RABBITMQ_DEFAULT_PASS=planner_secret \
+                              -v plannerv2_rabbitmq_data_dev:/var/lib/rabbitmq \
+                              --restart unless-stopped rabbitmq:3-management-alpine
+                        fi
                         if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-rabbitmq 2>/dev/null)" != "true" ]; then
-                            echo "🐇 RabbitMQ PROD nie działa. Uruchamiam..."
+                            echo "🐇 RabbitMQ PROD nie działa. Uruchamiam na porcie 127.0.0.1:15672..."
                             docker rm -f plannerv2-rabbitmq plannerv2-redis || true
                             docker run -d --name plannerv2-rabbitmq --network plannerv2-network \
                               -p 127.0.0.1:15672:15672 \

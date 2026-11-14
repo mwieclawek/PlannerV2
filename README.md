@@ -336,7 +336,7 @@ Aplikacja wykorzystuje Jenkins do automatycznych wdrożeń:
 
 - **DEV**: Wdrażany automatycznie z gałęzi `main`.
 - **PROD**: Wdrażany automatycznie po utworzeniu taga wersji (np. `v2.2.4`).
-- **Monitoring Kolejek RabbitMQ**: Panel administracyjny RabbitMQ Management jest zbindowany na serwerze lokalnie (`127.0.0.1:15672:15672`). Dostęp przez tunel SSH:
+- **Monitoring Kolejek RabbitMQ**: Panel administracyjny RabbitMQ Management jest zbindowany na serwerze lokalnie (`127.0.0.1:15672:15672` dla PROD oraz `127.0.0.1:15673:15672` dla DEV). Dostęp przez tunel SSH:
   ```bash
   ssh -L 15672:localhost:15672 root@<adres-serwera>
   # Otwórz w przeglądarce: http://localhost:15672 (login: planner / hasło: planner_secret)
