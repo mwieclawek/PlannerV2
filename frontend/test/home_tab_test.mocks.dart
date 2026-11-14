@@ -118,6 +118,70 @@ class _FakeTipSummary_17 extends _i1.SmartFake implements _i3.TipSummary {
     : super(parent, parentInvocation);
 }
 
+class _FakeDailyCloseoutSummary_18 extends _i1.SmartFake
+    implements _i3.DailyCloseoutSummary {
+  _FakeDailyCloseoutSummary_18(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeMonthlyPayrollSummary_19 extends _i1.SmartFake
+    implements _i3.MonthlyPayrollSummary {
+  _FakeMonthlyPayrollSummary_19(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeEmployeeMonthlyEarnings_20 extends _i1.SmartFake
+    implements _i3.EmployeeMonthlyEarnings {
+  _FakeEmployeeMonthlyEarnings_20(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeChecklistTemplateModel_21 extends _i1.SmartFake
+    implements _i3.ChecklistTemplateModel {
+  _FakeChecklistTemplateModel_21(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeChecklistItemModel_22 extends _i1.SmartFake
+    implements _i3.ChecklistItemModel {
+  _FakeChecklistItemModel_22(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeClockoutValidationResult_23 extends _i1.SmartFake
+    implements _i3.ClockoutValidationResult {
+  _FakeClockoutValidationResult_23(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeHaccpDeviceModel_24 extends _i1.SmartFake
+    implements _i3.HaccpDeviceModel {
+  _FakeHaccpDeviceModel_24(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeHaccpLogModel_25 extends _i1.SmartFake implements _i3.HaccpLogModel {
+  _FakeHaccpLogModel_25(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeAnnouncementModel_26 extends _i1.SmartFake
+    implements _i3.AnnouncementModel {
+  _FakeAnnouncementModel_26(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeWfmPrediction_27 extends _i1.SmartFake implements _i3.WfmPrediction {
+  _FakeWfmPrediction_27(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeLaborCostSimulation_28 extends _i1.SmartFake
+    implements _i3.LaborCostSimulation {
+  _FakeLaborCostSimulation_28(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
 /// A class which mocks [ApiService].
 ///
 /// See the documentation for Mockito's code generation for more information.
@@ -204,6 +268,25 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
             Invocation.method(#getCurrentUser, []),
             returnValue: _i6.Future<_i3.User>.value(
               _FakeUser_1(this, Invocation.method(#getCurrentUser, [])),
+            ),
+          )
+          as _i6.Future<_i3.User>);
+
+  @override
+  _i6.Future<_i3.User> updateMyProfile({String? email, String? fullName}) =>
+      (super.noSuchMethod(
+            Invocation.method(#updateMyProfile, [], {
+              #email: email,
+              #fullName: fullName,
+            }),
+            returnValue: _i6.Future<_i3.User>.value(
+              _FakeUser_1(
+                this,
+                Invocation.method(#updateMyProfile, [], {
+                  #email: email,
+                  #fullName: fullName,
+                }),
+              ),
             ),
           )
           as _i6.Future<_i3.User>);
@@ -700,6 +783,16 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
           as _i6.Future<Map<String, dynamic>>);
 
   @override
+  _i6.Future<Map<String, dynamic>> getEmployeeRestaurantConfig() =>
+      (super.noSuchMethod(
+            Invocation.method(#getEmployeeRestaurantConfig, []),
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i6.Future<Map<String, dynamic>>);
+
+  @override
   _i6.Future<void> saveConfig(
     String? name,
     String? openingHours,
@@ -732,26 +825,6 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
           as _i6.Future<void>);
 
   @override
-  _i6.Future<Map<String, dynamic>> getEmployeeRestaurantConfig() =>
-      (super.noSuchMethod(
-            Invocation.method(#getEmployeeRestaurantConfig, []),
-            returnValue: _i6.Future<Map<String, dynamic>>.value(
-              <String, dynamic>{},
-            ),
-          )
-          as _i6.Future<Map<String, dynamic>>);
-
-  @override
-  _i6.Future<Map<String, dynamic>> getMissingAttendance() =>
-      (super.noSuchMethod(
-            Invocation.method(#getMissingAttendance, []),
-            returnValue: _i6.Future<Map<String, dynamic>>.value(
-              <String, dynamic>{},
-            ),
-          )
-          as _i6.Future<Map<String, dynamic>>);
-
-  @override
   _i6.Future<List<_i3.TeamAvailability>> getTeamAvailability(
     DateTime? weekStart,
     DateTime? weekEnd,
@@ -763,6 +836,16 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
             ),
           )
           as _i6.Future<List<_i3.TeamAvailability>>);
+
+  @override
+  _i6.Future<Map<String, dynamic>> getMissingAttendance() =>
+      (super.noSuchMethod(
+            Invocation.method(#getMissingAttendance, []),
+            returnValue: _i6.Future<Map<String, dynamic>>.value(
+              <String, dynamic>{},
+            ),
+          )
+          as _i6.Future<Map<String, dynamic>>);
 
   @override
   _i6.Future<Map<String, dynamic>> getAttendanceDefaults(DateTime? date) =>
@@ -927,13 +1010,25 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
           as _i6.Future<List<Map<String, dynamic>>>);
 
   @override
-  _i6.Future<_i3.UserStats> getUserStats(String? userId) =>
+  _i6.Future<_i3.UserStats> getUserStats(
+    String? userId, {
+    int? month,
+    int? year,
+  }) =>
       (super.noSuchMethod(
-            Invocation.method(#getUserStats, [userId]),
+            Invocation.method(
+              #getUserStats,
+              [userId],
+              {#month: month, #year: year},
+            ),
             returnValue: _i6.Future<_i3.UserStats>.value(
               _FakeUserStats_4(
                 this,
-                Invocation.method(#getUserStats, [userId]),
+                Invocation.method(
+                  #getUserStats,
+                  [userId],
+                  {#month: month, #year: year},
+                ),
               ),
             ),
           )
@@ -1792,4 +1887,482 @@ class MockApiService extends _i1.Mock implements _i4.ApiService {
             ),
           )
           as _i6.Future<_i3.TipSummary>);
+
+  @override
+  _i6.Future<_i3.DailyCloseoutSummary> upsertDailyCloseout({
+    required DateTime? date,
+    required double? dailyRevenue,
+    required double? tipPool,
+    String? notes,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#upsertDailyCloseout, [], {
+              #date: date,
+              #dailyRevenue: dailyRevenue,
+              #tipPool: tipPool,
+              #notes: notes,
+            }),
+            returnValue: _i6.Future<_i3.DailyCloseoutSummary>.value(
+              _FakeDailyCloseoutSummary_18(
+                this,
+                Invocation.method(#upsertDailyCloseout, [], {
+                  #date: date,
+                  #dailyRevenue: dailyRevenue,
+                  #tipPool: tipPool,
+                  #notes: notes,
+                }),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.DailyCloseoutSummary>);
+
+  @override
+  _i6.Future<_i3.DailyCloseoutSummary> getDailyCloseoutSummary(
+    DateTime? date,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getDailyCloseoutSummary, [date]),
+            returnValue: _i6.Future<_i3.DailyCloseoutSummary>.value(
+              _FakeDailyCloseoutSummary_18(
+                this,
+                Invocation.method(#getDailyCloseoutSummary, [date]),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.DailyCloseoutSummary>);
+
+  @override
+  _i6.Future<_i3.MonthlyPayrollSummary> getMonthlyPayroll(
+    int? year,
+    int? month,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getMonthlyPayroll, [year, month]),
+            returnValue: _i6.Future<_i3.MonthlyPayrollSummary>.value(
+              _FakeMonthlyPayrollSummary_19(
+                this,
+                Invocation.method(#getMonthlyPayroll, [year, month]),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.MonthlyPayrollSummary>);
+
+  @override
+  String getPayrollExportCsvUrl(int? year, int? month, {String? token}) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #getPayrollExportCsvUrl,
+              [year, month],
+              {#token: token},
+            ),
+            returnValue: _i5.dummyValue<String>(
+              this,
+              Invocation.method(
+                #getPayrollExportCsvUrl,
+                [year, month],
+                {#token: token},
+              ),
+            ),
+          )
+          as String);
+
+  @override
+  String getPayrollExportPdfUrl(int? year, int? month, {String? token}) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #getPayrollExportPdfUrl,
+              [year, month],
+              {#token: token},
+            ),
+            returnValue: _i5.dummyValue<String>(
+              this,
+              Invocation.method(
+                #getPayrollExportPdfUrl,
+                [year, month],
+                {#token: token},
+              ),
+            ),
+          )
+          as String);
+
+  @override
+  _i6.Future<_i3.EmployeeMonthlyEarnings> getMyMonthlyEarnings(
+    int? year,
+    int? month,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getMyMonthlyEarnings, [year, month]),
+            returnValue: _i6.Future<_i3.EmployeeMonthlyEarnings>.value(
+              _FakeEmployeeMonthlyEarnings_20(
+                this,
+                Invocation.method(#getMyMonthlyEarnings, [year, month]),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.EmployeeMonthlyEarnings>);
+
+  @override
+  _i6.Future<List<_i3.ChecklistTemplateModel>> getChecklistTemplates({
+    bool? includeInactive = false,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#getChecklistTemplates, [], {
+              #includeInactive: includeInactive,
+            }),
+            returnValue: _i6.Future<List<_i3.ChecklistTemplateModel>>.value(
+              <_i3.ChecklistTemplateModel>[],
+            ),
+          )
+          as _i6.Future<List<_i3.ChecklistTemplateModel>>);
+
+  @override
+  _i6.Future<_i3.ChecklistTemplateModel> createChecklistTemplate({
+    required String? title,
+    String? description,
+    int? roleId,
+    required String? shiftPeriod,
+    required bool? isMandatory,
+    required List<Map<String, dynamic>>? items,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#createChecklistTemplate, [], {
+              #title: title,
+              #description: description,
+              #roleId: roleId,
+              #shiftPeriod: shiftPeriod,
+              #isMandatory: isMandatory,
+              #items: items,
+            }),
+            returnValue: _i6.Future<_i3.ChecklistTemplateModel>.value(
+              _FakeChecklistTemplateModel_21(
+                this,
+                Invocation.method(#createChecklistTemplate, [], {
+                  #title: title,
+                  #description: description,
+                  #roleId: roleId,
+                  #shiftPeriod: shiftPeriod,
+                  #isMandatory: isMandatory,
+                  #items: items,
+                }),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.ChecklistTemplateModel>);
+
+  @override
+  _i6.Future<void> deleteChecklistTemplate(String? templateId) =>
+      (super.noSuchMethod(
+            Invocation.method(#deleteChecklistTemplate, [templateId]),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
+          )
+          as _i6.Future<void>);
+
+  @override
+  _i6.Future<List<_i3.ChecklistTemplateModel>> getManagerDailyChecklists(
+    DateTime? date,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getManagerDailyChecklists, [date]),
+            returnValue: _i6.Future<List<_i3.ChecklistTemplateModel>>.value(
+              <_i3.ChecklistTemplateModel>[],
+            ),
+          )
+          as _i6.Future<List<_i3.ChecklistTemplateModel>>);
+
+  @override
+  _i6.Future<List<_i3.ChecklistTemplateModel>> getEmployeeChecklists({
+    DateTime? date,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#getEmployeeChecklists, [], {#date: date}),
+            returnValue: _i6.Future<List<_i3.ChecklistTemplateModel>>.value(
+              <_i3.ChecklistTemplateModel>[],
+            ),
+          )
+          as _i6.Future<List<_i3.ChecklistTemplateModel>>);
+
+  @override
+  _i6.Future<_i3.ChecklistItemModel> toggleChecklistItem(
+    String? itemId, {
+    DateTime? date,
+    bool? isCompleted,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #toggleChecklistItem,
+              [itemId],
+              {#date: date, #isCompleted: isCompleted},
+            ),
+            returnValue: _i6.Future<_i3.ChecklistItemModel>.value(
+              _FakeChecklistItemModel_22(
+                this,
+                Invocation.method(
+                  #toggleChecklistItem,
+                  [itemId],
+                  {#date: date, #isCompleted: isCompleted},
+                ),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.ChecklistItemModel>);
+
+  @override
+  _i6.Future<_i3.ClockoutValidationResult> validateClockoutChecklists({
+    DateTime? date,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#validateClockoutChecklists, [], {#date: date}),
+            returnValue: _i6.Future<_i3.ClockoutValidationResult>.value(
+              _FakeClockoutValidationResult_23(
+                this,
+                Invocation.method(#validateClockoutChecklists, [], {
+                  #date: date,
+                }),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.ClockoutValidationResult>);
+
+  @override
+  _i6.Future<List<_i3.HaccpDeviceModel>> getHaccpDevices({
+    bool? isManager = false,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#getHaccpDevices, [], {#isManager: isManager}),
+            returnValue: _i6.Future<List<_i3.HaccpDeviceModel>>.value(
+              <_i3.HaccpDeviceModel>[],
+            ),
+          )
+          as _i6.Future<List<_i3.HaccpDeviceModel>>);
+
+  @override
+  _i6.Future<_i3.HaccpDeviceModel> createHaccpDevice({
+    required String? name,
+    required double? minTemp,
+    required double? maxTemp,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#createHaccpDevice, [], {
+              #name: name,
+              #minTemp: minTemp,
+              #maxTemp: maxTemp,
+            }),
+            returnValue: _i6.Future<_i3.HaccpDeviceModel>.value(
+              _FakeHaccpDeviceModel_24(
+                this,
+                Invocation.method(#createHaccpDevice, [], {
+                  #name: name,
+                  #minTemp: minTemp,
+                  #maxTemp: maxTemp,
+                }),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.HaccpDeviceModel>);
+
+  @override
+  _i6.Future<void> deleteHaccpDevice(String? deviceId) =>
+      (super.noSuchMethod(
+            Invocation.method(#deleteHaccpDevice, [deviceId]),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
+          )
+          as _i6.Future<void>);
+
+  @override
+  _i6.Future<List<_i3.HaccpLogModel>> getHaccpLogs({
+    required bool? isManager,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool? violationsOnly = false,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#getHaccpLogs, [], {
+              #isManager: isManager,
+              #startDate: startDate,
+              #endDate: endDate,
+              #violationsOnly: violationsOnly,
+            }),
+            returnValue: _i6.Future<List<_i3.HaccpLogModel>>.value(
+              <_i3.HaccpLogModel>[],
+            ),
+          )
+          as _i6.Future<List<_i3.HaccpLogModel>>);
+
+  @override
+  _i6.Future<_i3.HaccpLogModel> createHaccpLog({
+    required bool? isManager,
+    required String? logType,
+    String? deviceId,
+    String? deviceName,
+    double? measuredTemp,
+    String? correctiveAction,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#createHaccpLog, [], {
+              #isManager: isManager,
+              #logType: logType,
+              #deviceId: deviceId,
+              #deviceName: deviceName,
+              #measuredTemp: measuredTemp,
+              #correctiveAction: correctiveAction,
+            }),
+            returnValue: _i6.Future<_i3.HaccpLogModel>.value(
+              _FakeHaccpLogModel_25(
+                this,
+                Invocation.method(#createHaccpLog, [], {
+                  #isManager: isManager,
+                  #logType: logType,
+                  #deviceId: deviceId,
+                  #deviceName: deviceName,
+                  #measuredTemp: measuredTemp,
+                  #correctiveAction: correctiveAction,
+                }),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.HaccpLogModel>);
+
+  @override
+  String getHaccpExportPdfUrl(
+    DateTime? startDate,
+    DateTime? endDate, {
+    String? token,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #getHaccpExportPdfUrl,
+              [startDate, endDate],
+              {#token: token},
+            ),
+            returnValue: _i5.dummyValue<String>(
+              this,
+              Invocation.method(
+                #getHaccpExportPdfUrl,
+                [startDate, endDate],
+                {#token: token},
+              ),
+            ),
+          )
+          as String);
+
+  @override
+  _i6.Future<List<_i3.AnnouncementModel>> getManagerAnnouncements() =>
+      (super.noSuchMethod(
+            Invocation.method(#getManagerAnnouncements, []),
+            returnValue: _i6.Future<List<_i3.AnnouncementModel>>.value(
+              <_i3.AnnouncementModel>[],
+            ),
+          )
+          as _i6.Future<List<_i3.AnnouncementModel>>);
+
+  @override
+  _i6.Future<_i3.AnnouncementModel> createAnnouncement({
+    required String? title,
+    required String? content,
+    bool? isPinned = false,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#createAnnouncement, [], {
+              #title: title,
+              #content: content,
+              #isPinned: isPinned,
+            }),
+            returnValue: _i6.Future<_i3.AnnouncementModel>.value(
+              _FakeAnnouncementModel_26(
+                this,
+                Invocation.method(#createAnnouncement, [], {
+                  #title: title,
+                  #content: content,
+                  #isPinned: isPinned,
+                }),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.AnnouncementModel>);
+
+  @override
+  _i6.Future<_i3.AnnouncementModel> getAnnouncementReceipts(
+    String? announcementId,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getAnnouncementReceipts, [announcementId]),
+            returnValue: _i6.Future<_i3.AnnouncementModel>.value(
+              _FakeAnnouncementModel_26(
+                this,
+                Invocation.method(#getAnnouncementReceipts, [announcementId]),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.AnnouncementModel>);
+
+  @override
+  _i6.Future<void> deleteAnnouncement(String? announcementId) =>
+      (super.noSuchMethod(
+            Invocation.method(#deleteAnnouncement, [announcementId]),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
+          )
+          as _i6.Future<void>);
+
+  @override
+  _i6.Future<List<_i3.AnnouncementModel>> getEmployeeAnnouncements() =>
+      (super.noSuchMethod(
+            Invocation.method(#getEmployeeAnnouncements, []),
+            returnValue: _i6.Future<List<_i3.AnnouncementModel>>.value(
+              <_i3.AnnouncementModel>[],
+            ),
+          )
+          as _i6.Future<List<_i3.AnnouncementModel>>);
+
+  @override
+  _i6.Future<void> markAnnouncementRead(String? announcementId) =>
+      (super.noSuchMethod(
+            Invocation.method(#markAnnouncementRead, [announcementId]),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
+          )
+          as _i6.Future<void>);
+
+  @override
+  _i6.Future<_i3.WfmPrediction> getWfmPredictions(
+    DateTime? startDate,
+    DateTime? endDate,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#getWfmPredictions, [startDate, endDate]),
+            returnValue: _i6.Future<_i3.WfmPrediction>.value(
+              _FakeWfmPrediction_27(
+                this,
+                Invocation.method(#getWfmPredictions, [startDate, endDate]),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.WfmPrediction>);
+
+  @override
+  _i6.Future<_i3.LaborCostSimulation> simulateLaborCost(
+    DateTime? startDate,
+    DateTime? endDate,
+    List<_i3.ScheduleEntry>? entries,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#simulateLaborCost, [
+              startDate,
+              endDate,
+              entries,
+            ]),
+            returnValue: _i6.Future<_i3.LaborCostSimulation>.value(
+              _FakeLaborCostSimulation_28(
+                this,
+                Invocation.method(#simulateLaborCost, [
+                  startDate,
+                  endDate,
+                  entries,
+                ]),
+              ),
+            ),
+          )
+          as _i6.Future<_i3.LaborCostSimulation>);
 }
