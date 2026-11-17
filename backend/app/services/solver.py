@@ -15,8 +15,14 @@ def _import_cp_model_deps() -> Any:
     import dateutil.parser  # noqa: F401
     import dateutil.relativedelta  # noqa: F401
     import pandas  # noqa: F401
+
+    if not hasattr(pandas, "_pandas_datetime_CAPI"):
+        raise ImportError("partially initialized module 'pandas' has no attribute '_pandas_datetime_CAPI'")
+
     from ortools.sat.python import cp_model
 
+    if hasattr(cp_model, "pd"):
+        cp_model.pd = pandas
     return cp_model
 
 
@@ -32,12 +38,16 @@ def _load_cp_model() -> Any:
                 "[SOLVER] Wykryto częściowo zainicjalizowany import pandas/ortools (%s) — czyszczenie sys.modules i ponowienie.",
                 first_err,
             )
-            prefixes = ["pandas", "ortools"]
+            # Clear only pandas/dateutil modules (never ortools *_pb2 to avoid Protobuf duplicate descriptor errors)
+            prefixes = ["pandas"]
             if isinstance(first_err, KeyError) or "dateutil" in str(first_err).lower():
                 prefixes.append("dateutil")
             for mod_name in list(sys.modules.keys()):
                 if any(mod_name == p or mod_name.startswith(f"{p}.") for p in prefixes):
                     sys.modules.pop(mod_name, None)
+            cp_mod = sys.modules.get("ortools.sat.python.cp_model")
+            if cp_mod is not None and not hasattr(cp_mod, "CpModel"):
+                sys.modules.pop("ortools.sat.python.cp_model", None)
             return _import_cp_model_deps()
 
 

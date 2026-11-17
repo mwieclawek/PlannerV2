@@ -426,3 +426,83 @@ async def test_periodic_stale_job_recovery_loop_runs_on_startup_and_stops(monkey
         _stop_soon(),
     )
     assert calls == 1
+
+
+def test_load_cp_model_recovers_from_corrupted_partial_pandas_module():
+    import sys
+    import types
+
+    from app.services.solver import _load_cp_model
+    from app.workers import smoke_check
+
+    # Ensure clean initial load and snapshot working pandas/ortools modules
+    _load_cp_model()
+    saved_modules = {
+        name: mod
+        for name, mod in sys.modules.items()
+        if name == "pandas"
+        or name.startswith("pandas.")
+        or name == "ortools"
+        or name.startswith("ortools.")
+    }
+
+    try:
+        # Inject a broken/partially initialized pandas stub lacking _pandas_datetime_CAPI
+        broken_pandas = types.ModuleType("pandas")
+        sys.modules["pandas"] = broken_pandas
+
+        cp_model = _load_cp_model()
+        assert hasattr(cp_model, "CpModel")
+        assert hasattr(sys.modules["pandas"], "_pandas_datetime_CAPI")
+
+        summary = smoke_check.run_worker_smoke_check()
+        assert summary["status"] == "success"
+        assert summary["assigned_count"] == 1
+    finally:
+        # Restore original module entries if present to avoid polluting other tests
+        for name in list(sys.modules.keys()):
+            if (
+                (name == "pandas" or name.startswith("pandas.") or name == "ortools" or name.startswith("ortools."))
+                and name not in saved_modules
+            ):
+                sys.modules.pop(name, None)
+        sys.modules.update(saved_modules)
+
+
+def test_concurrent_threaded_solver_execution_safety():
+    import concurrent.futures
+
+    from app.workers import smoke_check
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(smoke_check.run_worker_smoke_check) for _ in range(4)]
+        results = [fut.result(timeout=30) for fut in futures]
+
+    assert len(results) == 4
+    for res in results:
+        assert res["status"] == "success"
+        assert res["assigned_count"] == 1
+
+
+def test_requirements_contracts_for_api_and_worker_images():
+    from pathlib import Path
+
+    req_dir = Path(__file__).resolve().parents[1] / "requirements"
+    base_reqs = (req_dir / "base.txt").read_text(encoding="utf-8")
+    api_reqs = (req_dir / "api.txt").read_text(encoding="utf-8")
+    worker_reqs = (req_dir / "worker.txt").read_text(encoding="utf-8")
+
+    def _pkg_names(raw: str) -> list[str]:
+        return [
+            line.strip().lower()
+            for line in raw.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+
+    base_lines = _pkg_names(base_reqs)
+    api_lines = _pkg_names(api_reqs)
+    worker_lines = _pkg_names(worker_reqs)
+
+    assert any(line.startswith("python-dateutil>=2.8.2,<3.0.0") for line in base_lines)
+    assert "ortools" in api_lines
+    assert "ortools" in worker_lines

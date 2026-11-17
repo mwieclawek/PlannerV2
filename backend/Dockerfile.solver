@@ -16,6 +16,7 @@ COPY app/contracts/ backend/app/contracts/
 COPY app/services/solver.py backend/app/services/solver.py
 COPY app/workers/__init__.py backend/app/workers/__init__.py
 COPY app/workers/solver_worker.py backend/app/workers/solver_worker.py
+COPY app/workers/smoke_check.py backend/app/workers/smoke_check.py
 
 ENV PYTHONPATH=/app/backend:/app
 ENV PYTHONUNBUFFERED=1

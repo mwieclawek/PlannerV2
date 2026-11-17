@@ -110,18 +110,20 @@ pipeline {
             }
         }
 
-        // --- 4. DEPLOY NA DEV (Branch main) ---
-        stage('Deploy to DEV') {
+        // --- 4. DEPLOY NA DEV ORAZ BRAMKA GOTOWOŚCI PROD (Branch main) ---
+        stage('DEV Deploy & Prod Readiness (main)') {
             when {
                 branch 'main'
             }
-            agent {
-                docker {
-                    image 'docker:cli'
-                    args '-v /var/run/docker.sock:/var/run/docker.sock -u 0:0'
-                }
-            }
-            steps {
+            parallel {
+                stage('Deploy to DEV') {
+                    agent {
+                        docker {
+                            image 'docker:cli'
+                            args '-v /var/run/docker.sock:/var/run/docker.sock -u 0:0'
+                        }
+                    }
+                    steps {
                 deleteDir()
                 unstash 'source'
                 unstash 'flutter-web'
@@ -328,11 +330,15 @@ pipeline {
                         docker exec plannerv2-nginx-dev nginx -s reload
                     '''
 
-                    echo "🧪 Smoke Tests (DEV): Weryfikacja /health oraz /firebase-messaging-sw.js..."
+                    echo "🧪 Smoke Tests (DEV): Weryfikacja /health, /firebase-messaging-sw.js, workerów i E2E RabbitMQ -> CP-SAT..."
                     sh '''
                         docker exec plannerv2-nginx-dev apk add --no-cache curl >/dev/null 2>&1 || true
                         docker exec plannerv2-nginx-dev curl -sf http://localhost/health | grep -q '"status":"ok"'
                         docker exec plannerv2-nginx-dev curl -sf http://localhost/firebase-messaging-sw.js | grep -q 'firebase'
+                        [ "$(docker inspect -f '{{.State.Running}}' plannerv2-solver-worker-dev 2>/dev/null)" = "true" ]
+                        [ "$(docker inspect -f '{{.State.Running}}' plannerv2-analytics-worker-dev 2>/dev/null)" = "true" ]
+                        docker exec plannerv2-solver-worker-dev python -m app.workers.smoke_check --mode=worker
+                        docker exec plannerv2-backend-dev python -m app.workers.smoke_check --mode=backend-e2e
                         echo "✅ Smoke Tests DEV zakończone sukcesem!"
                     '''
 
@@ -340,6 +346,68 @@ pipeline {
                     sh 'docker image prune -f || true'
                     
                     echo "✅ DEV gotowy na porcie 8091"
+                        }
+                    }
+                }
+
+                stage('Prod Readiness Gate') {
+                    agent {
+                        docker {
+                            image 'docker:cli'
+                            args '-v /var/run/docker.sock:/var/run/docker.sock -u 0:0'
+                        }
+                    }
+                    steps {
+                        deleteDir()
+                        unstash 'source'
+                        script {
+                            echo "🛡️ WERYFIKACJA GOTOWOŚCI PRODUKCYJNEJ (PRE-FLIGHT GATE)..."
+                            withCredentials([
+                                string(credentialsId: 'github-token', variable: 'GH_TOKEN'),
+                                string(credentialsId: 'jwt-secret-key', variable: 'JWT_SECRET'),
+                                string(credentialsId: 'manager-pin', variable: 'MGR_PIN'),
+                                string(credentialsId: 'google-client-id', variable: 'GOOGLE_CLIENT_ID'),
+                                string(credentialsId: 'google-client-secret', variable: 'GOOGLE_CLIENT_SECRET'),
+                                string(credentialsId: 'db-encryption-key', variable: 'ENCRYPTION_KEY'),
+                                file(credentialsId: 'firebase-admin-key', variable: 'FIREBASE_KEY')
+                            ]) {
+                                echo "✅ Wszystkie poświadczenia produkcyjne Jenkins są dostępne."
+                            }
+                            sh '''
+                                echo "🔍 Audyt portów produkcyjnych i sieci Docker..."
+                                docker network inspect plannerv2-network >/dev/null 2>&1 || docker network create plannerv2-network || true
+                                if docker port plannerv2-rabbitmq-dev 2>/dev/null | grep -q ':15672$'; then
+                                    echo "❌ BŁĄD PRE-FLIGHT: Kontener DEV zajmuje port produkcyjny 15672!"
+                                    exit 1
+                                fi
+                                if docker port plannerv2-nginx-dev 2>/dev/null | grep -q ':8090$'; then
+                                    echo "❌ BŁĄD PRE-FLIGHT: Kontener DEV zajmuje port produkcyjny 8090!"
+                                    exit 1
+                                fi
+
+                                echo "🧪 Budowanie i testowanie izolowanych obrazów Pre-Flight (API + Solver Worker)..."
+                                docker build -t plannerv2-backend:preflight ./backend
+                                docker build -f ./backend/Dockerfile.solver -t plannerv2-solver-worker:preflight ./backend
+
+                                docker run --rm plannerv2-solver-worker:preflight python -m app.workers.smoke_check --mode=worker
+                                docker run --rm plannerv2-backend:preflight python -m app.workers.smoke_check --mode=worker
+
+                                HEADS_COUNT=$(docker run --rm plannerv2-backend:preflight sh -c "alembic heads | wc -l" | tr -d ' \r\n')
+                                if [ "$HEADS_COUNT" -ne 1 ]; then
+                                    echo "❌ BŁĄD PRE-FLIGHT: Drzewo migracji Alembic ma nieprawidłową liczbę heads ($HEADS_COUNT)!"
+                                    docker run --rm plannerv2-backend:preflight alembic heads
+                                    exit 1
+                                fi
+
+                                if [ "$(docker inspect -f '{{.State.Running}}' plannerv2-db 2>/dev/null)" = "true" ]; then
+                                    docker exec plannerv2-db pg_isready -U planner_user -d planner_db
+                                fi
+
+                                docker rmi plannerv2-backend:preflight plannerv2-solver-worker:preflight >/dev/null 2>&1 || true
+                                echo "✅ Prod Readiness Gate zakończony sukcesem — środowisko gotowe do wdrożenia produkcyjnego!"
+                            '''
+                        }
+                    }
                 }
             }
         }
@@ -557,11 +625,15 @@ pipeline {
                         docker exec plannerv2-nginx nginx -s reload
                     '''
 
-                    echo "🧪 Smoke Tests (PROD): Weryfikacja /health oraz /firebase-messaging-sw.js..."
+                    echo "🧪 Smoke Tests (PROD): Weryfikacja /health, /firebase-messaging-sw.js, workerów i E2E RabbitMQ -> CP-SAT..."
                     sh '''
                         docker exec plannerv2-nginx apk add --no-cache curl >/dev/null 2>&1 || true
                         docker exec plannerv2-nginx curl -sf http://localhost/health | grep -q '"status":"ok"'
                         docker exec plannerv2-nginx curl -sf http://localhost/firebase-messaging-sw.js | grep -q 'firebase'
+                        [ "$(docker inspect -f '{{.State.Running}}' plannerv2-solver-worker 2>/dev/null)" = "true" ]
+                        [ "$(docker inspect -f '{{.State.Running}}' plannerv2-analytics-worker 2>/dev/null)" = "true" ]
+                        docker exec plannerv2-solver-worker python -m app.workers.smoke_check --mode=worker
+                        docker exec plannerv2-backend python -m app.workers.smoke_check --mode=backend-e2e
                         echo "✅ Smoke Tests PROD zakończone sukcesem!"
                     '''
 
