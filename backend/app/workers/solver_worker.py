@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional, Union
 from uuid import UUID, uuid4
 
 from ..contracts.wfm import SolverInputDTO as SolverJobPayload
-from ..services.solver import solve_from_payload
+from ..services.solver import _load_cp_model, solve_from_payload
 from . import install_signal_handlers, use_async_worker
 
 logger = logging.getLogger(__name__)
@@ -100,6 +100,8 @@ async def run_solver_worker_consumer(stop_event: Optional[asyncio.Event] = None)
 
     rabbitmq_url = get_rabbitmq_url()
     logger.info(f"[SOLVER WORKER] Uruchamianie bezstanowego konsumenta AMQP (queue={SOLVER_REQUESTS_QUEUE})...")
+    # Pre-initialize dateutil/pandas/ortools on the main thread before RabbitMQ/worker threads start
+    _load_cp_model()
 
     if stop_event is None:
         stop_event = asyncio.Event()

@@ -1,11 +1,50 @@
 from datetime import date, datetime, time, timedelta
 import json
 import logging
+import sys
+import threading
 import time as perf_time
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from uuid import UUID, uuid4
 
 logger = logging.getLogger(__name__)
+_CP_MODEL_IMPORT_LOCK = threading.Lock()
+
+
+def _import_cp_model_deps() -> Any:
+    import dateutil.parser  # noqa: F401
+    import dateutil.relativedelta  # noqa: F401
+    import pandas  # noqa: F401
+    from ortools.sat.python import cp_model
+
+    return cp_model
+
+
+def _load_cp_model() -> Any:
+    """Thread-safe import of cp_model/pandas/dateutil with recovery if sys.modules holds a partial import."""
+    with _CP_MODEL_IMPORT_LOCK:
+        try:
+            return _import_cp_model_deps()
+        except (AttributeError, ImportError, KeyError) as first_err:
+            if isinstance(first_err, ModuleNotFoundError) and first_err.name == "ortools" and "ortools" not in sys.modules:
+                raise
+            logger.warning(
+                "[SOLVER] Wykryto częściowo zainicjalizowany import pandas/ortools (%s) — czyszczenie sys.modules i ponowienie.",
+                first_err,
+            )
+            prefixes = ["pandas", "ortools"]
+            if isinstance(first_err, KeyError) or "dateutil" in str(first_err).lower():
+                prefixes.append("dateutil")
+            for mod_name in list(sys.modules.keys()):
+                if any(mod_name == p or mod_name.startswith(f"{p}.") for p in prefixes):
+                    sys.modules.pop(mod_name, None)
+            return _import_cp_model_deps()
+
+
+try:
+    _load_cp_model()
+except Exception as _preload_exc:
+    logger.warning("[SOLVER] Pre-ładowanie cp_model/pandas przy starcie modułu pominięte: %s", _preload_exc)
 
 # Wagi odcinkowo-liniowej (piecewise-linear) funkcji kary za odchylenie od efektywnego celu tygodniowego (za każdą minutę)
 W_DEV_1 = 6                 # do 4h (0 - 240 min)
@@ -181,7 +220,7 @@ def solve_to_dto(payload_input: Union[SolverInputDTO, Dict[str, Any], str]) -> S
                 clopening_pairs.append((s1.id, s2.id))
 
     # Build CP-SAT Model
-    from ortools.sat.python import cp_model
+    cp_model = _load_cp_model()
     model = cp_model.CpModel()
     work: Dict[Tuple[str, str, int, int], Any] = {}
 

@@ -11,3 +11,4 @@ reportlab
 slowapi
 firebase-admin
 cryptography
+ortools

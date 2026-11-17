@@ -6,4 +6,5 @@ psycopg[binary]
 asyncpg
 python-dotenv
 tzdata
+python-dateutil>=2.8.2,<3.0.0
 aio-pika
