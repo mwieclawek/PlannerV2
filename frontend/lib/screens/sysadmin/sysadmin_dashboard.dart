@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,13 +33,37 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
   int _logOffset = 0;
   final int _logLimit = 150;
 
+  // State: Database Explorer
+  List<Map<String, dynamic>> _dbTables = [];
+  bool _isLoadingDbTables = false;
+  String? _selectedDbTable;
+  List<Map<String, dynamic>> _dbColumns = [];
+  List<Map<String, dynamic>> _dbRows = [];
+  bool _isLoadingDbRows = false;
+  int _dbTotalRows = 0;
+  int _dbLimit = 50;
+  int _dbOffset = 0;
+  bool _dbHasTenantId = false;
+  int? _selectedDbTenantId;
+  String? _dbSortBy;
+  bool _dbSortDesc = true;
+  bool _dbResolveFks = true;
+  String? _dbError;
+  final TextEditingController _dbSearchCtrl = TextEditingController();
+  final ScrollController _dbVerticalScrollCtrl = ScrollController();
+  final ScrollController _dbHorizontalScrollCtrl = ScrollController();
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (_tabController.index == 1 && _logs.isEmpty && !_isLoadingLogs) {
         _loadLogs();
+      } else if (_tabController.index == 2 &&
+          _dbTables.isEmpty &&
+          !_isLoadingDbTables) {
+        _loadDbTables();
       }
       setState(() {});
     });
@@ -49,6 +74,9 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
   void dispose() {
     _tabController.dispose();
     _logSearchCtrl.dispose();
+    _dbSearchCtrl.dispose();
+    _dbVerticalScrollCtrl.dispose();
+    _dbHorizontalScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -1334,6 +1362,1065 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
+  //  DATABASE EXPLORER LOGIC & VIEWER
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  bool _checkHasTenantId(
+    Map<String, dynamic>? tableMeta,
+    List<Map<String, dynamic>> columns,
+  ) {
+    if (tableMeta != null && tableMeta['has_tenant_id'] == true) {
+      return true;
+    }
+    return columns.any((c) {
+      final name = (c['name'] ?? '').toString().toLowerCase();
+      return name == 'tenant_id' || name == 'restaurant_id';
+    });
+  }
+
+  List<Map<String, dynamic>> _parseColumns(dynamic rawColumns) {
+    if (rawColumns is! List) return [];
+    return rawColumns
+        .whereType<Map>()
+        .map((c) => Map<String, dynamic>.from(c))
+        .toList();
+  }
+
+  String _formatRowCount(int count) {
+    if (count == 1) return '1 wiersz';
+    final mod10 = count % 10;
+    final mod100 = count % 100;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) {
+      return '$count wiersze';
+    }
+    return '$count wierszy';
+  }
+
+  Future<void> _loadDbTables({bool resetOffset = false}) async {
+    setState(() {
+      _isLoadingDbTables = true;
+      _dbError = null;
+    });
+    try {
+      final service = ref.read(sysAdminServiceProvider);
+      final tables = await service.getDatabaseTables();
+
+      String? nextSelected = _selectedDbTable;
+      final tableNames = tables
+          .map((t) => t['table_name']?.toString())
+          .whereType<String>()
+          .toList();
+
+      if (nextSelected == null || !tableNames.contains(nextSelected)) {
+        nextSelected = tableNames.isNotEmpty ? tableNames.first : null;
+      }
+
+      Map<String, dynamic>? selectedMeta;
+      if (nextSelected != null) {
+        selectedMeta = tables.firstWhere(
+          (t) => t['table_name']?.toString() == nextSelected,
+          orElse: () => <String, dynamic>{},
+        );
+      }
+
+      final parsedCols = _parseColumns(selectedMeta?['columns']);
+      final hasTenant = _checkHasTenantId(selectedMeta, parsedCols);
+
+      setState(() {
+        _dbTables = tables;
+        _selectedDbTable = nextSelected;
+        if (parsedCols.isNotEmpty) {
+          _dbColumns = parsedCols;
+        }
+        _dbHasTenantId = hasTenant;
+        if (!hasTenant) {
+          _selectedDbTenantId = null;
+        }
+        _isLoadingDbTables = false;
+      });
+
+      if (nextSelected != null) {
+        await _loadDbRows(resetOffset: resetOffset);
+      } else {
+        setState(() {
+          _dbRows = [];
+          _dbTotalRows = 0;
+        });
+      }
+    } catch (e) {
+      final msg = ApiErrorHandler.extractMessage(e);
+      setState(() {
+        _isLoadingDbTables = false;
+        _dbError = msg;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Błąd ładowania tabel bazy: $msg')),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadDbRows({bool resetOffset = false}) async {
+    final tableName = _selectedDbTable;
+    if (tableName == null) return;
+
+    if (resetOffset) {
+      _dbOffset = 0;
+    }
+
+    setState(() {
+      _isLoadingDbRows = true;
+      _dbError = null;
+    });
+
+    try {
+      final service = ref.read(sysAdminServiceProvider);
+      final data = await service.getDatabaseTableRows(
+        tableName,
+        limit: _dbLimit,
+        offset: _dbOffset,
+        search: _dbSearchCtrl.text.trim(),
+        tenantId: _dbHasTenantId ? _selectedDbTenantId : null,
+        sortBy: _dbSortBy,
+        sortDesc: _dbSortDesc,
+        resolveFks: _dbResolveFks,
+      );
+
+      final parsedCols = _parseColumns(data['columns']);
+      final rawRows = data['rows'];
+      final parsedRows = rawRows is List
+          ? rawRows
+              .whereType<Map>()
+              .map((r) => Map<String, dynamic>.from(r))
+              .toList()
+          : <Map<String, dynamic>>[];
+
+      List<Map<String, dynamic>> effectiveCols =
+          parsedCols.isNotEmpty ? parsedCols : _dbColumns;
+      if (effectiveCols.isEmpty && parsedRows.isNotEmpty) {
+        effectiveCols = parsedRows.first.keys
+            .map((k) => <String, dynamic>{'name': k, 'type': ''})
+            .toList();
+      }
+
+      final hasTenant = data.containsKey('has_tenant_id')
+          ? (data['has_tenant_id'] == true ||
+              _checkHasTenantId(null, effectiveCols))
+          : _checkHasTenantId(null, effectiveCols);
+
+      setState(() {
+        _dbColumns = effectiveCols;
+        _dbRows = parsedRows;
+        _dbTotalRows = (data['total'] as num?)?.toInt() ?? parsedRows.length;
+        _dbHasTenantId = hasTenant;
+        if (!hasTenant) {
+          _selectedDbTenantId = null;
+        }
+        _isLoadingDbRows = false;
+      });
+    } catch (e) {
+      final msg = ApiErrorHandler.extractMessage(e);
+      setState(() {
+        _isLoadingDbRows = false;
+        _dbError = msg;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Błąd ładowania wierszy: $msg')),
+        );
+      }
+    }
+  }
+
+  void _onSelectDbTable(String? newTable) {
+    if (newTable == null || newTable == _selectedDbTable) return;
+    final meta = _dbTables.firstWhere(
+      (t) => t['table_name']?.toString() == newTable,
+      orElse: () => <String, dynamic>{},
+    );
+    final cols = _parseColumns(meta['columns']);
+    final hasTenant = _checkHasTenantId(meta, cols);
+
+    setState(() {
+      _selectedDbTable = newTable;
+      _dbColumns = cols;
+      _dbRows = [];
+      _dbTotalRows = (meta['row_count'] as num?)?.toInt() ?? 0;
+      _dbOffset = 0;
+      _dbSortBy = null;
+      _dbSortDesc = true;
+      _dbHasTenantId = hasTenant;
+      if (!hasTenant) {
+        _selectedDbTenantId = null;
+      }
+    });
+    _loadDbRows(resetOffset: true);
+  }
+
+  String _formatCellPretty(dynamic value) {
+    if (value == null) return 'NULL';
+    if (value is Map || value is List) {
+      try {
+        return const JsonEncoder.withIndent('  ').convert(value);
+      } catch (_) {
+        return value.toString();
+      }
+    }
+    if (value is String) {
+      final trimmed = value.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+          final decoded = jsonDecode(trimmed);
+          if (decoded is Map || decoded is List) {
+            return const JsonEncoder.withIndent('  ').convert(decoded);
+          }
+        } catch (_) {
+          // Not valid JSON, fall back to raw string
+        }
+      }
+      return value;
+    }
+    return value.toString();
+  }
+
+  void _showCellDetailDialog(
+    String columnName,
+    Map<String, dynamic> colMeta,
+    dynamic rawValue,
+  ) {
+    final prettyValue = _formatCellPretty(rawValue);
+    final colType = (colMeta['type'] ?? '').toString();
+    final isPk = colMeta['primary_key'] == true;
+    final fks = colMeta['foreign_keys'] is List
+        ? (colMeta['foreign_keys'] as List).map((e) => e.toString()).toList()
+        : <String>[];
+    final isSensitive = colMeta['is_sensitive'] == true;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${_selectedDbTable ?? ''} • $columnName',
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+            if (colType.isNotEmpty || isPk || fks.isNotEmpty || isSensitive)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    if (colType.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          colType,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade800,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ),
+                    if (isPk)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade100,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'PK',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.purple.shade900,
+                          ),
+                        ),
+                      ),
+                    if (fks.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'FK -> ${fks.join(', ')}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.indigo.shade900,
+                          ),
+                        ),
+                      ),
+                    if (isSensitive)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade100,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'WRAŻLIWE',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber.shade900,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640, maxHeight: 420),
+          child: Container(
+            width: double.maxFinite,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: SingleChildScrollView(
+              child: SelectableText(
+                prettyValue,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 13,
+                  color: rawValue == null
+                      ? Colors.grey.shade600
+                      : Colors.grey.shade900,
+                  fontStyle:
+                      rawValue == null ? FontStyle.italic : FontStyle.normal,
+                ),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          ElevatedButton.icon(
+            icon: const Icon(Icons.copy, size: 18),
+            label: const Text('Kopiuj do schowka'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple.shade800,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: prettyValue));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Skopiowano wartość do schowka'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Zamknij'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDbColumnHeader(Map<String, dynamic> col) {
+    final name = (col['name'] ?? '').toString();
+    final type = (col['type'] ?? '').toString();
+    final isPk = col['primary_key'] == true;
+    final fks = col['foreign_keys'] is List
+        ? (col['foreign_keys'] as List).map((e) => e.toString()).toList()
+        : <String>[];
+    final hasFk = fks.isNotEmpty;
+    final isSensitive = col['is_sensitive'] == true;
+
+    final tooltipLines = <String>[
+      name,
+      if (type.isNotEmpty) 'Typ: $type',
+      if (isPk) 'Klucz główny (PK)',
+      if (hasFk) 'Klucz obcy (FK): ${fks.join(', ')}',
+      if (isSensitive) 'Pole wrażliwe (maskowane)',
+      'Kliknij, aby posortować',
+    ];
+
+    return Tooltip(
+      message: tooltipLines.join('\n'),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            name,
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.purple.shade900,
+              fontSize: 13,
+            ),
+          ),
+          if (isPk) ...[
+            const SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: Colors.purple.shade700,
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: const Text(
+                'PK',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+          if (hasFk) ...[
+            const SizedBox(width: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: Colors.indigo.shade100,
+                borderRadius: BorderRadius.circular(3),
+                border: Border.all(color: Colors.indigo.shade300),
+              ),
+              child: Text(
+                'FK',
+                style: TextStyle(
+                  color: Colors.indigo.shade900,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+          if (isSensitive) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.lock_outline, size: 13, color: Colors.amber.shade800),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDbCellWidget(dynamic value, Map<String, dynamic> col) {
+    if (value == null) {
+      return Text(
+        'NULL',
+        style: TextStyle(
+          color: Colors.grey.shade500,
+          fontStyle: FontStyle.italic,
+          fontSize: 12,
+          fontFamily: 'monospace',
+        ),
+      );
+    }
+
+    final strVal =
+        (value is Map || value is List) ? jsonEncode(value) : value.toString();
+
+    if (strVal == '[REDACTED]') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade50,
+          border: Border.all(color: Colors.amber.shade400),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.visibility_off, size: 12, color: Colors.amber.shade900),
+            const SizedBox(width: 4),
+            Text(
+              '[REDACTED]',
+              style: TextStyle(
+                color: Colors.amber.shade900,
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final isResolvedFk =
+        _dbResolveFks && RegExp(r'\[#[^\]]+\]').hasMatch(strVal);
+
+    if (isResolvedFk) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 260),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.link, size: 14, color: Colors.indigo.shade600),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                strVal,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.indigo.shade800,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 260),
+      child: Text(
+        strVal,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 13,
+          fontFamily: (value is Map || value is List) ? 'monospace' : null,
+          color: Colors.grey.shade900,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDatabaseTab() {
+    if (_isLoadingDbTables && _dbTables.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final tableNames = _dbTables
+        .map((t) => t['table_name']?.toString())
+        .whereType<String>()
+        .toList();
+    final validTableValue =
+        (_selectedDbTable != null && tableNames.contains(_selectedDbTable))
+            ? _selectedDbTable
+            : null;
+
+    final restaurantIds = _restaurants.map((r) => r['id']).toSet();
+    final validTenantValue = (_dbHasTenantId &&
+            _selectedDbTenantId != null &&
+            restaurantIds.contains(_selectedDbTenantId))
+        ? _selectedDbTenantId
+        : null;
+
+    final sortColumnIndex = _dbSortBy != null
+        ? _dbColumns.indexWhere((c) => c['name']?.toString() == _dbSortBy)
+        : -1;
+
+    final startRow = _dbTotalRows == 0 ? 0 : _dbOffset + 1;
+    final endRow = (_dbOffset + _dbRows.length).clamp(0, _dbTotalRows);
+    final hasPrev = _dbOffset > 0 && !_isLoadingDbRows;
+    final hasNext = (_dbOffset + _dbLimit) < _dbTotalRows && !_isLoadingDbRows;
+
+    final tableDropdown = DropdownButtonFormField<String>(
+      value: validTableValue,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Tabela',
+        prefixIcon: const Icon(Icons.table_chart_outlined, size: 20),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      hint: const Text('Wybierz tabelę'),
+      items: _dbTables.map((t) {
+        final name = (t['table_name'] ?? '').toString();
+        final rowCount = (t['row_count'] as num?)?.toInt();
+        final label =
+            rowCount != null ? '$name (${_formatRowCount(rowCount)})' : name;
+        return DropdownMenuItem<String>(
+          value: name,
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+      }).toList(),
+      onChanged: _isLoadingDbTables ? null : _onSelectDbTable,
+    );
+
+    final tenantDropdown = DropdownButtonFormField<int?>(
+      value: validTenantValue,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: _dbHasTenantId
+            ? 'Restauracja (Tenant)'
+            : 'Restauracja (tabela globalna)',
+        prefixIcon: const Icon(Icons.storefront, size: 20),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        filled: !_dbHasTenantId,
+        fillColor: !_dbHasTenantId ? Colors.grey.shade100 : null,
+      ),
+      items: [
+        const DropdownMenuItem<int?>(
+          value: null,
+          child: Text(
+            'Wszystkie restauracje',
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+        ..._restaurants.map((r) => DropdownMenuItem<int?>(
+              value: r['id'] as int?,
+              child: Text(
+                '${r['name']} (ID: ${r['id']})',
+                overflow: TextOverflow.ellipsis,
+              ),
+            )),
+      ],
+      onChanged: _dbHasTenantId
+          ? (val) {
+              setState(() => _selectedDbTenantId = val);
+              _loadDbRows(resetOffset: true);
+            }
+          : null,
+    );
+
+    final searchField = TextField(
+      controller: _dbSearchCtrl,
+      decoration: InputDecoration(
+        hintText: 'Szukaj w wierszach...',
+        prefixIcon: const Icon(Icons.search, size: 20),
+        suffixIcon: _dbSearchCtrl.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear, size: 18),
+                tooltip: 'Wyczyść wyszukiwanie',
+                onPressed: () {
+                  setState(() => _dbSearchCtrl.clear());
+                  _loadDbRows(resetOffset: true);
+                },
+              )
+            : null,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      onChanged: (_) => setState(() {}),
+      onSubmitted: (_) => _loadDbRows(resetOffset: true),
+    );
+
+    final refreshButton = IconButton(
+      icon: const Icon(Icons.refresh),
+      tooltip: 'Odśwież tabele i dane',
+      onPressed: () => _loadDbTables(resetOffset: false),
+    );
+
+    return Column(
+      children: [
+        // Toolbar & Filters
+        Card(
+          margin: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth >= 850) {
+                      return Row(
+                        children: [
+                          Expanded(flex: 3, child: tableDropdown),
+                          const SizedBox(width: 10),
+                          Expanded(flex: 3, child: tenantDropdown),
+                          const SizedBox(width: 10),
+                          Expanded(flex: 4, child: searchField),
+                          const SizedBox(width: 6),
+                          refreshButton,
+                        ],
+                      );
+                    }
+                    return Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: tableDropdown),
+                            const SizedBox(width: 6),
+                            refreshButton,
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        tenantDropdown,
+                        const SizedBox(height: 10),
+                        searchField,
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    FilterChip(
+                      label: const Text('Czytelne nazwy (ID -> Login/Nazwa)'),
+                      selected: _dbResolveFks,
+                      selectedColor: Colors.purple.shade100,
+                      checkmarkColor: Colors.purple.shade900,
+                      labelStyle: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _dbResolveFks
+                            ? Colors.purple.shade900
+                            : Colors.grey.shade800,
+                      ),
+                      onSelected: (selected) {
+                        setState(() => _dbResolveFks = selected);
+                        _loadDbRows(resetOffset: false);
+                      },
+                    ),
+                    if (_dbSortBy != null)
+                      InputChip(
+                        avatar: Icon(
+                          _dbSortDesc
+                              ? Icons.arrow_downward
+                              : Icons.arrow_upward,
+                          size: 15,
+                          color: Colors.purple.shade800,
+                        ),
+                        label: Text(
+                          'Sort: $_dbSortBy (${_dbSortDesc ? 'malejąco' : 'rosnąco'})',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        onDeleted: () {
+                          setState(() {
+                            _dbSortBy = null;
+                            _dbSortDesc = true;
+                          });
+                          _loadDbRows(resetOffset: true);
+                        },
+                      ),
+                    if (_selectedDbTenantId != null ||
+                        _dbSearchCtrl.text.isNotEmpty)
+                      TextButton.icon(
+                        icon: const Icon(Icons.filter_alt_off, size: 16),
+                        label: const Text('Wyczyść filtry'),
+                        onPressed: () {
+                          setState(() {
+                            _selectedDbTenantId = null;
+                            _dbSearchCtrl.clear();
+                          });
+                          _loadDbRows(resetOffset: true);
+                        },
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        if (_isLoadingDbRows && _dbRows.isNotEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
+
+        // Data Table Area
+        Expanded(
+          child: Card(
+            margin: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+            clipBehavior: Clip.antiAlias,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: _dbTables.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.storage_outlined,
+                            size: 56, color: Colors.grey.shade400),
+                        const SizedBox(height: 12),
+                        Text(
+                          _dbError != null
+                              ? 'Błąd: $_dbError'
+                              : 'Brak dostępnych tabel bazy danych.',
+                          style: TextStyle(color: Colors.grey.shade700),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Spróbuj ponownie'),
+                          onPressed: () => _loadDbTables(resetOffset: true),
+                        ),
+                      ],
+                    ),
+                  )
+                : _isLoadingDbRows && _dbRows.isEmpty
+                    ? const Center(child: CircularProgressIndicator())
+                    : _dbError != null && _dbRows.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.error_outline,
+                                      size: 48, color: Colors.red.shade400),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    'Błąd ładowania danych: $_dbError',
+                                    textAlign: TextAlign.center,
+                                    style:
+                                        TextStyle(color: Colors.red.shade800),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  OutlinedButton.icon(
+                                    icon: const Icon(Icons.refresh),
+                                    label: const Text('Odśwież'),
+                                    onPressed: () =>
+                                        _loadDbRows(resetOffset: false),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : _dbColumns.isEmpty
+                            ? const Center(
+                                child: Text('Brak kolumn do wyświetlenia.'),
+                              )
+                            : LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return Scrollbar(
+                                    controller: _dbVerticalScrollCtrl,
+                                    thumbVisibility: true,
+                                    child: SingleChildScrollView(
+                                      controller: _dbVerticalScrollCtrl,
+                                      scrollDirection: Axis.vertical,
+                                      child: Scrollbar(
+                                        controller: _dbHorizontalScrollCtrl,
+                                        thumbVisibility: true,
+                                        child: SingleChildScrollView(
+                                          controller: _dbHorizontalScrollCtrl,
+                                          scrollDirection: Axis.horizontal,
+                                          child: ConstrainedBox(
+                                            constraints: BoxConstraints(
+                                              minWidth: constraints.maxWidth,
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                DataTable(
+                                                  sortColumnIndex:
+                                                      sortColumnIndex >= 0
+                                                          ? sortColumnIndex
+                                                          : null,
+                                                  sortAscending: !_dbSortDesc,
+                                                  headingRowColor:
+                                                      WidgetStateProperty.all(
+                                                    Colors.purple.shade50,
+                                                  ),
+                                                  dataRowMinHeight: 40,
+                                                  dataRowMaxHeight: 52,
+                                                  columnSpacing: 20,
+                                                  horizontalMargin: 16,
+                                                  border: TableBorder.all(
+                                                    color: Colors.grey.shade200,
+                                                  ),
+                                                  columns: _dbColumns.map((col) {
+                                                    final colName =
+                                                        (col['name'] ?? '')
+                                                            .toString();
+                                                    return DataColumn(
+                                                      label:
+                                                          _buildDbColumnHeader(
+                                                              col),
+                                                      onSort: (_, __) {
+                                                        setState(() {
+                                                          if (_dbSortBy ==
+                                                              colName) {
+                                                            _dbSortDesc =
+                                                                !_dbSortDesc;
+                                                          } else {
+                                                            _dbSortBy = colName;
+                                                            _dbSortDesc = true;
+                                                          }
+                                                        });
+                                                        _loadDbRows(
+                                                            resetOffset: true);
+                                                      },
+                                                    );
+                                                  }).toList(),
+                                                  rows: _dbRows.map((row) {
+                                                    return DataRow(
+                                                      cells:
+                                                          _dbColumns.map((col) {
+                                                        final colName =
+                                                            (col['name'] ?? '')
+                                                                .toString();
+                                                        final rawVal =
+                                                            row[colName];
+                                                        return DataCell(
+                                                          _buildDbCellWidget(
+                                                              rawVal, col),
+                                                          onTap: () =>
+                                                              _showCellDetailDialog(
+                                                            colName,
+                                                            col,
+                                                            rawVal,
+                                                          ),
+                                                        );
+                                                      }).toList(),
+                                                    );
+                                                  }).toList(),
+                                                ),
+                                                if (_dbRows.isEmpty)
+                                                  SizedBox(
+                                                    width: constraints.maxWidth,
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                              32),
+                                                      child: Center(
+                                                        child: Text(
+                                                          'Brak rekordów spełniających wybrane kryteria.',
+                                                          style: TextStyle(
+                                                            color: Colors
+                                                                .grey.shade600,
+                                                            fontSize: 14,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+          ),
+        ),
+
+        // Bottom Pagination Bar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            border: Border(top: BorderSide(color: Colors.grey.shade300)),
+          ),
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _dbTotalRows == 0
+                        ? 'Pokazano 0 z 0'
+                        : 'Pokazano $startRow–$endRow z $_dbTotalRows',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade800,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    'Na stronę:',
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                  ),
+                  const SizedBox(width: 6),
+                  DropdownButton<int>(
+                    value: _dbLimit,
+                    isDense: true,
+                    underline: const SizedBox.shrink(),
+                    items: const [25, 50, 100, 200]
+                        .map((lim) => DropdownMenuItem<int>(
+                              value: lim,
+                              child: Text('$lim'),
+                            ))
+                        .toList(),
+                    onChanged: _isLoadingDbRows
+                        ? null
+                        : (val) {
+                            if (val != null && val != _dbLimit) {
+                              setState(() {
+                                _dbLimit = val;
+                                _dbOffset = 0;
+                              });
+                              _loadDbRows(resetOffset: true);
+                            }
+                          },
+                  ),
+                ],
+              ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.chevron_left, size: 18),
+                    label: const Text('Poprzednia'),
+                    onPressed: hasPrev
+                        ? () {
+                            setState(() {
+                              _dbOffset = (_dbOffset - _dbLimit)
+                                  .clamp(0, _dbTotalRows);
+                            });
+                            _loadDbRows(resetOffset: false);
+                          }
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.chevron_right, size: 18),
+                    label: const Text('Następna'),
+                    onPressed: hasNext
+                        ? () {
+                            setState(() {
+                              _dbOffset += _dbLimit;
+                            });
+                            _loadDbRows(resetOffset: false);
+                          }
+                        : null,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
   //  BUILD METHOD
   // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1350,8 +2437,10 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
             onPressed: () {
               if (_tabController.index == 0) {
                 _loadRestaurants();
-              } else {
+              } else if (_tabController.index == 1) {
                 _loadLogs(resetOffset: true);
+              } else {
+                _loadDbTables(resetOffset: false);
               }
             },
             tooltip: 'Odśwież',
@@ -1379,6 +2468,10 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
               icon: Icon(Icons.receipt_long),
               text: 'Logi systemowe',
             ),
+            Tab(
+              icon: Icon(Icons.storage_rounded),
+              text: 'Baza Danych',
+            ),
           ],
         ),
       ),
@@ -1387,6 +2480,7 @@ class _SysAdminDashboardScreenState extends ConsumerState<SysAdminDashboardScree
         children: [
           _buildRestaurantsTab(),
           _buildLogsTab(),
+          _buildDatabaseTab(),
         ],
       ),
       floatingActionButton: _tabController.index == 0

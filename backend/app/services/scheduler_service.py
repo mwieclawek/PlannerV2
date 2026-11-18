@@ -329,10 +329,16 @@ class SchedulerService:
             shifts = list(self.session.exec(shift_q).all())
 
         days = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
-        month_start = date(start_date.year, start_date.month, 1)
-        end_month_days = calendar.monthrange(end_date.year, end_date.month)[1]
-        month_end = date(end_date.year, end_date.month, end_month_days)
-        days_in_primary_month = calendar.monthrange(start_date.year, start_date.month)[1]
+        unique_months: List[Tuple[int, int]] = []
+        seen_ym: Set[Tuple[int, int]] = set()
+        for d in days:
+            ym_pair = (d.year, d.month)
+            if ym_pair not in seen_ym:
+                seen_ym.add(ym_pair)
+                unique_months.append(ym_pair)
+
+        last_y, last_m = unique_months[-1]
+        window_end = date(last_y, last_m, calendar.monthrange(last_y, last_m)[1])
 
         shift_durations: Dict[int, float] = {s.id: _shift_duration_hours(s) for s in shifts}
         overlaps = _compute_shift_overlaps(shifts)
@@ -347,30 +353,38 @@ class SchedulerService:
         if not emp_ids:
             return {}
 
-        # a) worked_or_scheduled_hours: suma godzin zaplanowanych w miesiącu POZA [start_date, end_date]
-        other_schedules = self.session.exec(
-            select(Schedule).where(
-                Schedule.date >= month_start,
-                Schedule.date <= month_end,
-                (Schedule.date < start_date) | (Schedule.date > end_date),
-            )
-        ).all()
-        if tid is not None:
-            other_schedules = [s for s in other_schedules if s.user_id in emp_ids]
+        # a) worked_by_month_map: suma godzin zaplanowanych osobno per miesiąc kalendarzowy [m_start, m_end]
+        # z bezwzględnym wykluczeniem zakresu [start_date, end_date] (idempotentna regeneracja).
+        worked_by_month_map: Dict[UUID, Dict[str, float]] = {e.id: {} for e in employees}
+        for yr, mo in unique_months:
+            ym_key = f"{yr:04d}-{mo:02d}"
+            m_start = date(yr, mo, 1)
+            m_end = date(yr, mo, calendar.monthrange(yr, mo)[1])
+            month_schedules = self.session.exec(
+                select(Schedule).where(
+                    Schedule.date >= m_start,
+                    Schedule.date <= m_end,
+                    (Schedule.date < start_date) | (Schedule.date > end_date),
+                    Schedule.user_id.in_(emp_ids),
+                )
+            ).all()
 
-        worked_or_scheduled_map: Dict[UUID, float] = {}
-        for sc in other_schedules:
-            dur = shift_durations.get(sc.shift_def_id)
-            if dur is None:
-                sh_obj = self.session.get(ShiftDefinition, sc.shift_def_id)
-                dur = _shift_duration_hours(sh_obj) if sh_obj else 0.0
-            worked_or_scheduled_map[sc.user_id] = worked_or_scheduled_map.get(sc.user_id, 0.0) + dur
+            per_user_hours: Dict[UUID, float] = {}
+            for sc in month_schedules:
+                dur = shift_durations.get(sc.shift_def_id)
+                if dur is None:
+                    sh_obj = self.session.get(ShiftDefinition, sc.shift_def_id)
+                    dur = _shift_duration_hours(sh_obj) if sh_obj else 0.0
+                per_user_hours[sc.user_id] = per_user_hours.get(sc.user_id, 0.0) + dur
 
-        # Pobierz dostępności od start_date do końca miesiąca
+            for e in employees:
+                worked_by_month_map[e.id][ym_key] = round(per_user_hours.get(e.id, 0.0), 2)
+
+        # Pobierz dostępności od start_date do końca ostatniego miesiąca w zakresie
         month_avails = self.session.exec(
             select(Availability).where(
                 Availability.date >= start_date,
-                Availability.date <= month_end,
+                Availability.date <= window_end,
             )
         ).all()
         if tid is not None:
@@ -381,11 +395,11 @@ class SchedulerService:
             val = str(a.status.value) if hasattr(a.status, "value") else str(a.status)
             avail_map[(str(a.user_id), a.date.isoformat(), a.shift_def_id)] = val
 
-        # Pobierz zatwierdzone urlopy (LeaveRequest) w zakresie [start_date, month_end]
+        # Pobierz zatwierdzone urlopy (LeaveRequest) w zakresie [start_date, window_end]
         approved_leaves = self.session.exec(
             select(LeaveRequest).where(
                 LeaveRequest.status == LeaveStatus.APPROVED,
-                LeaveRequest.start_date <= month_end,
+                LeaveRequest.start_date <= window_end,
                 LeaveRequest.end_date >= start_date,
             )
         ).all()
@@ -419,59 +433,83 @@ class SchedulerService:
                     avail_sids.append(s.id)
             return _max_non_overlapping_hours(avail_sids, shift_durations, overlaps)
 
-        future_days = [
-            end_date + timedelta(days=i)
-            for i in range(1, max(0, (month_end - end_date).days) + 1)
-        ]
-        future_chunks = [future_days[i:i + 7] for i in range(0, len(future_days), 7)]
-
+        primary_ym = f"{start_date.year:04d}-{start_date.month:02d}"
         result: Dict[UUID, Dict[str, Any]] = {}
         for e in employees:
             monthly_target = float(e.target_hours_per_month) if e.target_hours_per_month is not None else None
-            worked_hours = worked_or_scheduled_map.get(e.id, 0.0)
+            monthly_hours_by_month = dict(worked_by_month_map[e.id])
+            monthly_target_by_month = (
+                {ym_k: monthly_target for ym_k in monthly_hours_by_month}
+                if monthly_target is not None
+                else {}
+            )
+
+            worked_hours = monthly_hours_by_month.get(primary_ym, 0.0)
             remaining_monthly_target = (
                 max(0.0, monthly_target - worked_hours) if monthly_target is not None else 0.0
             )
+            max_shift_cap = (
+                float(e.target_shifts_per_month) * max(shift_durations.values(), default=8.0)
+                if e.target_shifts_per_month is not None
+                else 168.0
+            )
 
-            current_week_avail_hours = sum(_daily_avail_hours(e, d) for d in days)
-
-            # d) future_month_avail_hours z rozróżnieniem tygodni uzupełnionych vs nieuzupełnionych
+            current_week_avail_hours = 0.0
             future_month_avail_hours = 0.0
+            raw_weekly_target = 0.0
+            effective_weekly_target_hours = 0.0
             uid_str = str(e.id)
-            for chunk in future_chunks:
-                chunk_has_entries = any(
-                    (uid_str, d.isoformat(), s.id) in avail_map
-                    for d in chunk
-                    for s in shifts
-                )
-                if chunk_has_entries:
-                    future_month_avail_hours += sum(_daily_avail_hours(e, d) for d in chunk)
-                else:
-                    # Brak wpisów Availability w tym przyszłym tygodniu – nie zakładamy 0h!
-                    est_daily = (
-                        (monthly_target / float(days_in_primary_month))
-                        if (monthly_target is not None and monthly_target > 0)
-                        else (current_week_avail_hours / float(max(1, len(days))))
+
+            for yr, mo in unique_months:
+                ym_key = f"{yr:04d}-{mo:02d}"
+                days_in_m = calendar.monthrange(yr, mo)[1]
+                m_end = date(yr, mo, days_in_m)
+                slice_days = [d for d in days if d.year == yr and d.month == mo]
+                slice_avail = sum(_daily_avail_hours(e, d) for d in slice_days)
+                current_week_avail_hours += slice_avail
+
+                future_days_m = [
+                    end_date + timedelta(days=i)
+                    for i in range(1, max(0, (m_end - end_date).days) + 1)
+                ]
+                future_chunks_m = [future_days_m[i:i + 7] for i in range(0, len(future_days_m), 7)]
+                future_avail_m = 0.0
+                for chunk in future_chunks_m:
+                    chunk_has_entries = any(
+                        (uid_str, d.isoformat(), s.id) in avail_map
+                        for d in chunk
+                        for s in shifts
                     )
-                    for d in chunk:
-                        if _is_on_leave(e.id, d):
-                            continue
-                        future_month_avail_hours += est_daily
+                    if chunk_has_entries:
+                        future_avail_m += sum(_daily_avail_hours(e, d) for d in chunk)
+                    else:
+                        est_daily = (
+                            (monthly_target / float(days_in_m))
+                            if (monthly_target is not None and monthly_target > 0)
+                            else (slice_avail / float(max(1, len(slice_days))))
+                        )
+                        for d in chunk:
+                            if _is_on_leave(e.id, d):
+                                continue
+                            future_avail_m += est_daily
+
+                future_month_avail_hours += future_avail_m
+
+                if monthly_target is not None:
+                    worked_m = monthly_hours_by_month.get(ym_key, 0.0)
+                    rem_m = max(0.0, monthly_target - worked_m)
+                    denom_m = max(1.0, slice_avail + future_avail_m)
+                    raw_slice = rem_m * (slice_avail / denom_m)
+                    raw_weekly_target += raw_slice
+                    effective_weekly_target_hours += min(
+                        raw_slice,
+                        slice_avail,
+                        rem_m,
+                        max_shift_cap,
+                    )
 
             if monthly_target is not None:
-                denom = max(1.0, current_week_avail_hours + future_month_avail_hours)
-                raw_weekly_target = remaining_monthly_target * (current_week_avail_hours / denom)
-                max_shift_cap = (
-                    float(e.target_shifts_per_month) * max(shift_durations.values(), default=8.0)
-                    if e.target_shifts_per_month is not None
-                    else 168.0
-                )
-                effective_weekly_target_hours = min(
-                    raw_weekly_target,
-                    current_week_avail_hours,
-                    remaining_monthly_target,
-                    max_shift_cap,
-                )
+                effective_weekly_target_hours = min(effective_weekly_target_hours, max_shift_cap)
                 effective_weekly_target_minutes = int(round(effective_weekly_target_hours * 60))
                 if current_week_avail_hours > 0:
                     scarcity_ratio = min(1.5, raw_weekly_target / max(1.0, current_week_avail_hours))
@@ -495,6 +533,8 @@ class SchedulerService:
                 "effective_weekly_target_hours": round(effective_weekly_target_hours, 2),
                 "effective_weekly_target_minutes": effective_weekly_target_minutes,
                 "scarcity_ratio": round(scarcity_ratio, 4),
+                "monthly_hours_by_month": monthly_hours_by_month,
+                "monthly_target_by_month": monthly_target_by_month,
             }
 
         return result
@@ -990,6 +1030,14 @@ class SchedulerService:
             eff_h = float(wt.get("effective_weekly_target_hours", rem_h))
             eff_min = int(wt.get("effective_weekly_target_minutes", int(round(eff_h * 60))))
             scarcity = float(wt.get("scarcity_ratio", 0.0))
+            monthly_hours_map = {
+                str(mk): float(mv)
+                for mk, mv in (wt.get("monthly_hours_by_month") or {}).items()
+            }
+            monthly_target_map = {
+                str(mk): float(mv)
+                for mk, mv in (wt.get("monthly_target_by_month") or {}).items()
+            }
             emp_items.append(
                 SolverEmployeeItem(
                     id=str(e.id),
@@ -1004,6 +1052,8 @@ class SchedulerService:
                     effective_weekly_target_hours=eff_h,
                     effective_weekly_target_minutes=eff_min,
                     scarcity_ratio=scarcity,
+                    monthly_hours_by_month=monthly_hours_map,
+                    monthly_target_by_month=monthly_target_map,
                 )
             )
 
@@ -1049,11 +1099,33 @@ class SchedulerService:
             deficit_details = explanation.get("deficit_details", {})
             employee_summary_log = explanation.get("employee_summary_log", {})
 
-            if warnings:
+            deficit_warnings = [w for w in warnings if isinstance(w, dict) and "missing" in w]
+            over_target_warnings = [
+                w for w in warnings
+                if (isinstance(w, dict) and w.get("category") == "OVER_TARGET_WARNING")
+                or (isinstance(w, str) and "przekroczono cel miesięczny" in w)
+            ]
+
+            if deficit_warnings:
                 log_event(
                     "DEFICIT",
-                    f"Wykryto braki kadrowe przy generowaniu grafiku ({len(warnings)} pozycji)",
+                    f"Wykryto braki kadrowe przy generowaniu grafiku ({len(deficit_warnings)} pozycji)",
                     deficit_details,
+                    level="WARNING",
+                    actor=actor or "System / Solver",
+                    tenant_id=tid,
+                )
+
+            if over_target_warnings:
+                log_event(
+                    "SOLVER",
+                    f"Przekroczenie limitu miesięcznego w grafiku ({len(over_target_warnings)} przypisań)",
+                    {
+                        "over_target_warnings": [
+                            w["message"] if isinstance(w, dict) else w
+                            for w in over_target_warnings
+                        ]
+                    },
                     level="WARNING",
                     actor=actor or "System / Solver",
                     tenant_id=tid,
@@ -1068,7 +1140,7 @@ class SchedulerService:
                     "status": status_name,
                     "czas_wykonania_s": round(solve_duration, 2),
                     "przypisane_zmiany": len(raw_schedules),
-                    "liczba_deficytow": len(warnings),
+                    "liczba_deficytow": len(deficit_warnings),
                     "pracownicy": employee_summary_log,
                 },
                 level="INFO" if not warnings else "WARNING",

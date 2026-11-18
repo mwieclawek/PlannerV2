@@ -135,6 +135,35 @@ def _build_bottleneck_entry(
     }
 
 
+def _resolve_employee_month_context(
+    emp: SolverEmployeeItem,
+    ym: str,
+    primary_ym: str,
+    wt: Dict[str, Any],
+) -> Tuple[float, float]:
+    """Return (mtd_hours_ym, target_hours_ym) for an employee in calendar month `ym`."""
+    wt_hours_by_month = wt.get("monthly_hours_by_month") or {}
+    wt_targets_by_month = wt.get("monthly_target_by_month") or {}
+
+    if ym in emp.monthly_hours_by_month:
+        mtd_h = float(emp.monthly_hours_by_month[ym])
+    elif ym in wt_hours_by_month:
+        mtd_h = float(wt_hours_by_month[ym])
+    elif ym == primary_ym:
+        mtd_h = float(wt.get("worked_or_scheduled_hours", emp.worked_or_scheduled_hours))
+    else:
+        mtd_h = 0.0
+
+    if ym in emp.monthly_target_by_month:
+        target_h = float(emp.monthly_target_by_month[ym])
+    elif ym in wt_targets_by_month:
+        target_h = float(wt_targets_by_month[ym])
+    else:
+        target_h = float(emp.target_hours_per_month or 0.0)
+
+    return mtd_h, target_h
+
+
 def solve_to_dto(payload_input: Union[SolverInputDTO, Dict[str, Any], str]) -> SolverResultDTO:
     """
     100% bezstanowa funkcja Pure-Compute:
@@ -301,54 +330,109 @@ def solve_to_dto(payload_input: Union[SolverInputDTO, Dict[str, Any], str]) -> S
     # Objective: Maximize preferences & Penalize Overworking / Weekly Target Deviation
     objective_terms = []
     shift_minutes = {s_id: int(round(dur * 60)) for s_id, dur in shift_durations.items()}
+    weights = payload.weights
 
-    # C4. Monthly & Effective Weekly Targets (Hours / Shifts)
+    days_by_month: Dict[str, List[date]] = {}
+    months_in_range: List[str] = []
+    for d in days:
+        ym = d.strftime("%Y-%m")
+        if ym not in days_by_month:
+            months_in_range.append(ym)
+            days_by_month[ym] = []
+        days_by_month[ym].append(d)
+    primary_ym = days[0].strftime("%Y-%m") if days else ""
+
+    # C4. Monthly (per calendar month) & Effective Weekly Targets (Hours / Shifts)
     for e in employees:
         employee_vars = []
         employee_minutes_coeffs = []
+        vars_by_month: Dict[str, List[Any]] = {ym: [] for ym in months_in_range}
+        coeffs_by_month: Dict[str, List[int]] = {ym: [] for ym in months_in_range}
 
         for d in days:
             d_iso = d.isoformat()
+            ym = d.strftime("%Y-%m")
             for s in shifts:
                 for r in roles:
                     if (e.id, d_iso, s.id, r.id) in work:
                         var = work[(e.id, d_iso, s.id, r.id)]
+                        s_min = shift_minutes[s.id]
                         employee_vars.append(var)
-                        employee_minutes_coeffs.append(shift_minutes[s.id])
+                        employee_minutes_coeffs.append(s_min)
+                        vars_by_month[ym].append(var)
+                        coeffs_by_month[ym].append(s_min)
 
-        weights = payload.weights
-        if e.target_shifts_per_month is not None:
+        if e.target_shifts_per_month is not None and employee_vars:
             excess_shifts_var = model.NewIntVar(0, len(employee_vars), f"excess_shifts_{e.id}")
             model.Add(sum(employee_vars) - int(e.target_shifts_per_month) <= excess_shifts_var)
             objective_terms.append(excess_shifts_var * -weights.excess_shifts_penalty)
 
-        if e.target_hours_per_month is not None and employee_vars:
-            wt = payload.weekly_targets.get(str(e.id), {})
-            already_scheduled = float(wt.get("worked_or_scheduled_hours", e.worked_or_scheduled_hours))
-            remaining_monthly_hours = float(
-                wt.get(
-                    "remaining_monthly_target",
-                    e.remaining_monthly_target
-                    if e.remaining_monthly_target > 0 or already_scheduled > 0
-                    else max(0.0, float(e.target_hours_per_month) - already_scheduled),
-                )
-            )
-            remaining_monthly_min = int(round(remaining_monthly_hours * 60))
-            eff_target_min = int(
-                wt.get(
-                    "effective_weekly_target_minutes",
-                    e.effective_weekly_target_minutes
-                    if e.effective_weekly_target_minutes > 0 or "effective_weekly_target_minutes" in wt
-                    else remaining_monthly_min,
-                )
-            )
+        if not employee_vars:
+            continue
+
+        wt = payload.weekly_targets.get(str(e.id), {})
+        has_any_monthly_target = False
+        total_remaining_monthly_min = 0
+
+        for ym in months_in_range:
+            ym_vars = vars_by_month[ym]
+            ym_coeffs = coeffs_by_month[ym]
+            if not ym_vars:
+                continue
+
+            mtd_hours_ym, target_hours_ym = _resolve_employee_month_context(e, ym, primary_ym, wt)
+            if target_hours_ym <= 0:
+                continue
+
+            has_any_monthly_target = True
+            mtd_min_ym = int(round(mtd_hours_ym * 60))
+            target_min_ym = int(round(target_hours_ym * 60))
+            total_remaining_monthly_min += max(0, target_min_ym - mtd_min_ym)
+
+            assigned_min_in_ym = cp_model.LinearExpr.WeightedSum(ym_vars, ym_coeffs)
+            max_assigned_ym = sum(ym_coeffs)
+            total_min_ym = mtd_min_ym + assigned_min_in_ym
+
+            # Progresywna miękka kara za nadgodziny miesięczne (tier 1: 0-10h, tier 2: 10-40h, tier 3: >40h)
+            if mtd_min_ym + max_assigned_ym > target_min_ym:
+                max_over_ym = max(1, mtd_min_ym + max_assigned_ym - target_min_ym)
+                over_t1 = model.NewIntVar(0, 600, f"over_m_t1_{e.id}_{ym}")
+                over_t2 = model.NewIntVar(0, 1800, f"over_m_t2_{e.id}_{ym}")
+                over_t3 = model.NewIntVar(0, max_over_ym, f"over_m_t3_{e.id}_{ym}")
+                model.Add(over_t1 + over_t2 + over_t3 >= total_min_ym - target_min_ym)
+                objective_terms.append(over_t1 * -weights.overtime_tier1_penalty)
+                objective_terms.append(over_t2 * -weights.overtime_tier2_penalty)
+                objective_terms.append(over_t3 * -weights.overtime_tier3_penalty)
+
+                # Ochrona przed skrajnym przekroczeniem etatu (> 150% celu miesięcznego)
+                extreme_cap_min = int(round(1.5 * target_min_ym))
+                if mtd_min_ym + max_assigned_ym > extreme_cap_min:
+                    max_extreme = max(1, mtd_min_ym + max_assigned_ym - extreme_cap_min)
+                    over_extreme = model.NewIntVar(0, max_extreme, f"over_m_ext_{e.id}_{ym}")
+                    model.Add(over_extreme >= total_min_ym - extreme_cap_min)
+                    objective_terms.append(over_extreme * -weights.extreme_overtime_penalty)
+
+            # Progresywna kara za pozostający niedobór do celu miesięcznego (premiuje pracowników pod celem)
+            if mtd_min_ym < target_min_ym:
+                max_under_ym = target_min_ym - mtd_min_ym
+                under_t1 = model.NewIntVar(0, min(600, max_under_ym), f"under_m_t1_{e.id}_{ym}")
+                under_t2 = model.NewIntVar(0, min(1200, max_under_ym), f"under_m_t2_{e.id}_{ym}")
+                under_t3 = model.NewIntVar(0, max_under_ym, f"under_m_t3_{e.id}_{ym}")
+                model.Add(under_t1 + under_t2 + under_t3 >= target_min_ym - total_min_ym)
+                objective_terms.append(under_t1 * -weights.under_target_tier1_penalty)
+                objective_terms.append(under_t2 * -weights.under_target_tier2_penalty)
+                objective_terms.append(under_t3 * -weights.under_target_tier3_penalty)
+
+        if has_any_monthly_target:
+            if "effective_weekly_target_minutes" in wt:
+                eff_target_min = int(wt["effective_weekly_target_minutes"])
+            elif e.effective_weekly_target_minutes > 0:
+                eff_target_min = int(e.effective_weekly_target_minutes)
+            else:
+                eff_target_min = total_remaining_monthly_min
+
             max_week_min = sum(employee_minutes_coeffs) + 600
             worked_minutes_expr = cp_model.LinearExpr.WeightedSum(employee_vars, employee_minutes_coeffs)
-
-            # Silna kara za przekroczenie pozostałego limitu miesięcznego (-1000 za minutę)
-            excess_monthly_var = model.NewIntVar(0, max_week_min, f"excess_hours_{e.id}")
-            model.Add(worked_minutes_expr - remaining_monthly_min <= excess_monthly_var)
-            objective_terms.append(excess_monthly_var * -weights.excess_monthly_minutes_penalty)
 
             # Trójprogowa odcinkowo-liniowa (piecewise-linear) funkcja kary względem effective_weekly_target_minutes:
             under_tier1 = model.NewIntVar(0, 240, f"under_t1_{e.id}")
@@ -489,7 +573,7 @@ def solve_to_dto(payload_input: Union[SolverInputDTO, Dict[str, Any], str]) -> S
             k = (item["date"], item["shift_def_id"], item["role_id"])
             assigned_count[k] = assigned_count.get(k, 0) + 1
 
-        warnings: List[Dict[str, Any]] = []
+        warnings: List[Union[Dict[str, Any], str]] = []
         deficit_details: Dict[str, str] = {}
         deficit_explanations: List[Dict[str, Any]] = []
         domain_logs: List[str] = [
@@ -581,9 +665,15 @@ def solve_to_dto(payload_input: Union[SolverInputDTO, Dict[str, Any], str]) -> S
 
                                     cand_scheds = [it for it in generated_items if it["user_id"] == cand.id]
                                     cand_gen_hours = sum(shift_durations.get(it["shift_def_id"], 0.0) for it in cand_scheds)
+                                    ym_cand = d_iso[:7]
                                     wt = payload.weekly_targets.get(str(cand.id), {})
-                                    prev_h = float(wt.get("worked_or_scheduled_hours", cand.worked_or_scheduled_hours))
-                                    tot_h = prev_h + cand_gen_hours
+                                    prev_h, target_h = _resolve_employee_month_context(cand, ym_cand, primary_ym, wt)
+                                    cand_gen_hours_ym = sum(
+                                        shift_durations.get(it["shift_def_id"], 0.0)
+                                        for it in cand_scheds
+                                        if it["date"][:7] == ym_cand
+                                    )
+                                    tot_h = prev_h + cand_gen_hours_ym
                                     eff_w_h = float(wt.get("effective_weekly_target_hours", cand.effective_weekly_target_hours))
 
                                     if clopening_prev:
@@ -598,15 +688,13 @@ def solve_to_dto(payload_input: Union[SolverInputDTO, Dict[str, Any], str]) -> S
                                             f"{cand.full_name}: dostępny ({st}), ale przypisanie naruszyłoby 11h odpoczynku dobowego "
                                             f"(clopening ze zmianą '{', '.join(n_names)}' w dniu {d_next_iso})"
                                         )
-                                    elif cand.target_hours_per_month is not None and tot_h >= float(cand.target_hours_per_month):
-                                        target_h = float(cand.target_hours_per_month)
+                                    elif target_h > 0 and tot_h >= target_h:
                                         diag = (
                                             f"{cand.full_name}: dostępny ({st}), ale osiągnął miesięczny limit godzin "
-                                            f"({tot_h:.1f}h / {target_h:.1f}h, MTD: {prev_h:.1f}h + grafik: {cand_gen_hours:.1f}h). "
+                                            f"({tot_h:.1f}h / {target_h:.1f}h, MTD: {prev_h:.1f}h + grafik: {cand_gen_hours_ym:.1f}h). "
                                             f"Przypisanie zmiany {shift_dur_h:.1f}h przekroczyłoby limit o {tot_h + shift_dur_h - target_h:.1f}h."
                                         )
-                                    elif cand.target_hours_per_month is not None and (tot_h + shift_dur_h) > float(cand.target_hours_per_month):
-                                        target_h = float(cand.target_hours_per_month)
+                                    elif target_h > 0 and (tot_h + shift_dur_h) > target_h:
                                         rem_h = max(0.0, target_h - tot_h)
                                         diag = (
                                             f"{cand.full_name}: dostępny ({st}), ale zmiana ({shift_dur_h:.1f}h) przekracza "
@@ -747,6 +835,15 @@ def solve_to_dto(payload_input: Union[SolverInputDTO, Dict[str, Any], str]) -> S
         best_bound_val = round(float(solver.BestObjectiveBound()), 2)
 
         decisions: List[DecisionExplanationDTO] = []
+        assigned_hours_by_user_month: Dict[Tuple[str, str], float] = {}
+        for item in generated_items:
+            ym_item = item["date"][:7]
+            key_um = (item["user_id"], ym_item)
+            assigned_hours_by_user_month[key_um] = (
+                assigned_hours_by_user_month.get(key_um, 0.0)
+                + shift_durations.get(item["shift_def_id"], 0.0)
+            )
+
         for item in generated_items:
             av_st = avail_map.get((item["user_id"], item["date"], item["shift_def_id"]), "UNKNOWN")
             decisions.append(
@@ -766,6 +863,54 @@ def solve_to_dto(payload_input: Union[SolverInputDTO, Dict[str, Any], str]) -> S
                     details={"availability_status": av_st},
                 )
             )
+            emp_obj = emp_by_id.get(item["user_id"])
+            if emp_obj is not None:
+                ym_item = item["date"][:7]
+                wt_item = payload.weekly_targets.get(str(emp_obj.id), {})
+                mtd_h_ym, target_h = _resolve_employee_month_context(emp_obj, ym_item, primary_ym, wt_item)
+                total_month_hours_ym = mtd_h_ym + assigned_hours_by_user_month.get((emp_obj.id, ym_item), 0.0)
+                if target_h > 0 and total_month_hours_ym > target_h + 1e-6:
+                    over_h = round(total_month_hours_ym - target_h, 1)
+                    warn_msg = (
+                        f"Obsadzono: {emp_obj.full_name} (UWAGA: przekroczono cel miesięczny o +{over_h:.1f}h; "
+                        f"łącznie {total_month_hours_ym:.1f}h / {target_h:.1f}h w miesiącu {ym_item})."
+                    )
+                    decisions.append(
+                        DecisionExplanationDTO(
+                            category="OVER_TARGET_WARNING",
+                            date=item["date"],
+                            shift_def_id=item["shift_def_id"],
+                            shift_name=item.get("shift_name"),
+                            role_id=item["role_id"],
+                            role_name=item.get("role_name"),
+                            user_id=emp_obj.id,
+                            user_name=emp_obj.full_name,
+                            message=warn_msg,
+                            details={
+                                "over_hours": over_h,
+                                "total_month_hours": round(total_month_hours_ym, 1),
+                                "target_hours": round(target_h, 1),
+                                "month": ym_item,
+                            },
+                        )
+                    )
+                    domain_logs.append(warn_msg)
+                    warnings.append({
+                        "category": "OVER_TARGET_WARNING",
+                        "date": item["date"],
+                        "shift_def_id": item["shift_def_id"],
+                        "shift_name": item.get("shift_name"),
+                        "role_id": item["role_id"],
+                        "role_name": item.get("role_name"),
+                        "user_id": emp_obj.id,
+                        "user_name": emp_obj.full_name,
+                        "month": ym_item,
+                        "over_hours": over_h,
+                        "total_month_hours": round(total_month_hours_ym, 1),
+                        "target_hours": round(target_h, 1),
+                        "message": warn_msg,
+                    })
+                    logger.warning(f"[SOLVER WORKER OVER_TARGET] {warn_msg} [tenant:{tid}].")
         for de in deficit_explanations:
             decisions.append(
                 DecisionExplanationDTO(

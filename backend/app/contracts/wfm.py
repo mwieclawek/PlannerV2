@@ -12,12 +12,19 @@ class SolverWeightsDTO(BaseModel):
     w_dev_2: int = 18                 # > 4h do 10h (240 - 600 min)
     w_dev_3: int = 48                 # > 10h (> 600 min)
     urgency_scale: int = 1200         # premia za rzadkość dyspozycyjności (scarcity_ratio * urgency_scale)
-    slot_fill_reward: int = 50000
+    slot_fill_reward: int = 1_000_000
     preferred_bonus: int = 2000
     available_bonus: int = 500
     clopening_penalty: int = 25000
     excess_shifts_penalty: int = 2000
     excess_monthly_minutes_penalty: int = 1000
+    overtime_tier1_penalty: int = 5       # 0 - 10h nadgodzin miesięcznych (za min)
+    overtime_tier2_penalty: int = 20      # > 10h - 40h nadgodzin miesięcznych (za min)
+    overtime_tier3_penalty: int = 60      # > 40h nadgodzin miesięcznych (za min)
+    extreme_overtime_penalty: int = 20_000  # > 150% celu miesięcznego (ochrona przed skrajnym przekroczeniem)
+    under_target_tier1_penalty: int = 5   # 0 - 10h niedoboru miesięcznego (za min)
+    under_target_tier2_penalty: int = 10  # > 10h - 30h niedoboru miesięcznego (za min)
+    under_target_tier3_penalty: int = 20  # > 30h niedoboru miesięcznego (za min)
     split_shift_penalty: int = 50
     max_solve_time_sec: float = 10.0
 
@@ -46,6 +53,8 @@ class SolverEmployeeItem(BaseModel):
     effective_weekly_target_hours: float = 0.0
     effective_weekly_target_minutes: int = 0
     scarcity_ratio: float = 0.0
+    monthly_hours_by_month: Dict[str, float] = Field(default_factory=dict)
+    monthly_target_by_month: Dict[str, float] = Field(default_factory=dict)
 
 
 class SolverRequirementItem(BaseModel):
@@ -109,7 +118,7 @@ class SolverAssignmentDTO(BaseModel):
 class DecisionExplanationDTO(BaseModel):
     """Szczegółowe uzasadnienie decyzji solvera dla pojedynczego slotu lub pracownika."""
 
-    category: str  # "ASSIGNED", "DEFICIT", "REST_VIOLATION", "EMPLOYEE_SUMMARY", "INFEASIBLE"
+    category: str  # "ASSIGNED", "DEFICIT", "REST_VIOLATION", "EMPLOYEE_SUMMARY", "INFEASIBLE", "OVER_TARGET_WARNING"
     date: Optional[str] = None
     shift_def_id: Optional[int] = None
     shift_name: Optional[str] = None

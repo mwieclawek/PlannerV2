@@ -1,8 +1,8 @@
 from datetime import datetime, date as date_type
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from ..models import RoleSystem
 from .base import _SLUG_RE, _EMAIL_RE, _validate_password_strength
@@ -269,3 +269,33 @@ class SysAdminLogsResponse(BaseModel):
     items: List[SysAdminLogEntry]
     available_levels: List[str]
     available_categories: List[str] = []
+
+
+class SysAdminDbColumnInfo(BaseModel):
+    name: str
+    type: str
+    nullable: bool = True
+    primary_key: bool = False
+    foreign_keys: List[str] = Field(default_factory=list)
+    is_sensitive: bool = False
+
+
+class SysAdminDbTableInfo(BaseModel):
+    table_name: str
+    row_count: int
+    has_tenant_id: bool
+    columns: List[SysAdminDbColumnInfo]
+
+
+class SysAdminDbTablesResponse(BaseModel):
+    tables: List[SysAdminDbTableInfo]
+
+
+class SysAdminDbTableRowsResponse(BaseModel):
+    table_name: str
+    total: int
+    limit: int
+    offset: int
+    has_tenant_id: bool
+    columns: List[SysAdminDbColumnInfo]
+    rows: List[Dict[str, Any]]

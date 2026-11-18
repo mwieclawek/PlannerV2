@@ -104,4 +104,53 @@ class SysAdminService {
   Future<void> clearLogs() async {
     await _dio.delete('/sysadmin/logs');
   }
+
+  Future<List<Map<String, dynamic>>> getDatabaseTables() async {
+    final response = await _dio.get('/sysadmin/db/tables');
+    final data = response.data;
+    if (data is Map && data['tables'] is List) {
+      return List<Map<String, dynamic>>.from(
+        (data['tables'] as List).map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+    }
+    if (data is List) {
+      return List<Map<String, dynamic>>.from(
+        data.map((item) => Map<String, dynamic>.from(item as Map)),
+      );
+    }
+    return [];
+  }
+
+  Future<Map<String, dynamic>> getDatabaseTableRows(
+    String tableName, {
+    int limit = 50,
+    int offset = 0,
+    String? search,
+    int? tenantId,
+    String? sortBy,
+    bool sortDesc = true,
+    bool resolveFks = true,
+  }) async {
+    final queryParams = <String, dynamic>{
+      'limit': limit,
+      'offset': offset,
+      'sort_desc': sortDesc,
+      'resolve_fks': resolveFks,
+    };
+    if (search != null && search.trim().isNotEmpty) {
+      queryParams['search'] = search.trim();
+    }
+    if (tenantId != null) {
+      queryParams['tenant_id'] = tenantId;
+    }
+    if (sortBy != null && sortBy.trim().isNotEmpty) {
+      queryParams['sort_by'] = sortBy.trim();
+    }
+
+    final response = await _dio.get(
+      '/sysadmin/db/tables/${Uri.encodeComponent(tableName)}/rows',
+      queryParameters: queryParams,
+    );
+    return Map<String, dynamic>.from(response.data);
+  }
 }

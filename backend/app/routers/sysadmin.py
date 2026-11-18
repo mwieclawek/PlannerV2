@@ -7,15 +7,27 @@ Every endpoint here is protected by `get_current_superadmin`, which requires
 """
 import logging
 import re
-from typing import Dict, List, Optional
+from datetime import date, datetime, time
+from enum import Enum
+from typing import Any, Dict, List, Optional, Set
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
-from sqlmodel import Session, select
+from sqlalchemy import String, cast, func, or_
+from sqlmodel import SQLModel, Session, select
 
+from .. import models as app_models  # noqa: F401 - ensure all tables are registered in SQLModel.metadata
 from ..auth_utils import get_current_superadmin, get_password_hash
 from ..database import get_session
-from ..models import RestaurantConfig, RoleSystem, SystemSettings, User
+from ..models import (
+    ChecklistTemplate,
+    JobRole,
+    RestaurantConfig,
+    RoleSystem,
+    ShiftDefinition,
+    SystemSettings,
+    User,
+)
 from ..schemas import (
     SysAdminManagerCreate,
     SysAdminManagerResponse,
@@ -27,6 +39,12 @@ from ..schemas import (
     SysAdminPasswordReset,
     SysAdminLogEntry,
     SysAdminLogsResponse,
+)
+from ..schemas.tenant import (
+    SysAdminDbColumnInfo,
+    SysAdminDbTableInfo,
+    SysAdminDbTableRowsResponse,
+    SysAdminDbTablesResponse,
 )
 from ..services import log_service
 
@@ -310,7 +328,6 @@ def get_restaurant_users(
     users.sort(key=lambda u: (0 if u.role_system == RoleSystem.MANAGER else 1, 0 if u.is_active else 1, u.username))
     return users
 
-from uuid import UUID
 
 @router.put("/users/{user_id}/reset-password")
 def reset_user_password(
@@ -382,3 +399,358 @@ def clear_system_logs(
         superadmin.email or superadmin.username,
     )
     return {"message": "Plik logów został wyczyszczony"}
+
+
+# ── DB Explorer (read-only) ────────────────────────────────────────────────────
+
+_SENSITIVE_COLUMN_EXACT = frozenset({
+    "password_hash",
+    "hashed_password",
+    "manager_pin",
+    "registration_pin",
+    "google_access_token",
+    "google_refresh_token",
+    "fcm_token",
+})
+_SENSITIVE_COLUMN_SUBSTRINGS = (
+    "password",
+    "token",
+    "secret",
+    "manager_pin",
+    "registration_pin",
+)
+
+_USER_FK_COLUMN_NAMES = frozenset({
+    "user_id",
+    "employee_id",
+    "manager_id",
+    "changed_by_user_id",
+    "target_user_id",
+    "requester_id",
+    "offered_by",
+    "taken_by",
+    "reviewed_by",
+    "waiter_id",
+    "actor_id",
+    "recorded_by_user_id",
+    "author_id",
+    "created_by",
+})
+_TENANT_FK_COLUMN_NAMES = frozenset({"tenant_id", "restaurant_id", "config_id"})
+_JOB_ROLE_FK_COLUMN_NAMES = frozenset({"role_id"})
+_SHIFT_DEF_FK_COLUMN_NAMES = frozenset({"shift_def_id"})
+_CHECKLIST_FK_COLUMN_NAMES = frozenset({"checklist_id", "template_id"})
+_LEAVE_TYPE_FK_COLUMN_NAMES = frozenset({"leave_type_id"})
+
+
+def _is_sensitive_column(col_name: str) -> bool:
+    lower = col_name.lower()
+    if lower in _SENSITIVE_COLUMN_EXACT:
+        return True
+    return any(sub in lower for sub in _SENSITIVE_COLUMN_SUBSTRINGS)
+
+
+def _has_tenant_id(table) -> bool:
+    return ("tenant_id" in table.c) or ("restaurant_id" in table.c)
+
+
+def _build_column_infos(table) -> List[SysAdminDbColumnInfo]:
+    return [
+        SysAdminDbColumnInfo(
+            name=col.name,
+            type=str(col.type),
+            nullable=bool(col.nullable) if col.nullable is not None else True,
+            primary_key=bool(col.primary_key),
+            foreign_keys=[fk.target_fullname for fk in col.foreign_keys],
+            is_sensitive=_is_sensitive_column(col.name),
+        )
+        for col in table.columns
+    ]
+
+
+def _serialize_db_value(val: Any) -> Any:
+    if val is None:
+        return None
+    if isinstance(val, UUID):
+        return str(val)
+    if isinstance(val, (datetime, date, time)):
+        return val.isoformat()
+    if isinstance(val, Enum):
+        return val.value
+    if isinstance(val, bytes):
+        return val.decode("utf-8", errors="replace")
+    return val
+
+
+def _coerce_uuid(val: Any) -> Optional[UUID]:
+    if val is None:
+        return None
+    if isinstance(val, UUID):
+        return val
+    try:
+        return UUID(str(val))
+    except (ValueError, TypeError):
+        return None
+
+
+def _coerce_int(val: Any) -> Optional[int]:
+    if val is None or isinstance(val, bool):
+        return None
+    if isinstance(val, int):
+        return val
+    try:
+        return int(str(val))
+    except (ValueError, TypeError):
+        return None
+
+
+def _detect_fk_kind(col) -> Optional[str]:
+    """Identify target model category for a column via explicit FK metadata or naming convention."""
+    for fk in col.foreign_keys:
+        target = fk.target_fullname.lower()
+        if target in {"user.id", "users.id"}:
+            return "user"
+        if target in {"restaurantconfig.id", "tenant.id"}:
+            return "tenant"
+        if target == "jobrole.id":
+            return "job_role"
+        if target == "shiftdefinition.id":
+            return "shift_def"
+        if target == "checklisttemplate.id":
+            return "checklist"
+        if target == "leavetype.id":
+            return "leave_type"
+
+    lower_name = col.name.lower()
+    if lower_name in _USER_FK_COLUMN_NAMES:
+        return "user"
+    if lower_name in _TENANT_FK_COLUMN_NAMES:
+        return "tenant"
+    if lower_name in _JOB_ROLE_FK_COLUMN_NAMES:
+        return "job_role"
+    if lower_name in _SHIFT_DEF_FK_COLUMN_NAMES:
+        return "shift_def"
+    if lower_name in _CHECKLIST_FK_COLUMN_NAMES:
+        return "checklist"
+    if lower_name in _LEAVE_TYPE_FK_COLUMN_NAMES:
+        return "leave_type"
+    return None
+
+
+def _resolve_foreign_keys_in_rows(session: Session, table, rows: List[Dict[str, Any]]) -> None:
+    """Batch-resolve foreign key values in `rows` in-place (1 query per target table)."""
+    if not rows:
+        return
+
+    fk_columns: Dict[str, str] = {}
+    for col in table.columns:
+        if _is_sensitive_column(col.name):
+            continue
+        kind = _detect_fk_kind(col)
+        if kind:
+            fk_columns[col.name] = kind
+
+    if not fk_columns:
+        return
+
+    uuid_ids: Dict[str, Set[UUID]] = {"user": set(), "checklist": set()}
+    int_ids: Dict[str, Set[int]] = {"tenant": set(), "job_role": set(), "shift_def": set(), "leave_type": set()}
+
+    for row in rows:
+        for col_name, kind in fk_columns.items():
+            raw_val = row.get(col_name)
+            if raw_val is None or raw_val == "":
+                continue
+            if kind in uuid_ids:
+                parsed_uuid = _coerce_uuid(raw_val)
+                if parsed_uuid is not None:
+                    uuid_ids[kind].add(parsed_uuid)
+            elif kind in int_ids:
+                parsed_int = _coerce_int(raw_val)
+                if parsed_int is not None:
+                    int_ids[kind].add(parsed_int)
+
+    uuid_lookups: Dict[str, Dict[str, str]] = {}
+    int_lookups: Dict[str, Dict[int, str]] = {}
+
+    if uuid_ids["user"]:
+        users = session.exec(select(User).where(User.id.in_(list(uuid_ids["user"])))).all()
+        uuid_lookups["user"] = {
+            str(u.id): f"{u.username} ({u.full_name}) [#{u.id}]"
+            for u in users
+        }
+
+    if uuid_ids["checklist"]:
+        templates = session.exec(
+            select(ChecklistTemplate).where(ChecklistTemplate.id.in_(list(uuid_ids["checklist"])))
+        ).all()
+        uuid_lookups["checklist"] = {
+            str(c.id): f"{c.title} [#{c.id}]"
+            for c in templates
+        }
+
+    if int_ids["tenant"]:
+        restaurants = session.exec(
+            select(RestaurantConfig).where(RestaurantConfig.id.in_(list(int_ids["tenant"])))
+        ).all()
+        int_lookups["tenant"] = {
+            int(r.id): f"{r.name} [#{r.id}]"
+            for r in restaurants
+            if r.id is not None
+        }
+
+    if int_ids["job_role"]:
+        roles = session.exec(
+            select(JobRole).where(JobRole.id.in_(list(int_ids["job_role"])))
+        ).all()
+        int_lookups["job_role"] = {
+            int(role.id): f"{role.name} [#{role.id}]"
+            for role in roles
+            if role.id is not None
+        }
+
+    if int_ids["shift_def"]:
+        shift_defs = session.exec(
+            select(ShiftDefinition).where(ShiftDefinition.id.in_(list(int_ids["shift_def"])))
+        ).all()
+        int_lookups["shift_def"] = {
+            int(s.id): f"{s.name} ({str(s.start_time)[:5]}-{str(s.end_time)[:5]}) [#{s.id}]"
+            for s in shift_defs
+            if s.id is not None
+        }
+
+    leave_type_model = getattr(app_models, "LeaveType", None)
+    if leave_type_model is not None and int_ids["leave_type"]:
+        leave_types = session.exec(
+            select(leave_type_model).where(leave_type_model.id.in_(list(int_ids["leave_type"])))
+        ).all()
+        int_lookups["leave_type"] = {
+            int(lt.id): f"{getattr(lt, 'name', str(lt.id))} [#{lt.id}]"
+            for lt in leave_types
+            if getattr(lt, "id", None) is not None
+        }
+
+    for row in rows:
+        for col_name, kind in fk_columns.items():
+            raw_val = row.get(col_name)
+            if raw_val is None or raw_val == "":
+                continue
+            if kind in uuid_lookups:
+                parsed_uuid = _coerce_uuid(raw_val)
+                lookup_key = str(parsed_uuid) if parsed_uuid is not None else str(raw_val)
+                if lookup_key in uuid_lookups[kind]:
+                    row[col_name] = uuid_lookups[kind][lookup_key]
+            elif kind in int_lookups:
+                parsed_int = _coerce_int(raw_val)
+                if parsed_int is not None and parsed_int in int_lookups[kind]:
+                    row[col_name] = int_lookups[kind][parsed_int]
+
+
+@router.get("/db/tables", response_model=SysAdminDbTablesResponse)
+def list_database_tables(session: Session = Depends(get_session)):
+    """List all registered database tables with row counts and column metadata."""
+    tables_info: List[SysAdminDbTableInfo] = []
+    for table_name, table in sorted(SQLModel.metadata.tables.items(), key=lambda item: item[0]):
+        row_count = session.execute(select(func.count()).select_from(table)).scalar() or 0
+        tables_info.append(
+            SysAdminDbTableInfo(
+                table_name=table_name,
+                row_count=int(row_count),
+                has_tenant_id=_has_tenant_id(table),
+                columns=_build_column_infos(table),
+            )
+        )
+    return SysAdminDbTablesResponse(tables=tables_info)
+
+
+@router.get("/db/tables/{table_name}/rows", response_model=SysAdminDbTableRowsResponse)
+def get_database_table_rows(
+    table_name: str,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    search: Optional[str] = Query(None),
+    tenant_id: Optional[int] = Query(None),
+    sort_by: Optional[str] = Query(None),
+    sort_desc: bool = Query(True),
+    resolve_fks: bool = Query(True),
+    session: Session = Depends(get_session),
+):
+    """Browse rows of a whitelisted SQLModel table with filtering, sorting, masking, and FK resolution."""
+    table = SQLModel.metadata.tables.get(table_name)
+    if table is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tabela '{table_name}' nie istnieje",
+        )
+
+    if sort_by is not None and sort_by not in table.c:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Kolumna '{sort_by}' nie istnieje w tabeli '{table_name}'",
+        )
+
+    filters = []
+    if tenant_id is not None:
+        if "tenant_id" in table.c:
+            filters.append(table.c.tenant_id == tenant_id)
+        elif "restaurant_id" in table.c:
+            filters.append(table.c.restaurant_id == tenant_id)
+        elif table_name == "restaurantconfig" and "id" in table.c:
+            filters.append(table.c.id == tenant_id)
+
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        search_clauses = [
+            cast(col, String).ilike(term)
+            for col in table.columns
+            if not _is_sensitive_column(col.name)
+        ]
+        if search_clauses:
+            filters.append(or_(*search_clauses))
+
+    count_stmt = select(func.count()).select_from(table)
+    if filters:
+        count_stmt = count_stmt.where(*filters)
+    total = int(session.execute(count_stmt).scalar() or 0)
+
+    if sort_by is not None:
+        order_col = table.c[sort_by]
+    elif "created_at" in table.c:
+        order_col = table.c["created_at"]
+    elif "date" in table.c:
+        order_col = table.c["date"]
+    else:
+        pk_cols = list(table.primary_key.columns)
+        order_col = pk_cols[0] if pk_cols else list(table.columns)[0]
+
+    order_expr = order_col.desc() if sort_desc else order_col.asc()
+
+    rows_stmt = select(table)
+    if filters:
+        rows_stmt = rows_stmt.where(*filters)
+    rows_stmt = rows_stmt.order_by(order_expr).limit(limit).offset(offset)
+
+    raw_mappings = session.execute(rows_stmt).mappings().all()
+
+    serialized_rows: List[Dict[str, Any]] = []
+    for mapping in raw_mappings:
+        row_dict: Dict[str, Any] = {}
+        for col in table.columns:
+            if _is_sensitive_column(col.name):
+                row_dict[col.name] = "[REDACTED]"
+            else:
+                row_dict[col.name] = _serialize_db_value(mapping.get(col.name))
+        serialized_rows.append(row_dict)
+
+    if resolve_fks:
+        _resolve_foreign_keys_in_rows(session, table, serialized_rows)
+
+    return SysAdminDbTableRowsResponse(
+        table_name=table_name,
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_tenant_id=_has_tenant_id(table),
+        columns=_build_column_infos(table),
+        rows=serialized_rows,
+    )

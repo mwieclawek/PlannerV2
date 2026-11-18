@@ -447,3 +447,204 @@ async def test_structured_domain_logs_and_sql_noise_filtering(
         handler.close()
 
 
+# ── DB explorer endpoints ─────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_db_tables_metadata_and_sensitive_flags(
+    client: AsyncClient, session: Session, superadmin_headers, test_tenant
+):
+    _make_user(session, test_tenant.id, "db_emp1", role=RoleSystem.EMPLOYEE)
+    resp = await client.get("/sysadmin/db/tables", headers=superadmin_headers)
+    assert resp.status_code == 200, resp.text
+    tables = resp.json()["tables"]
+    table_names = [t["table_name"] for t in tables]
+    assert table_names == sorted(table_names)
+
+    by_name = {t["table_name"]: t for t in tables}
+    assert "user" in by_name
+    assert "schedule" in by_name
+    assert "restaurantconfig" in by_name
+    assert "announcement" in by_name
+
+    user_tbl = by_name["user"]
+    assert user_tbl["has_tenant_id"] is True
+    assert user_tbl["row_count"] >= 2  # superadmin + db_emp1
+    user_cols = {c["name"]: c for c in user_tbl["columns"]}
+    assert user_cols["password_hash"]["is_sensitive"] is True
+    assert user_cols["manager_pin"]["is_sensitive"] is True
+    assert user_cols["encrypted_google_access_token"]["is_sensitive"] is True
+    assert user_cols["encrypted_google_refresh_token"]["is_sensitive"] is True
+    assert user_cols["username"]["is_sensitive"] is False
+    assert user_cols["id"]["primary_key"] is True
+
+    # Ensure `is_pinned` is NOT mistakenly flagged as sensitive
+    ann_cols = {c["name"]: c for c in by_name["announcement"]["columns"]}
+    assert ann_cols["is_pinned"]["is_sensitive"] is False
+
+    # `fcm_token` on userdevice must be sensitive
+    dev_cols = {c["name"]: c for c in by_name["userdevice"]["columns"]}
+    assert dev_cols["fcm_token"]["is_sensitive"] is True
+
+    assert by_name["schedule"]["has_tenant_id"] is False
+    assert by_name["shiftauditlog"]["has_tenant_id"] is True
+
+
+@pytest.mark.asyncio
+async def test_db_table_rows_schedule_fk_resolution(
+    client: AsyncClient,
+    session: Session,
+    superadmin_headers,
+    test_tenant,
+    shift_definition,
+    job_role,
+):
+    from datetime import date
+    from app.models import Schedule
+
+    emp = _make_user(session, test_tenant.id, "kelner_fk", role=RoleSystem.EMPLOYEE)
+    emp.full_name = "Jan Kelner"
+    session.add(emp)
+    session.commit()
+    session.refresh(emp)
+
+    sched = Schedule(
+        date=date(2026, 11, 18),
+        shift_def_id=shift_definition.id,
+        user_id=emp.id,
+        role_id=job_role.id,
+        is_published=True,
+    )
+    session.add(sched)
+    session.commit()
+    session.refresh(sched)
+
+    # With resolve_fks=true (default)
+    resp_resolved = await client.get(
+        "/sysadmin/db/tables/schedule/rows?resolve_fks=true",
+        headers=superadmin_headers,
+    )
+    assert resp_resolved.status_code == 200, resp_resolved.text
+    body_res = resp_resolved.json()
+    assert body_res["table_name"] == "schedule"
+    assert body_res["total"] == 1
+    row_res = body_res["rows"][0]
+    assert row_res["user_id"] == f"{emp.username} ({emp.full_name}) [#{emp.id}]"
+    assert row_res["role_id"] == f"{job_role.name} [#{job_role.id}]"
+    expected_shift = (
+        f"{shift_definition.name} "
+        f"({str(shift_definition.start_time)[:5]}-{str(shift_definition.end_time)[:5]}) "
+        f"[#{shift_definition.id}]"
+    )
+    assert row_res["shift_def_id"] == expected_shift
+
+    # With resolve_fks=false
+    resp_raw = await client.get(
+        "/sysadmin/db/tables/schedule/rows?resolve_fks=false",
+        headers=superadmin_headers,
+    )
+    assert resp_raw.status_code == 200, resp_raw.text
+    row_raw = resp_raw.json()["rows"][0]
+    assert row_raw["user_id"] == str(emp.id)
+    assert row_raw["role_id"] == job_role.id
+    assert row_raw["shift_def_id"] == shift_definition.id
+
+
+@pytest.mark.asyncio
+async def test_db_table_rows_user_redaction_filtering_sorting_and_tenant_fk(
+    client: AsyncClient, session: Session, superadmin_headers, test_tenant
+):
+    other_rest = RestaurantConfig(name="Bistro Roma", slug="bistro-roma")
+    session.add(other_rest)
+    session.commit()
+    session.refresh(other_rest)
+
+    u_alpha = _make_user(session, test_tenant.id, "alpha_user", email="alpha@test.pl", role=RoleSystem.EMPLOYEE)
+    u_alpha.manager_pin = "9999"
+    u_alpha.encrypted_google_access_token = "secret-gcal-token"
+    session.add(u_alpha)
+
+    u_zeta = _make_user(session, test_tenant.id, "zeta_user", email="zeta@test.pl", role=RoleSystem.EMPLOYEE)
+    _make_user(session, other_rest.id, "roma_user", email="roma@roma.pl", role=RoleSystem.MANAGER)
+    session.commit()
+
+    # Filter by tenant_id + sort_by=username ascending + resolve_fks=true
+    resp = await client.get(
+        f"/sysadmin/db/tables/user/rows?tenant_id={test_tenant.id}&sort_by=username&sort_desc=false&resolve_fks=true",
+        headers=superadmin_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["has_tenant_id"] is True
+    usernames = [r["username"] for r in data["rows"]]
+    assert usernames == sorted(usernames)
+    assert "roma_user" not in usernames
+    assert "alpha_user" in usernames
+    assert "zeta_user" in usernames
+
+    alpha_row = next(r for r in data["rows"] if r["username"] == "alpha_user")
+    assert alpha_row["password_hash"] == "[REDACTED]"
+    assert alpha_row["manager_pin"] == "[REDACTED]"
+    assert alpha_row["encrypted_google_access_token"] == "[REDACTED]"
+    assert alpha_row["tenant_id"] == f"{test_tenant.name} [#{test_tenant.id}]"
+
+    # Search filter + sort_desc=true
+    resp_search = await client.get(
+        "/sysadmin/db/tables/user/rows?search=roma&sort_by=username&sort_desc=true",
+        headers=superadmin_headers,
+    )
+    assert resp_search.status_code == 200, resp_search.text
+    search_data = resp_search.json()
+    assert search_data["total"] == 1
+    assert search_data["rows"][0]["username"] == "roma_user"
+    assert search_data["rows"][0]["tenant_id"] == f"Bistro Roma [#{other_rest.id}]"
+
+    # Searching by a sensitive field value must NOT match (sensitive columns excluded from search)
+    resp_secret_search = await client.get(
+        "/sysadmin/db/tables/user/rows?search=secret-gcal-token",
+        headers=superadmin_headers,
+    )
+    assert resp_secret_search.status_code == 200
+    assert resp_secret_search.json()["total"] == 0
+
+    # Pagination (limit & offset)
+    resp_page = await client.get(
+        f"/sysadmin/db/tables/user/rows?tenant_id={test_tenant.id}&sort_by=username&sort_desc=false&limit=1&offset=1",
+        headers=superadmin_headers,
+    )
+    assert resp_page.status_code == 200
+    page_data = resp_page.json()
+    assert page_data["limit"] == 1
+    assert page_data["offset"] == 1
+    assert page_data["total"] == 3  # owner (superadmin), alpha_user, zeta_user
+    assert len(page_data["rows"]) == 1
+    assert page_data["rows"][0]["username"] == usernames[1]
+
+
+@pytest.mark.asyncio
+async def test_db_explorer_security_and_validation(
+    client: AsyncClient, superadmin_headers, auth_headers, employee_headers
+):
+    # Unauthenticated -> 401
+    assert (await client.get("/sysadmin/db/tables")).status_code == 401
+    assert (await client.get("/sysadmin/db/tables/user/rows")).status_code == 401
+
+    # Manager and Employee -> 403 Forbidden
+    for hdrs in (auth_headers, employee_headers):
+        assert (await client.get("/sysadmin/db/tables", headers=hdrs)).status_code == 403
+        assert (await client.get("/sysadmin/db/tables/user/rows", headers=hdrs)).status_code == 403
+
+    # Unknown / SQL-injection table name -> 404
+    resp_404 = await client.get(
+        "/sysadmin/db/tables/users; DROP TABLE user;--/rows",
+        headers=superadmin_headers,
+    )
+    assert resp_404.status_code == 404
+
+    # Unknown sort_by column -> 400
+    resp_400 = await client.get(
+        "/sysadmin/db/tables/user/rows?sort_by=nonexistent_col",
+        headers=superadmin_headers,
+    )
+    assert resp_400.status_code == 400
+
+
