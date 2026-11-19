@@ -779,14 +779,22 @@ class _ScheduleViewerState extends State<ScheduleViewer> {
                                         ),
                                         const SizedBox(width: 4),
                                         Flexible(
-                                          child: Text(
-                                            'Brakuje: ${warning.roleName} (${warning.missing})',
-                                            style: GoogleFonts.inter(
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.orange.shade900,
+                                          child: Tooltip(
+                                            message:
+                                                warning.message ??
+                                                'Brakuje: ${warning.roleName} (${warning.missing})',
+                                            child: Text(
+                                              warning.category ==
+                                                      'OVER_TARGET_WARNING'
+                                                  ? 'Nadgodziny: ${warning.userName ?? warning.roleName} (+${(warning.overHours ?? 0).toStringAsFixed(1)}h)'
+                                                  : 'Brakuje: ${warning.roleName} (${warning.missing})',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.orange.shade900,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                            overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
                                       ],

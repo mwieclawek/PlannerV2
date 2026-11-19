@@ -504,6 +504,12 @@ class StaffingWarning {
   final int required;
   final int assigned;
   final int missing;
+  final String category;
+  final String? message;
+  final String? userName;
+  final double? overHours;
+  final double? totalMonthHours;
+  final double? targetHours;
 
   StaffingWarning({
     required this.date,
@@ -514,18 +520,31 @@ class StaffingWarning {
     required this.required,
     required this.assigned,
     required this.missing,
+    this.category = 'DEFICIT',
+    this.message,
+    this.userName,
+    this.overHours,
+    this.totalMonthHours,
+    this.targetHours,
   });
 
   factory StaffingWarning.fromJson(Map<String, dynamic> json) {
     return StaffingWarning(
-      date: DateTime.parse(json['date']),
-      shiftDefId: json['shift_def_id'] as int,
-      roleId: json['role_id'] as int,
-      roleName: json['role_name'] as String,
-      shiftName: json['shift_name'] as String,
-      required: json['required'] as int,
-      assigned: json['assigned'] as int,
-      missing: json['missing'] as int,
+      date:
+          DateTime.tryParse(json['date']?.toString() ?? '') ?? DateTime.now(),
+      shiftDefId: (json['shift_def_id'] as num?)?.toInt() ?? 0,
+      roleId: (json['role_id'] as num?)?.toInt() ?? 0,
+      roleName: json['role_name']?.toString() ?? '',
+      shiftName: json['shift_name']?.toString() ?? '',
+      required: (json['required'] as num?)?.toInt() ?? 0,
+      assigned: (json['assigned'] as num?)?.toInt() ?? 0,
+      missing: (json['missing'] as num?)?.toInt() ?? 0,
+      category: json['category']?.toString() ?? 'DEFICIT',
+      message: json['message']?.toString(),
+      userName: json['user_name']?.toString(),
+      overHours: (json['over_hours'] as num?)?.toDouble(),
+      totalMonthHours: (json['total_month_hours'] as num?)?.toDouble(),
+      targetHours: (json['target_hours'] as num?)?.toDouble(),
     );
   }
 }

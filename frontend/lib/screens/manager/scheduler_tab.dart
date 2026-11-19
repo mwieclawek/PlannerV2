@@ -1306,7 +1306,8 @@ class _SchedulerTabState extends ConsumerState<SchedulerTab> {
         final List<dynamic> warningsJson = result['warnings'] ?? [];
         final List<StaffingWarning> parsedWarnings =
             warningsJson
-                .map((w) => StaffingWarning.fromJson(w as Map<String, dynamic>))
+                .whereType<Map>()
+                .map((w) => StaffingWarning.fromJson(Map<String, dynamic>.from(w)))
                 .toList();
         final explanationJson =
             result['solver_explanation'] as Map<String, dynamic>?;
